@@ -70,40 +70,55 @@ def get_status(item, now_ts):
     title = str(item.get('title') or item.get('question') or '').lower()
     now_hour = datetime.fromtimestamp(now_ts, est).hour  # 0-23 EST
     
-    # Extract explicit times with AM/PM (e.g., "2:30 pm", "10am")
-    time_pattern = r'(\d{1,2})(?::\d{2})?\s*(am|pm|a\.?m\.?|p\.?m\.?)'
+    # Improved regex: handles "5pm", "5:30pm", "5:30PM-5:45PM ET"
+    time_pattern = r'(\d{1,2})(?::(\d{2}))?\s*(a\.?m?\.?|p\.?m?\.?)'
     explicit_matches = re.findall(time_pattern, title)
-    title_hours = []
+    title_times = []  # Store (hour, minute) tuples
     
-    for hour_str, period in explicit_matches:
-        hour = int(hour_str)
-        if period in ['pm', 'p.m.', 'p.m']:
-            hour = hour % 12 + 12  # PM: 1pm=13, 12pm=12
-        else:  # AM
-            hour = hour % 12 or 12  # 12am=0->12? But trader context likely daytime
-        if 0 <= hour <= 23:
-            title_hours.append(hour)
+    for h_str, m_str, period in explicit_matches:
+        hour = int(h_str)
+        minute = int(m_str) if m_str else 0
+        period = period.replace('.', '').lower()
+        
+        if period in ['am', 'a.m']:
+            hour = hour % 12
+            if hour == 0: hour = 12  # 12AM = 0, but rare for trades
+        elif period in ['pm', 'p.m']:
+            hour = (hour % 12) + 12
+        else:
+            continue  # Skip invalid periods
+        
+        # Convert to decimal hour for precision (e.g., 17.5 for 5:30PM)
+        decimal_hour = hour + (minute / 60.0)
+        title_times.append(decimal_hour)
     
-    # Fallback: numeric hours only if no explicit AM/PM, assume PM for trader hours (8-23)
-    if not title_hours:
-        hour_matches = re.findall(r'\b(\d{1,2})\b', title)
-        for hour_str in hour_matches:
-            hour = int(hour_str)
+    if not title_times:
+        # Tighter fallback: only 1-12 near time words, no prices/symbols
+        fallback_pattern = r'\b(\d{1,2})\s*(?:pm|am|et)\b'
+        fallback_matches = re.findall(fallback_pattern, title)
+        for h_str in fallback_matches:
+            hour = int(h_str)
             if 1 <= hour <= 12:
-                assumed_hour = hour + 12 if hour >= 8 else hour  # Early=AM, 8+=PM bias
-                title_hours.append(assumed_hour)
+                # Assume PM for trader hours (post-8AM)
+                title_times.append(hour + 12 if hour >= 8 else hour)
     
-    if not title_hours:
+    if not title_times:
         return "🟢 ACTIVE (no timer)"
     
-    max_title_hour = max(title_hours)
-    if now_hour >= max_title_hour:  # Use >= for exact hour edge cases
+    # Use MAX (latest end time) for expiration check
+    max_decimal = max(title_times)
+    max_hour = int(max_decimal)  # Floor for hour-only compare
+    
+    if now_hour >= max_hour:
         return "⚫ EXPIRED"
     
-    # Display original 12h format for user
-    display_hour = max_title_hour % 12 or 12
-    ampm = 'AM' if max_title_hour < 12 else 'PM'
-    return f"🟢 ACTIVE (til ~{display_hour} {ampm} ET)"
+    # Display latest time in 12h format
+    display_hour = int(max_decimal % 12) or 12
+    display_min = int((max_decimal % 1) * 60)
+    min_str = f":{display_min:02d}" if display_min > 0 else ""
+    ampm = 'AM' if max_decimal < 12 else 'PM'
+    return f"🟢 ACTIVE (til ~{display_hour}{min_str} {ampm} ET)"
+
 
 def track_0x8dxd():
     trader = "0x8dxd"
