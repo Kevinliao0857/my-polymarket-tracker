@@ -5,65 +5,69 @@ from datetime import datetime
 import time
 
 st.set_page_config(layout="wide")
-st.title("🚀 Polymarket Live Tracker - 5s Refresh")
+st.title("₿ Crypto Bets Live Tracker")
 
-# Sidebar
-st.sidebar.header("Trader Search")
-trader = st.sidebar.text_input("Username/Wallet", value="nanoin123")
-if st.sidebar.button("🔄 Manual Refresh"):
-    st.rerun()
+st.sidebar.header("Crypto Trader")
+wallet = st.sidebar.text_input("Wallet Address", value="PASTE_CRYPTO_TRADER_WALLET_HERE")
+st.sidebar.caption("Find on polymarket.com/crypto or leaderboard")
 
-@st.cache_data(ttl=5)  # 5 SECONDS!
-def safe_fetch(url):
-    try:
-        resp = requests.get(url, timeout=8)
-        if resp.status_code == 200:
-            data = resp.json()
-            if isinstance(data, list) and data:
-                return data[:15]
-    except:
-        pass
-    return []
-
-def display_data(trader):
+@st.cache_data(ttl=5)
+def fetch_crypto_positions(wallet):
     urls = [
-        f"https://data-api.polymarket.com/positions?proxyWallet={trader}",
-        f"https://data-api.polymarket.com/trades?user={trader}"
+        f"https://data-api.polymarket.com/positions?proxyWallet={wallet}",
+        f"https://data-api.polymarket.com/trades?user={wallet}"
     ]
-    
     all_data = []
     for url in urls:
-        all_data.extend(safe_fetch(url))
+        try:
+            resp = requests.get(url, timeout=8)
+            if resp.status_code == 200:
+                data = resp.json()
+                if isinstance(data, list):
+                    # Filter CRYPTO bets
+                    for item in data:
+                        title = str(item.get('title', '')).lower()
+                        if any(crypto in title for crypto in ['btc', 'bitcoin', 'eth', 'ethereum', 'sol', 'price']):
+                            all_data.append(item)
+        except: pass
+    return all_data[:10]
+
+positions = fetch_crypto_positions(wallet)
+
+col1, col2 = st.columns(2)
+col1.metric("Crypto Bets", len(positions))
+col2.metric("Last Check", datetime.now().strftime('%H:%M:%S'))
+
+if positions:
+    df_data = []
+    for pos in positions:
+        row = {
+            'Market': pos.get('title', '-')[:80],
+            'Side': pos.get('side', '-'),
+            'Size': f"${float(pos.get('size', 0)):.0f}",
+            'PnL': f"${float(pos.get('cashPnl', 0)):.0f}",
+            'Price': pos.get('curPrice', '-')
+        }
+        df_data.append(row)
     
-    if all_data:
-        cols = ['title', 'question', 'market', 'outcome', 'side', 'size', 'cashPnl', 'pnl']
-        df_data = []
-        for item in all_data:
-            row = {col: item.get(col, '-') for col in cols}
-            row['time'] = datetime.now().strftime('%H:%M:%S')  # Seconds!
-            df_data.append(row)
-        
-        df = pd.DataFrame(df_data)
-        st.success(f"✅ Found {len(df)} positions/trades | Updated: {datetime.now().strftime('%H:%M:%S')}")
-        st.dataframe(df[['title', 'side', 'size', 'cashPnl', 'time']], use_container_width=True)
-        
-        total_pnl = pd.to_numeric(df['cashPnl'], errors='coerce').sum()
-        st.metric("Total PnL", f"${total_pnl:.0f}")
-    else:
-        st.info(f"""
-        🔍 No data for "{trader}" 
-        
-        **Try whales**:
-        • nanoin123
-        • beachboy4  
-        • 0x56687bf447db6ffa42ffe2204a05edaa20f55839
-        
-        [Leaderboard](https://polymarket.com/leaderboard)
-        """)
+    df = pd.DataFrame(df_data)
+    st.success("✅ Crypto bets found!")
+    st.dataframe(df, use_container_width=True)
+    
+    total_pnl = sum(float(p.get('cashPnl', 0)) for p in positions)
+    st.metric("Net Crypto PnL", f"${total_pnl:.0f}")
+else:
+    st.info("""
+    🔍 Paste crypto trader wallet 
+    
+    **Example markets tracked**:
+    • BTC $100k Dec 31?
+    • ETH $5k EOY?
+    • SOL $500?
+    
+    [Crypto Markets](https://polymarket.com/crypto)
+    """)
 
-display_data(trader)
-st.caption("🔄 Auto‑refresh 5s | Polymarket API [web:136]")
-
-# Auto‑refresh loop
+st.caption("₿ Auto 5s | Polymarket API [web:136]")
 time.sleep(5)
 st.rerun()
