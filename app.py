@@ -68,57 +68,37 @@ def get_up_down(item):
 
 def get_status(item, now_ts):
     title = str(item.get('title') or item.get('question') or '').lower()
-    now_hour = datetime.fromtimestamp(now_ts, est).hour  # 0-23 EST
+    now_hour = datetime.fromtimestamp(now_ts, est).hour
     
-    # Improved regex: handles "5pm", "5:30pm", "5:30PM-5:45PM ET"
-    time_pattern = r'(\d{1,2})(?::(\d{2}))?\s*(a\.?m?\.?|p\.?m?\.?)'
-    explicit_matches = re.findall(time_pattern, title)
-    title_times = []  # Store (hour, minute) tuples
+    # FIXED: Separate hour/min, flexible spacing/symbols
+    time_pattern = r'(\d{1,2})(?::(\d{1,2}))?[\s\-–]*([ap]\.?m?\.?|et)'
+    matches = re.findall(time_pattern, title)
+    title_hours = []
     
-    for h_str, m_str, period in explicit_matches:
+    for h_str, m_str, _ in matches:
         hour = int(h_str)
         minute = int(m_str) if m_str else 0
-        period = period.replace('.', '').lower()
-        
-        if period in ['am', 'a.m']:
-            hour = hour % 12
-            if hour == 0: hour = 12  # 12AM = 0, but rare for trades
-        elif period in ['pm', 'p.m']:
+        # PM conversion (assume PM for trader times)
+        if 'p' in _:
             hour = (hour % 12) + 12
+        elif 'a' in _:
+            hour = hour % 12
         else:
-            continue  # Skip invalid periods
-        
-        # Convert to decimal hour for precision (e.g., 17.5 for 5:30PM)
-        decimal_hour = hour + (minute / 60.0)
-        title_times.append(decimal_hour)
+            hour += 12 if hour >= 8 else hour  # Fallback bias PM
+        decimal_h = hour + (minute / 60)
+        title_hours.append(decimal_h)
     
-    if not title_times:
-        # Tighter fallback: only 1-12 near time words, no prices/symbols
-        fallback_pattern = r'\b(\d{1,2})\s*(?:pm|am|et)\b'
-        fallback_matches = re.findall(fallback_pattern, title)
-        for h_str in fallback_matches:
-            hour = int(h_str)
-            if 1 <= hour <= 12:
-                # Assume PM for trader hours (post-8AM)
-                title_times.append(hour + 12 if hour >= 8 else hour)
-    
-    if not title_times:
+    if not title_hours:
         return "🟢 ACTIVE (no timer)"
     
-    # Use MAX (latest end time) for expiration check
-    max_decimal = max(title_times)
-    max_hour = int(max_decimal)  # Floor for hour-only compare
-    
-    if now_hour >= max_hour:
+    max_h = max(title_hours)
+    if now_hour >= int(max_h):
         return "⚫ EXPIRED"
     
-    # Display latest time in 12h format
-    display_hour = int(max_decimal % 12) or 12
-    display_min = int((max_decimal % 1) * 60)
-    min_str = f":{display_min:02d}" if display_min > 0 else ""
-    ampm = 'AM' if max_decimal < 12 else 'PM'
-    return f"🟢 ACTIVE (til ~{display_hour}{min_str} {ampm} ET)"
-
+    disp_h = int(max_h % 12) or 12
+    disp_m = f":{int((max_h % 1)*60):02d}" if (max_h % 1) > 0 else ""
+    ampm = 'PM' if max_h >= 12 else 'AM'
+    return f"🟢 ACTIVE (til ~{disp_h}{disp_m} {ampm} ET)"
 
 def track_0x8dxd():
     trader = "0x8dxd"
