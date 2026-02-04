@@ -2,11 +2,17 @@ import streamlit as st
 import time
 from datetime import datetime
 import pandas as pd
-from data_fetch import track_0x8dxd
-from utils import est
+
+# ERROR HANDLING
+try:
+    from data_fetch import track_0x8dxd, est
+except ImportError as e:
+    st.error(f"Import error: {e}. Check data_fetch.py in same folder.")
+    st.stop()
 
 st.set_page_config(layout="wide")
 st.markdown("# ₿ 0x8dxd Crypto Bot Tracker - Last 15 Min")
+
 st.info("🟢 Live crypto-only | UP/DOWN focus | Last 15min")
 
 now_est = datetime.now(est)
@@ -35,9 +41,10 @@ while True:
             st.metric("🟢 UP Bets", up_bets)
             st.metric("🔴 DOWN Bets", len(df) - up_bets)
             
-            min_ts = df['Updated'].min()  # Assuming parsable; adjust if needed
-            now_ts = int(time.time())
-            span_min = int((now_ts - pd.to_datetime(min_ts).timestamp()) / 60)  # Fix timestamp
+            df['ts'] = pd.to_datetime(df['Updated'], format='%I:%M:%S %p ET').apply(lambda x: x.timestamp())
+            min_ts = df['ts'].min()
+            now_ts = time.time()
+            span_min = min(int((now_ts - min_ts) / 60), 15)  # Caps at 15
             st.metric("Newest", f"{span_min} min ago (ET)")
         
         st.caption(f"🕐 {now_est.strftime('%H:%M:%S ET')} | #{refresh_count}")
