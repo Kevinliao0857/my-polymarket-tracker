@@ -27,6 +27,39 @@ def safe_fetch(url):
         pass
     return []
 
+@st.cache_data(ttl=60)
+def get_trader_pnl(trader):
+    query = """
+    {
+      user(id: "%s") {
+        totalPnL
+        realizedPnL
+        unrealizedPnL
+        pnlChart(daysBack: 7) { timestamp pnl }
+      }
+    }
+    """ % trader.lower()
+    
+    try:
+        resp = requests.post(
+            "https://api.thegraph.com/subgraphs/name/polymarket/matic-markets",
+            json={'query': query},
+            timeout=10
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get('data', {}).get('user'):
+                user = data['data']['user']
+                return {
+                    'total': float(user.get('totalPnL', 0)),
+                    'realized': float(user.get('realizedPnL', 0)),
+                    'unrealized': float(user.get('unrealizedPnL', 0)),
+                    'chart_7d': user.get('pnlChart', [])
+                }
+    except:
+        pass
+    return None
+
 def is_crypto(market_title):
     title_lower = market_title.lower()
     crypto_symbols = ['btc', 'eth', 'sol', 'xrp', 'ada', 'doge', 'shib', 'link', 'avax', 'matic', 'dot', 'uni']
@@ -128,24 +161,28 @@ def track_0x8dxd():
     span_min = int((now_ts - min_ts) / 60)
     st.metric("Newest", f"{span_min} min ago")
     
-    # LIVE TOTAL OPEN PNL
+    # LIVE TOTAL OPEN PNL (Data API)
     positions = safe_fetch(f"https://data-api.polymarket.com/positions?user={trader}")
     live_pnl = sum(float(p.get('cashPnl', 0)) for p in positions) if positions else 0
-    st.metric("Open PnL Total", f"${live_pnl:.0f}")
+    st.metric("Open PnL (API)", f"${live_pnl:.0f}")
     
-    # 1-WEEK CLOSED PNL (NEW)
-    closed_positions = safe_fetch(f"https://data-api.polymarket.com/closed-positions?user={trader}&limit=500")
-    week_ago = now_ts - (7 * 24 * 3600)
-    closed_pnl_week = 0.0
-    crypto_count = 0
-    for p in closed_positions:
-        ts = int(float(p.get('timestamp', 0)))
-        if ts >= week_ago:
-            title = str(p.get('title', '')).lower()
-            if is_crypto(title):
-                closed_pnl_week += float(p.get('realizedPnl', 0))
-                crypto_count += 1
-    st.metric("Closed PnL (1wk Crypto)", f"${closed_pnl_week:.0f}", delta=f"({crypto_count} bets)")
+    # OFFICIAL PNL FROM POLYMARKET CHART (TheGraph)
+    with st.spinner("Fetching official PnL..."):
+        pnl_data = get_trader_pnl(trader)
+    if pnl_data:
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Total PnL", f"${pnl_data['total']:.0f}")
+        col2.metric("Realized PnL", f"${pnl_data['realized']:.0f}")
+        col3.metric("Unrealized PnL", f"${pnl_data['unrealized']:.0f}")
+        
+        # 7-Day PnL Chart (matches screenshot!)
+        if pnl_data['chart_7d']:
+            chart_df = pd.DataFrame(pnl_data['chart_7d'])
+            if not chart_df.empty:
+                st.subheader("📈 7-Day PnL Chart")
+                st.line_chart(chart_df.set_index('timestamp')['pnl'], use_container_width=True)
+    else:
+        st.warning("PnL data unavailable (GraphQL timeout)")
 
 if st.button("🔄 Force Refresh"):
     st.rerun()
