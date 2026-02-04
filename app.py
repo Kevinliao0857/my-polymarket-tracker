@@ -145,7 +145,7 @@ def track_0x8dxd():
         ts_field = item.get('timestamp') or item.get('updatedAt') or item.get('createdAt') or now_ts
         ts = int(float(ts_field)) if ts_field else now_ts
         min_ts = min(min_ts, ts)
-        update_str = datetime.fromtimestamp(ts, est).strftime('%H:%M:%S ET')
+        update_str = datetime.fromtimestamp(ts, est).strftime('%I:%M:%S %p ET')  # %I=12h, %p=AM/PM
         status_str = get_status(item, now_ts)
         
         row = {
