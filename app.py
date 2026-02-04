@@ -6,23 +6,23 @@ import time
 import pytz  # pip install pytz
 
 st.set_page_config(layout="wide")
-st.markdown("# ₿ 0x8dxd Crypto Bot Tracker - Last 5 Seconds")
+st.markdown("# ₿ 0x8dxd Crypto Bot Tracker - Last 15 Min")
 
-st.info("🟢 Live crypto-only | Last 5s trades/closes | Ultra-responsive")
+st.info("🟢 Live crypto-only | Last 15min trades/closes | Responsive refresh")
 
 # Live PST clock
 pst = pytz.timezone('US/Pacific')
 now_pst = datetime.now(pst)
-st.caption(f"🕐 Current: {now_pst.strftime('%Y-%m-%d %H:%M:%S %Z')} | Auto 3s + Force 🔄")
+st.caption(f"🕐 Current: {now_pst.strftime('%Y-%m-%d %H:%M:%S %Z')} | Auto 5s + Force 🔄")
 
-@st.cache_data(ttl=1)  # 1s for ultra live
+@st.cache_data(ttl=3)
 def safe_fetch(url):
     try:
-        resp = requests.get(url, timeout=8)
+        resp = requests.get(url, timeout=10)
         if resp.status_code == 200:
             data = resp.json()
             if isinstance(data, list) and data:
-                return data[:50]  # Recent focus
+                return data[:100]
     except:
         pass
     return []
@@ -47,7 +47,7 @@ def get_up_down(item):
     if 'sell' in side:
         return "🔴 DOWN"
     
-    if any(word in title for word in ['1h', 'hour', '15m', '5m']):
+    if any(word in title for word in ['1h', 'hour', '15m']):
         if any(word in title for word in ['above']):
             return "🟢 UP"
         if any(word in title for word in ['below']):
@@ -63,10 +63,11 @@ def get_up_down(item):
 def track_0x8dxd():
     trader = "0x8dxd"
     now_ts = int(time.time())
-    five_sec_ago = now_ts - 5  # Last 5 seconds!
+    fifteen_min_ago = now_ts - 900  # 15 minutes = 900s
     
     urls = [
-        f"https://data-api.polymarket.com/trades?user={trader}&limit=50",
+        f"https://data-api.polymarket.com/trades?user={trader}&limit=100",
+        f"https://data-api.polymarket.com/closed-positions?user={trader}&limit=50",
         f"https://data-api.polymarket.com/positions?user={trader}"
     ]
     
@@ -77,17 +78,16 @@ def track_0x8dxd():
         for item in raw_data:
             ts_field = item.get('timestamp') or item.get('updatedAt') or item.get('createdAt')
             ts = int(float(ts_field)) if ts_field else now_ts
-            if ts >= five_sec_ago:  # HYPER fresh only
+            if ts >= fifteen_min_ago:  # Last 15 min
                 title = str(item.get('title') or item.get('question') or '-')
                 if is_crypto(title):
-                    key = title[:80]
-                    if key not in seen:
+                    key = title[:100]
+                    if key not in seen and len(all_data) < 25:
                         seen.add(key)
                         all_data.append(item)
     
     if not all_data:
-        st.info("⏳ No trades in last 5s | Watching...")
-        st.metric("Status", "Live monitoring")
+        st.info("No crypto activity in last 15 min | Bot quiet?")
         return
     
     df_data = []
@@ -103,7 +103,7 @@ def track_0x8dxd():
         if isinstance(price_val, (int, float)):
             price_val = f"${price_val:.2f}"
         
-        ts_field = item.get('timestamp') or item.get('updatedAt') or now_ts
+        ts_field = item.get('timestamp') or item.get('updatedAt') or item.get('createdAt') or now_ts
         ts = int(float(ts_field)) if ts_field else now_ts
         min_ts = min(min_ts, ts)
         update_str = datetime.fromtimestamp(ts, pst).strftime('%H:%M:%S')
@@ -121,20 +121,23 @@ def track_0x8dxd():
     df = pd.DataFrame(df_data)
     df = df.sort_values('Updated', ascending=False)
     
-    st.success(f"🚀 {len(df)} FRESH crypto trades (last 5s!)")
-    st.dataframe(df, use_container_width=True, height=300)
+    st.success(f"✅ {len(df)} unique crypto bets (last 15min)")
+    st.dataframe(df, use_container_width=True, height=400)
     
     up_bets = len(df[df['UP/DOWN'] == '🟢 UP'])
-    st.metric("🟢 UP (5s)", up_bets)
-    st.metric("🔴 DOWN (5s)", len(df) - up_bets)
+    st.metric("🟢 UP Bets", up_bets)
+    st.metric("🔴 DOWN Bets", len(df) - up_bets)
     
     pnl = pd.to_numeric(df['PnL'].str.replace('$',''), errors='coerce').sum()
-    st.metric("PnL (5s)", f"${pnl:.0f}")
+    st.metric("Total PnL (15m)", f"${pnl:.0f}")
+    
+    span_min = int((now_ts - min_ts) / 60)
+    st.metric("Newest Activity", f"{span_min} min ago")
 
-if st.button("🔄 Force Check 5s Now"):
+if st.button("🔄 Force Refresh Now"):
     st.rerun()
 
-# Ultra-fast 3s loop
+# Bulletproof refresh
 placeholder = st.empty()
 refresh_count = 0
 while True:
@@ -142,6 +145,6 @@ while True:
     now_pst = datetime.now(pst)
     with placeholder.container():
         track_0x8dxd()
-        st.caption(f"⚡ {now_pst.strftime('%H:%M:%S %Z')} | #{refresh_count} | 3s checks")
-    time.sleep(3)
+        st.caption(f"🕐 {now_pst.strftime('%H:%M:%S %Z')} | Refresh #{refresh_count} | 5s auto")
+    time.sleep(5)
     st.rerun()
