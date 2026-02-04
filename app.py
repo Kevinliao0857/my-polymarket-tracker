@@ -77,8 +77,8 @@ def track_0x8dxd():
         for item in raw_data:
             ts_field = item.get('timestamp') or item.get('updatedAt') or item.get('createdAt')
             ts = int(float(ts_field)) if ts_field else now_ts
-            if ts >= fifteen_min_ago and is_crypto(item):  # FIXED: Crypto filter + timestamp
-                key = str(item.get('title') or item.get('question') or '-'))[:100]
+            if ts >= fifteen_min_ago and is_crypto(item):
+                key = str(item.get('title') or item.get('question') or '-')[:100]  # FIXED: Added missing )
                 if key not in seen and len(all_data) < 25:
                     seen.add(key)
                     all_data.append(item)
