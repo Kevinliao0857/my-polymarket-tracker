@@ -64,32 +64,43 @@ def get_up_down(item):
     return "➖ ?"
 
 def get_status(item, now_ts):
-    title = str(item.get('title') or item.get('question') or '')
-    now_hour = datetime.fromtimestamp(now_ts, est).hour  # Current EST hour (0-23)
+    title = str(item.get('title') or item.get('question') or '').lower()
+    now_hour = datetime.fromtimestamp(now_ts, est).hour  # 0-23 EST
     
-    # Extract ALL 1-2 digit numbers (hours)
-    hour_matches = re.findall(r'\b(\d{1,2})\b', title)
+    # Extract explicit times with AM/PM (e.g., "2:30 pm", "10am")
+    time_pattern = r'(\d{1,2})(?::\d{2})?\s*(am|pm|a\.?m\.?|p\.?m\.?)'
+    explicit_matches = re.findall(time_pattern, title)
     title_hours = []
     
-    for hour_str in hour_matches:
+    for hour_str, period in explicit_matches:
         hour = int(hour_str)
-        if 1 <= hour <= 12:  # Valid AM/PM hour
-            # Early hours likely AM, later PM
-            if hour <= 6:
-                title_hours.append(hour)  # 1-6 AM
-            else:
-                title_hours.append(hour + 12 if hour != 12 else 12)  # 7-11 + PM/12
+        if period in ['pm', 'p.m.', 'p.m']:
+            hour = hour % 12 + 12  # PM: 1pm=13, 12pm=12
+        else:  # AM
+            hour = hour % 12 or 12  # 12am=0->12? But trader context likely daytime; adjust if needed
+        if 0 <= hour <= 23:
+            title_hours.append(hour)
     
-    # If no valid hours found → ACTIVE
+    # Fallback: numeric hours only if no explicit AM/PM, assume PM for trader hours (8-23)
+    if not title_hours:
+        hour_matches = re.findall(r'\b(\d{1,2})\b', title)
+        for hour_str in hour_matches:
+            hour = int(hour_str)
+            if 1 <= hour <= 12:
+                assumed_hour = hour + 12 if hour >= 8 else hour  # Early=AM, 8+=PM bias
+                title_hours.append(assumed_hour)
+    
     if not title_hours:
         return "🟢 ACTIVE (no timer)"
     
     max_title_hour = max(title_hours)
-    if now_hour > max_title_hour:
+    if now_hour >= max_title_hour:  # Use >= for exact hour edge cases
         return "⚫ EXPIRED"
     
-    return f"🟢 ACTIVE (til ~{max(title_hours):02d}:00 ET)"
-
+    # Display original 12h format for user
+    display_hour = max_title_hour % 12 or 12
+    ampm = 'AM' if max_title_hour < 12 else 'PM'
+    return f"🟢 ACTIVE (til ~{display_hour} {ampm} ET)"
 
 
 def track_0x8dxd():
@@ -153,7 +164,7 @@ def track_0x8dxd():
     st.success(f"✅ {len(df)} crypto bets (15min ET)")
     st.dataframe(df, use_container_width=True, height=500, column_config={
         "Market": st.column_config.TextColumn("Market", width="medium"),
-        "Status": st.column_config.TextColumn("Status", width="small")
+        "Status": st.column_config.TextColumn("Status", width="medium")  # Was "small"
     })
     
     up_bets = len(df[df['UP/DOWN'] == '🟢 UP'])
