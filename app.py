@@ -29,36 +29,30 @@ def safe_fetch(url):
 
 @st.cache_data(ttl=60)
 def get_trader_pnl(trader):
-    query = """
-    {
-      user(id: "%s") {
-        totalPnL
-        realizedPnL
-        unrealizedPnL
-        pnlChart(daysBack: 7) { timestamp pnl }
-      }
-    }
-    """ % trader.lower()
-    
     try:
-        resp = requests.post(
-            "https://api.thegraph.com/subgraphs/name/polymarket/matic-markets",
-            json={'query': query},
-            timeout=10
-        )
+        url = f"https://polymarket.com/@{trader}"
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+        resp = requests.get(url, headers=headers, timeout=15)
         if resp.status_code == 200:
-            data = resp.json()
-            if data.get('data', {}).get('user'):
-                user = data['data']['user']
+            html = resp.text
+            # Extract PnL from data attributes/JSON blobs (matches chart)
+            import re
+            # Total PnL (look for data-pnl-total pattern)
+            total_match = re.search(r'"totalPnL":\s*([\d.-]+)', html)
+            realized_match = re.search(r'"realizedPnL":\s*([\d.-]+)', html)
+            unrealized_match = re.search(r'"unrealizedPnL":\s*([\d.-]+)', html)
+            
+            if total_match:
                 return {
-                    'total': float(user.get('totalPnL', 0)),
-                    'realized': float(user.get('realizedPnL', 0)),
-                    'unrealized': float(user.get('unrealizedPnL', 0)),
-                    'chart_7d': user.get('pnlChart', [])
+                    'total': float(total_match.group(1)),
+                    'realized': float(realized_match.group(1)) if realized_match else 0,
+                    'unrealized': float(unrealized_match.group(1)) if unrealized_match else 0,
+                    'chart_7d': []  # Chart scraping complex, skip for now
                 }
     except:
         pass
     return None
+
 
 def is_crypto(market_title):
     title_lower = market_title.lower()
