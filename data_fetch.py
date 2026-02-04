@@ -60,32 +60,31 @@ def get_status(item, now_ts):
     title = str(item.get('title') or item.get('question') or '').lower()
     now_hour = datetime.fromtimestamp(now_ts, est).hour
     
-    # Better regex - catches all AM/PM times
-    time_pattern = r'(\d{1,2})(?::\d{2})?\s*(?:am|pm|a\.?m\.?|p\.?m\.?)?'
-    matches = re.findall(time_pattern, title, re.IGNORECASE)
     title_hours = []
     
-    for hour_str, period in matches:
+    # Find all AM/PM times (robust)
+    for match in re.finditer(r'(\d{1,2})(?::\d{2})?\s*(am|pm)', title):
+        hour_str, period = match.groups()
         try:
             hour = int(hour_str)
-            if period and 'pm' in period.lower():
-                hour = (hour % 12) + 12 if hour != 12 else 12
-            elif period and 'am' in period.lower():
-                hour = hour % 12
+            if 'pm' in period.lower():
+                hour = hour % 12 + 12
+            else:
+                hour = hour % 12 or 12
             if 0 <= hour <= 23:
                 title_hours.append(hour)
         except:
             pass
     
-    # Fallback standalone hours (PM bias)
+    # Fallback: standalone 1-12 (PM bias for trader hours)
     if not title_hours:
-        hour_matches = re.findall(r'\b(\d{1,2})\b(?!\d)', title)
-        for h in hour_matches:
+        numbers = re.findall(r'\b(\d{1,2})\b', title)
+        for num in numbers:
             try:
-                hour = int(h)
+                hour = int(num)
                 if 1 <= hour <= 12:
                     title_hours.append(hour + 12 if hour >= 8 else hour)
-            except:
+            except ValueError:
                 pass
     
     if not title_hours:
@@ -98,7 +97,6 @@ def get_status(item, now_ts):
     display_hour = expiry_hour % 12 or 12
     ampm = 'AM' if expiry_hour < 12 else 'PM'
     return f"🟢 ACTIVE (til ~{display_hour} {ampm} ET)"
-
 
 def track_0x8dxd():
     trader = "0x8dxd"
