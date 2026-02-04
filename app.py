@@ -36,7 +36,6 @@ def is_crypto(item):
     # STRICT: Must contain ticker OR full name in TITLE (no 'crypto' wildcard, no full item text)
     return any(t in title for t in tickers) or any(f in title for f in full_names)
 
-
 def get_up_down(item):
     fields = ['outcome', 'side', 'answer', 'choice', 'direction']
     text = ' '.join(str(item.get(f, '')).lower() for f in fields)
@@ -81,7 +80,7 @@ def get_status(item, now_ts):
         if period in ['pm', 'p.m.', 'p.m']:
             hour = hour % 12 + 12  # PM: 1pm=13, 12pm=12
         else:  # AM
-            hour = hour % 12 or 12  # 12am=0->12? But trader context likely daytime; adjust if needed
+            hour = hour % 12 or 12  # 12am=0->12? But trader context likely daytime
         if 0 <= hour <= 23:
             title_hours.append(hour)
     
@@ -105,7 +104,6 @@ def get_status(item, now_ts):
     display_hour = max_title_hour % 12 or 12
     ampm = 'AM' if max_title_hour < 12 else 'PM'
     return f"🟢 ACTIVE (til ~{display_hour} {ampm} ET)"
-
 
 def track_0x8dxd():
     trader = "0x8dxd"
@@ -149,7 +147,7 @@ def track_0x8dxd():
         ts_field = item.get('timestamp') or item.get('updatedAt') or item.get('createdAt') or now_ts
         ts = int(float(ts_field)) if ts_field else now_ts
         min_ts = min(min_ts, ts)
-        update_str = datetime.fromtimestamp(ts, est).strftime('%I:%M:%S %p ET')  # %I=12h, %p=AM/PM
+        update_str = datetime.fromtimestamp(ts, est).strftime('%I:%M:%S %p ET')  # 12h format
         status_str = get_status(item, now_ts)
         
         row = {
@@ -163,12 +161,20 @@ def track_0x8dxd():
         df_data.append(row)
     
     df = pd.DataFrame(df_data)
+    
+    # STRICT FINAL FILTER: Only perfect crypto titles
+    df = df[df['Market'].str.lower().str.contains('btc|eth|sol|xrp|ada|doge|bitcoin|ethereum|solana', na=False, regex=True)]
+    
+    if df.empty:
+        st.info("No qualifying crypto bets in last 15 min")
+        return
+    
     df = df.sort_values('Updated', ascending=False)
     
     st.success(f"✅ {len(df)} crypto bets (15min ET)")
     st.dataframe(df, use_container_width=True, height=500, column_config={
         "Market": st.column_config.TextColumn("Market", width="medium"),
-        "Status": st.column_config.TextColumn("Status", width="medium")  # Was "small"
+        "Status": st.column_config.TextColumn("Status", width="medium")
     })
     
     up_bets = len(df[df['UP/DOWN'] == '🟢 UP'])
