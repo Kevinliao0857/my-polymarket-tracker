@@ -66,52 +66,32 @@ def get_up_down(item):
 def get_status(item, now_ts):
     title = str(item.get('title') or item.get('question') or '').lower()
     
-    # NEW: Parse ranges FIRST: "4:00AM-8:00AM ET", "4AM-8AM"
-    range_match = re.search(r'(\d{1,2})(?::\d{2})?(am|pm)\s*-?\s*(\d{1,2})(?::\d{2})?(am|pm)', title)
-    if range_match:
-        start_h = int(range_match.group(1))
-        start_ampm = range_match.group(2)
-        end_h = int(range_match.group(3))
-        end_ampm = range_match.group(4)
-        
-        # Convert END time to 24h format
-        if 'pm' in end_ampm and end_h != 12:
-            end_h += 12
-        if 'am' in end_ampm and end_h == 12:
-            end_h = 0
-        
-        today_str = datetime.fromtimestamp(now_ts, est).strftime('%Y-%m-%d')
-        try:
-            end_time = est.localize(datetime.strptime(f"{today_str} {end_h:02d}:00:00", '%Y-%m-%d %H:%M:%S'))
-            end_unix = int(end_time.timestamp())
-            
-            if end_unix < now_ts:
-                return "⚫ EXPIRED"
-            return f"🟢 ACTIVE (END {end_time.strftime('%H:%M ET')})"
-        except:
-            pass
+    # Simple patterns that always work
+    patterns = [
+        r'(\d{1,2})am', r'(\d{1,2})pm', 
+        r'(\d{1,2})am et', r'(\d{1,2})pm et'
+    ]
     
-    # Fallback: single time "6AM ET"
-    time_match = re.search(r'(\d{1,2})(am|pm|am et|pm et)', title)
-    if time_match:
-        hour = int(time_match.group(1))
-        ampm = time_match.group(2).replace(' et', '')
-        
-        if 'pm' in ampm and hour != 12:
-            hour += 12
-        if 'am' in ampm and hour == 12:
-            hour = 0
-        
-        today_str = datetime.fromtimestamp(now_ts, est).strftime('%Y-%m-%d')
-        try:
-            bet_time = est.localize(datetime.strptime(f"{today_str} {hour:02d}:00:00", '%Y-%m-%d %H:%M:%S'))
-            bet_unix = int(bet_time.timestamp())
+    for pattern in patterns:
+        match = re.search(pattern, title)
+        if match:
+            hour = int(match.group(1))
+            # Assume AM/PM based on pattern match
+            if 'pm' in pattern and hour != 12:
+                hour += 12
+            if 'am' in pattern and hour == 12:
+                hour = 0
             
-            if bet_unix < now_ts:
-                return "⚫ EXPIRED"
-            return f"🟢 ACTIVE ({bet_time.strftime('%H:%M ET')})"
-        except:
-            pass
+            today_str = datetime.fromtimestamp(now_ts, est).strftime('%Y-%m-%d')
+            try:
+                bet_time = est.localize(datetime.strptime(f"{today_str} {hour:02d}:00:00", '%Y-%m-%d %H:%M:%S'))
+                bet_unix = int(bet_time.timestamp())
+                
+                if bet_unix < now_ts:
+                    return "⚫ EXPIRED"
+                return f"🟢 ACTIVE ({bet_time.strftime('%H:%M ET')})"
+            except:
+                pass
     
     return "🟢 ACTIVE"
 
