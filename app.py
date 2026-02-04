@@ -71,31 +71,35 @@ def get_up_down(item):
 def get_status(item, now_ts):
     title = str(item.get('title') or item.get('question') or '').lower()
     
-    # Parse common timeframe patterns: "6AM ET", "6am", "6PM", etc.
+    # Parse ranges: "4:00AM-8:00AM ET", "4AM-8AM"
+    range_match = re.search(r'(\d{1,2}:\d{2}|\d{1,2})(am|pm)[^\w]*-*[^\w]*(\d{1,2}:\d{2}|\d{1,2})(am|pm)', title)
+    if range_match:
+        start_h = int(range_match.group(1).replace(':', ''))
+        start_ampm = range_match.group(2)
+        end_h = int(range_match.group(3).replace(':', ''))
+        end_ampm = range_match.group(4)
+        
+        # Convert both times to 24h
+        if 'pm' in start_ampm and start_h != 12: start_h += 12
+        if 'am' in start_ampm and start_h == 12: start_h = 0
+        if 'pm' in end_ampm and end_h != 12: end_h += 12  
+        if 'am' in end_ampm and end_h == 12: end_h = 0
+        
+        today_str = datetime.fromtimestamp(now_ts, est).strftime('%Y-%m-%d')
+        end_time = est.localize(datetime.strptime(f"{today_str} {end_h:02d}:00:00", '%Y-%m-%d %H:%M:%S'))
+        end_unix = int(end_time.timestamp())
+        
+        if end_unix < now_ts:
+            return "⚫ EXPIRED"
+        return f"🟢 ACTIVE (END {end_time.strftime('%H:%M ET')})"
+    
+    # Fallback: single time
     time_match = re.search(r'(\d{1,2})(am|pm|am et|pm et)', title)
     if time_match:
-        hour = int(time_match.group(1))
-        ampm = time_match.group(2).replace(' et', '')
-        
-        # Convert 12h to 24h
-        if 'pm' in ampm and hour != 12:
-            hour += 12
-        elif 'am' in ampm and hour == 12:
-            hour = 0
-        
-        # Today's date in EST
-        today_str = datetime.fromtimestamp(now_ts, est).strftime('%Y-%m-%d')
-        try:
-            bet_time = est.localize(datetime.strptime(f"{today_str} {hour:02d}:00:00", '%Y-%m-%d %H:%M:%S'))
-            bet_unix = int(bet_time.timestamp())
-            
-            if bet_unix < now_ts:
-                return "⚫ EXPIRED"
-            return f"🟢 ACTIVE ({bet_time.strftime('%H:%M ET')})"
-        except:
-            pass
+        # ... [existing single time code] ...
     
-    return "🟢 ACTIVE"  # Fallback
+    return "🟢 ACTIVE"
+
 
 def track_0x8dxd():
     trader = "0x8dxd"
