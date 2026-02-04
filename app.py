@@ -69,11 +69,11 @@ def get_up_down(item):
 def get_status(item, now_ts):
     title = str(item.get('title') or item.get('question') or '').lower()
     
-    # FULL DECIMAL NOW (critical fix!)
+    # FULL DECIMAL NOW - Precise minute/second comparison
     now_dt = datetime.fromtimestamp(now_ts, est)
     now_decimal = now_dt.hour + (now_dt.minute / 60.0) + (now_dt.second / 3600.0)
     
-    # Same proven regex
+    # Regex for times
     time_pattern = r'(\d{1,2})(?::(\d{1,2}))?([ap]m|et)'
     matches = re.findall(time_pattern, title)
     title_times = []
@@ -94,24 +94,17 @@ def get_status(item, now_ts):
         except:
             continue
     
-    # DEBUG with decimals
-    debug = f"DEBUG '{title[:40]}...' now={now_decimal:.2f} times={title_times}"
-    
     if not title_times:
-        st.caption(debug + " → no timer")
         return "🟢 ACTIVE (no timer)"
     
     max_h = max(title_times)
     if now_decimal >= max_h:
-        st.caption(debug + f" → EXPIRED (now {now_decimal:.2f} >= {max_h:.2f})")
         return "⚫ EXPIRED"
     
     disp_h = int(max_h % 12) or 12
     disp_m = f":{int((max_h % 1)*60):02d}" if (max_h % 1) > 0.1 else ""
     ampm = 'PM' if max_h >= 12 else 'AM'
-    status = f"🟢 ACTIVE (til ~{disp_h}{disp_m} {ampm} ET)"
-    st.caption(debug + f" → ACTIVE ({now_decimal:.2f} < {max_h:.2f})")
-    return status
+    return f"🟢 ACTIVE (til ~{disp_h}{disp_m} {ampm} ET)"
 
 
 def track_0x8dxd():
