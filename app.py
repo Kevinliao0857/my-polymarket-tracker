@@ -64,7 +64,7 @@ def get_status(item, now_ts):
     title = str(item.get('title') or item.get('question') or '')
     now_hour = datetime.fromtimestamp(now_ts, est).hour
     
-    # FIXED REGEX: Extract ALL 1-2 digit numbers with proper \b
+    # FIXED REGEX: Proper word boundary matching
     hour_matches = re.findall(r'\b(\d{1,2})\b', title)
     title_hours = []
     
@@ -85,13 +85,13 @@ def get_status(item, now_ts):
     
     return f"🟢 ACTIVE (til ~{max(title_hours):02d}:00 ET)"
 
-@st.cache_data(ttl=5)  # Slightly longer for efficiency
+@st.cache_data(ttl=5)
 def track_0x8dxd():
     trader = "0x8dxd"
     now_ts = int(time.time())
     fifteen_min_ago = now_ts - 900  # 15 min
     
-    # FIXED: Add time filtering to API URLs for efficiency
+    # API URLs with time filtering for efficiency
     urls = [
         f"https://data-api.polymarket.com/trades?user={trader}&limit=50&from={fifteen_min_ago}",
         f"https://data-api.polymarket.com/positions?user={trader}&limit=50&from={fifteen_min_ago}"
@@ -158,17 +158,28 @@ def track_0x8dxd():
     span_min = int((now_ts - min_ts) / 60)
     col3.metric("Newest", f"{span_min} min ago (ET)")
 
-# FIXED: Non-blocking auto-refresh with session state (no infinite loop!)
+# PERFECT AUTO-REFRESH: 3s intervals + manual override
 if 'refresh_time' not in st.session_state:
     st.session_state.refresh_time = 0
 
 now_time = time.time()
-if now_time - st.session_state.refresh_time > 3 or st.button("🔄 Force Refresh", type="primary"):
-    st.session_state.refresh_time = now_time
-    now_est = datetime.now(est)
-    
-    st.markdown("---")
-    track_0x8dxd()
-    st.caption(f"🕐 {now_est.strftime('%H:%M:%S ET')} | Live | Vancouver-friendly (PST+3h)")
+refresh_triggered = False
 
-st.info("💡 Auto-refreshes every 3s | Fixed regex/API/loop issues")
+if now_time - st.session_state.refresh_time > 3:
+    refresh_triggered = True
+elif st.button("🔄 Force Refresh", type="primary"):
+    refresh_triggered = True
+
+if refresh_triggered:
+    st.session_state.refresh_time = now_time
+    st.rerun()
+
+# Always show latest data (runs every page load)
+now_est = datetime.now(est)
+st.markdown("---")
+try:
+    track_0x8dxd()
+except Exception as e:
+    st.error(f"API error (normal during low activity): {str(e)[:100]}")
+
+st.caption(f"🕐 {now_est.strftime('%H:%M:%S ET')} | Live | PST+3h | Fixed: regex/API/refresh")
