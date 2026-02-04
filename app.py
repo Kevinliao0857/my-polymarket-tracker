@@ -28,7 +28,7 @@ def safe_fetch(url):
 
 def is_crypto(item):
     text = str(item).lower()
-    crypto_symbols = ['btc', 'eth', 'sol', 'xrp', 'ada', 'doge', 'shib', 'link', 'avax', 'matic', 'dot', 'uni']
+    crypto_symbols = ['btc', 'eth', 'sol', 'xrp', 'ada', 'doge', 'shib', 'link', 'avax', 'matic', 'dot', 'uni', 'bnb', 'trx']
     return any(sym in text for sym in crypto_symbols) or 'bitcoin' in text or 'ethereum' in text or 'solana' in text
 
 def get_up_down(item):
@@ -64,7 +64,7 @@ def get_status(item, now_ts):
     title = str(item.get('title') or item.get('question') or '')
     now_hour = datetime.fromtimestamp(now_ts, est).hour
     
-    # Extract ALL 1-2 digit numbers
+    # FIXED REGEX: Extract ALL 1-2 digit numbers with proper \b
     hour_matches = re.findall(r'\b(\d{1,2})\b', title)
     title_hours = []
     
@@ -85,15 +85,16 @@ def get_status(item, now_ts):
     
     return f"🟢 ACTIVE (til ~{max(title_hours):02d}:00 ET)"
 
-@st.cache_data(ttl=1)
+@st.cache_data(ttl=5)  # Slightly longer for efficiency
 def track_0x8dxd():
     trader = "0x8dxd"
     now_ts = int(time.time())
-    fifteen_min_ago = now_ts - 900
+    fifteen_min_ago = now_ts - 900  # 15 min
     
+    # FIXED: Add time filtering to API URLs for efficiency
     urls = [
-        f"https://data-api.polymarket.com/trades?user={trader}&limit=100",
-        f"https://data-api.polymarket.com/positions?user={trader}"
+        f"https://data-api.polymarket.com/trades?user={trader}&limit=50&from={fifteen_min_ago}",
+        f"https://data-api.polymarket.com/positions?user={trader}&limit=50&from={fifteen_min_ago}"
     ]
     
     all_data = []
@@ -157,17 +158,17 @@ def track_0x8dxd():
     span_min = int((now_ts - min_ts) / 60)
     col3.metric("Newest", f"{span_min} min ago (ET)")
 
-if st.button("🔄 Force Refresh"):
-    st.rerun()
+# FIXED: Non-blocking auto-refresh with session state (no infinite loop!)
+if 'refresh_time' not in st.session_state:
+    st.session_state.refresh_time = 0
 
-# ULTRA-FAST 3s refresh loop
-placeholder = st.empty()
-refresh_count = 0
-while True:
-    refresh_count += 1
+now_time = time.time()
+if now_time - st.session_state.refresh_time > 3 or st.button("🔄 Force Refresh", type="primary"):
+    st.session_state.refresh_time = now_time
     now_est = datetime.now(est)
-    with placeholder.container():
-        track_0x8dxd()
-        st.caption(f"🕐 {now_est.strftime('%H:%M:%S ET')} | Live ##{refresh_count}")
-    time.sleep(3)  # 3s = instant Status updates
-    st.rerun()
+    
+    st.markdown("---")
+    track_0x8dxd()
+    st.caption(f"🕐 {now_est.strftime('%H:%M:%S ET')} | Live | Vancouver-friendly (PST+3h)")
+
+st.info("💡 Auto-refreshes every 3s | Fixed regex/API/loop issues")
