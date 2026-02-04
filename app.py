@@ -67,6 +67,20 @@ def get_up_down(item):
     
     return "➖ ?"
 
+def get_status(item, now_ts):
+    end_fields = ['endDate', 'expiresAt', 'closeTime', 'resolutionTime']
+    for field in end_fields:
+        end_ts = item.get(field)
+        if end_ts:
+            try:
+                end_unix = int(float(end_ts))
+                if end_unix < now_ts:
+                    return "⚫ EXPIRED"
+                return f"🟢 ACTIVE ({datetime.fromtimestamp(end_unix, est).strftime('%H:%M ET')})"
+            except:
+                pass
+    return "🟢 ACTIVE"
+
 def track_0x8dxd():
     trader = "0x8dxd"
     now_ts = int(time.time())
@@ -99,7 +113,7 @@ def track_0x8dxd():
     for item in all_data:
         updown = get_up_down(item)
         title = str(item.get('title') or item.get('question') or '-')
-        short_title = (title[:85] + '...') if len(title) > 90 else title  # FIXED: 85 chars visible
+        short_title = (title[:85] + '...') if len(title) > 90 else title
         
         size_val = float(item.get('size', 0))
         price_val = item.get('curPrice', item.get('price', '-'))
@@ -110,12 +124,14 @@ def track_0x8dxd():
         ts = int(float(ts_field)) if ts_field else now_ts
         min_ts = min(min_ts, ts)
         update_str = datetime.fromtimestamp(ts, est).strftime('%H:%M:%S ET')
+        status_str = get_status(item, now_ts)  # NEW: Status column
         
         row = {
             'Market': short_title,
             'UP/DOWN': updown,
             'Size': f"${size_val:.0f}",
             'Price': price_val,
+            'Status': status_str,  # NEW
             'Updated': update_str
         }
         df_data.append(row)
@@ -124,8 +140,9 @@ def track_0x8dxd():
     df = df.sort_values('Updated', ascending=False)
     
     st.success(f"✅ {len(df)} crypto bets (15min ET)")
-    st.dataframe(df, use_container_width=True, height=500, column_config={  # FIXED: Full titles + taller
-        "Market": st.column_config.TextColumn("Market", width="medium")
+    st.dataframe(df, use_container_width=True, height=500, column_config={
+        "Market": st.column_config.TextColumn("Market", width="medium"),
+        "Status": st.column_config.TextColumn("Status", width="small")
     })
     
     up_bets = len(df[df['UP/DOWN'] == '🟢 UP'])
