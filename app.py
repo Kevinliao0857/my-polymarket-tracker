@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import datetime
 import time
 import pytz  # pip install pytz
-import re  # NEW: For time parsing
+import re  # For time parsing
 
 st.set_page_config(layout="wide")
 st.markdown("# ₿ 0x8dxd Crypto Bot Tracker - Last 15 Min")
@@ -28,30 +28,26 @@ def safe_fetch(url):
         pass
     return []
 
-def is_crypto(item):  # Scans entire item for crypto
+def is_crypto(item):
     text = str(item).lower()
     crypto_symbols = ['btc', 'eth', 'sol', 'xrp', 'ada', 'doge', 'shib', 'link', 'avax', 'matic', 'dot', 'uni']
     return any(sym in text for sym in crypto_symbols) or 'bitcoin' in text or 'ethereum' in text or 'solana' in text
 
 def get_up_down(item):
-    # Check all common fields for direction
     fields = ['outcome', 'side', 'answer', 'choice', 'direction']
     text = ' '.join(str(item.get(f, '')).lower() for f in fields)
     title = str(item.get('title', item.get('question', ''))).lower()
     
-    # Priority 1: Explicit outcome/side
     if 'yes' in text or 'buy' in text or 'long' in text:
         return "🟢 UP"
     if 'no' in text or 'sell' in text or 'short' in text:
         return "🔴 DOWN"
     
-    # Priority 2: Price direction in title
     if any(word in title for word in ['above', 'higher', 'rise', 'up', 'moon']):
         return "🟢 UP"
     if any(word in title for word in ['below', 'lower', 'drop', 'down', 'crash']):
         return "🔴 DOWN"
     
-    # Priority 3: Price thresholds (above=UP, below=DOWN)
     price_words = ['$', 'usd', 'price']
     if any(p in title for p in price_words):
         if '>' in title or '>=' in title:
@@ -59,7 +55,6 @@ def get_up_down(item):
         if '<' in title or '<=' in title:
             return "🔴 DOWN"
     
-    # Priority 4: Timeframe bets (will reach = direction in title)
     if any(word in title for word in ['1h', 'hour', '15m', 'will']):
         if any(word in title for word in ['yes', 'will', 'reach']):
             return "🟢 UP"
@@ -71,35 +66,54 @@ def get_up_down(item):
 def get_status(item, now_ts):
     title = str(item.get('title') or item.get('question') or '').lower()
     
-    # Parse ranges: "4:00AM-8:00AM ET", "4AM-8AM"
-    range_match = re.search(r'(\d{1,2}:\d{2}|\d{1,2})(am|pm)[^\w]*-*[^\w]*(\d{1,2}:\d{2}|\d{1,2})(am|pm)', title)
+    # NEW: Parse ranges FIRST: "4:00AM-8:00AM ET", "4AM-8AM"
+    range_match = re.search(r'(\d{1,2})(?::\d{2})?(am|pm)\s*-?\s*(\d{1,2})(?::\d{2})?(am|pm)', title)
     if range_match:
-        start_h = int(range_match.group(1).replace(':', ''))
+        start_h = int(range_match.group(1))
         start_ampm = range_match.group(2)
-        end_h = int(range_match.group(3).replace(':', ''))
+        end_h = int(range_match.group(3))
         end_ampm = range_match.group(4)
         
-        # Convert both times to 24h
-        if 'pm' in start_ampm and start_h != 12: start_h += 12
-        if 'am' in start_ampm and start_h == 12: start_h = 0
-        if 'pm' in end_ampm and end_h != 12: end_h += 12  
-        if 'am' in end_ampm and end_h == 12: end_h = 0
+        # Convert END time to 24h format
+        if 'pm' in end_ampm and end_h != 12:
+            end_h += 12
+        if 'am' in end_ampm and end_h == 12:
+            end_h = 0
         
         today_str = datetime.fromtimestamp(now_ts, est).strftime('%Y-%m-%d')
-        end_time = est.localize(datetime.strptime(f"{today_str} {end_h:02d}:00:00", '%Y-%m-%d %H:%M:%S'))
-        end_unix = int(end_time.timestamp())
-        
-        if end_unix < now_ts:
-            return "⚫ EXPIRED"
-        return f"🟢 ACTIVE (END {end_time.strftime('%H:%M ET')})"
+        try:
+            end_time = est.localize(datetime.strptime(f"{today_str} {end_h:02d}:00:00", '%Y-%m-%d %H:%M:%S'))
+            end_unix = int(end_time.timestamp())
+            
+            if end_unix < now_ts:
+                return "⚫ EXPIRED"
+            return f"🟢 ACTIVE (END {end_time.strftime('%H:%M ET')})"
+        except:
+            pass
     
-    # Fallback: single time
+    # Fallback: single time "6AM ET"
     time_match = re.search(r'(\d{1,2})(am|pm|am et|pm et)', title)
     if time_match:
-        # ... [existing single time code] ...
+        hour = int(time_match.group(1))
+        ampm = time_match.group(2).replace(' et', '')
+        
+        if 'pm' in ampm and hour != 12:
+            hour += 12
+        if 'am' in ampm and hour == 12:
+            hour = 0
+        
+        today_str = datetime.fromtimestamp(now_ts, est).strftime('%Y-%m-%d')
+        try:
+            bet_time = est.localize(datetime.strptime(f"{today_str} {hour:02d}:00:00", '%Y-%m-%d %H:%M:%S'))
+            bet_unix = int(bet_time.timestamp())
+            
+            if bet_unix < now_ts:
+                return "⚫ EXPIRED"
+            return f"🟢 ACTIVE ({bet_time.strftime('%H:%M ET')})"
+        except:
+            pass
     
     return "🟢 ACTIVE"
-
 
 def track_0x8dxd():
     trader = "0x8dxd"
