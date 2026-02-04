@@ -1,24 +1,24 @@
 import streamlit as st
 import requests
 import pandas as pd
-from datetime import datetime, timezone
+from datetime import datetime
 import time
-import pytz  # Add this pip install pytz if needed
+import pytz  # pip install pytz
 
 st.set_page_config(layout="wide")
 st.markdown("# ₿ 0x8dxd Crypto Bot Tracker - Last 1 Hour")
 
-st.info("🟢 Live crypto-only | Last 1h trades/closes | Enhanced UP/DOWN")
+st.info("🟢 Live crypto-only | Last 1h trades/closes | Responsive refresh")
 
-# Timezone display
+# Live PST clock
 pst = pytz.timezone('US/Pacific')
 now_pst = datetime.now(pst)
-st.caption(f"🕐 Current: {now_pst.strftime('%Y-%m-%d %H:%M:%S %Z')} | Auto-refresh 5s")
+st.caption(f"🕐 Current: {now_pst.strftime('%Y-%m-%d %H:%M:%S %Z')} | Auto 5s + Force 🔄")
 
-@st.cache_data(ttl=5)
+@st.cache_data(ttl=3)  # Shorter TTL for live
 def safe_fetch(url):
     try:
-        resp = requests.get(url, timeout=8)
+        resp = requests.get(url, timeout=10)
         if resp.status_code == 200:
             data = resp.json()
             if isinstance(data, list) and data:
@@ -30,27 +30,33 @@ def safe_fetch(url):
 def is_crypto(market_title):
     title_lower = market_title.lower()
     crypto_symbols = ['btc', 'eth', 'sol', 'xrp', 'ada', 'doge', 'shib', 'link', 'avax', 'matic', 'dot', 'uni']
-    return any(sym in title_lower for sym in crypto_symbols) or any(phrase in title_lower for phrase in ['bitcoin', 'ethereum', 'solana'])
+    return any(sym in title_lower for sym in crypto_symbols) or 'bitcoin' in title_lower or 'ethereum' in title_lower or 'solana' in title_lower
 
 def get_up_down(item):
     outcome = str(item.get('outcome', '')).lower()
     side = str(item.get('side', '')).lower()
     title = str(item.get('title', item.get('question', ''))).lower()
     
+    # Positions outcome
     if 'yes' in outcome:
         return "🟢 UP"
     if 'no' in outcome:
         return "🔴 DOWN"
     
+    # Trades side
     if 'buy' in side:
-        if any(word in title for word in ['above', 'up']):
-            return "🟢 UP"
         return "🟢 UP"
     if 'sell' in side:
-        if any(word in title for word in ['below', 'down']):
-            return "🔴 DOWN"
         return "🔴 DOWN"
     
+    # 1h hourly specials
+    if any(word in title for word in ['1h', 'hour']):
+        if any(word in title for word in ['above']):
+            return "🟢 UP"
+        if any(word in title for word in ['below']):
+            return "🔴 DOWN"
+    
+    # Title fallback
     if any(word in title for word in ['yes', 'will', 'above', 'up']):
         return "🟢 UP"
     if any(word in title for word in ['no', 'below', 'down']):
@@ -75,17 +81,17 @@ def track_0x8dxd():
         raw_data = safe_fetch(url)
         for item in raw_data:
             ts_field = item.get('timestamp') or item.get('updatedAt') or item.get('createdAt')
-            ts = int(float(ts_field)) if ts_field else 0
+            ts = int(float(ts_field)) if ts_field else now_ts
             if ts >= hour_ago:
                 title = str(item.get('title') or item.get('question') or '-')
                 if is_crypto(title):
-                    key = f"{title[:80]}_{ts}"
-                    if key not in seen:
+                    key = title[:100]
+                    if key not in seen and len(all_data) < 25:
                         seen.add(key)
                         all_data.append(item)
     
     if not all_data:
-        st.info("No crypto trades/positions in last hour")
+        st.info("No crypto activity in last hour | Bot quiet?")
         return
     
     df_data = []
@@ -93,7 +99,7 @@ def track_0x8dxd():
     for item in all_data:
         updown = get_up_down(item)
         title = str(item.get('title') or item.get('question') or '-')
-        short_title = (title[:57] + '...') if len(title) > 60 else title
+        short_title = (title[:55] + '...') if len(title) > 60 else title
         
         size_val = float(item.get('size', 0))
         pnl_val = float(item.get('cashPnl', item.get('pnl', 0)))
@@ -104,7 +110,7 @@ def track_0x8dxd():
         ts_field = item.get('timestamp') or item.get('updatedAt') or item.get('createdAt') or now_ts
         ts = int(float(ts_field)) if ts_field else now_ts
         min_ts = min(min_ts, ts)
-        update_str = datetime.fromtimestamp(ts, pst).strftime('%H:%M:%S %Z')
+        update_str = datetime.fromtimestamp(ts, pst).strftime('%H:%M:%S')
         
         row = {
             'Market': short_title,
@@ -120,7 +126,7 @@ def track_0x8dxd():
     df = df.sort_values('Updated', ascending=False)
     
     st.success(f"✅ {len(df)} unique crypto bets (last 1h)")
-    st.dataframe(df, use_container_width=True)
+    st.dataframe(df, use_container_width=True, height=400)
     
     up_bets = len(df[df['UP/DOWN'] == '🟢 UP'])
     st.metric("🟢 UP Bets", up_bets)
@@ -130,15 +136,19 @@ def track_0x8dxd():
     st.metric("Total PnL (1h)", f"${pnl:.0f}")
     
     span_min = int((now_ts - min_ts) / 60)
-    st.metric("Activity Span", f"{span_min} min ago")
+    st.metric("Newest Activity", f"{span_min} min ago")
 
-# Reliable 5s refresh
+if st.button("🔄 Force Refresh Now"):
+    st.rerun()
+
+# Bulletproof 5s loop
 placeholder = st.empty()
 refresh_count = 0
 while True:
     refresh_count += 1
+    now_pst = datetime.now(pst)
     with placeholder.container():
         track_0x8dxd()
-        st.caption(f"🕐 {now_pst.strftime('%H:%M:%S %Z')} | Refresh #{refresh_count} | 5s interval")
+        st.caption(f"🕐 {now_pst.strftime('%H:%M:%S %Z')} | Refresh #{refresh_count} | 5s auto")
     time.sleep(5)
     st.rerun()
