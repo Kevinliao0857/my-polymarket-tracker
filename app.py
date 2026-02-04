@@ -12,24 +12,20 @@ wallet = st.sidebar.text_input("", value="0x63ce342161250d705dc0b16df89036c8e5f9
 
 @st.cache_data(ttl=5)
 def fetch_all(wallet):
+    data = []
     try:
         resp = requests.get(f"https://data-api.polymarket.com/positions?proxyWallet={wallet}", timeout=8)
         if resp.status_code == 200:
             data = resp.json()
-            return data[:15] if isinstance(data, list) else []
-        resp = requests.get(f"https://data-api.polymarket.com/trades?user={wallet}", timeout=8)
-        if resp.status_code == 200:
-            data = resp.json()
-            return data[:15] if isinstance(data, list) else []
     except:
         pass
-    return []
+    return data[:15] if isinstance(data, list) else []
 
-def direction(item):
-    side = str(item.get('side') or item.get('outcome') or '').lower()
-    if 'long' in side or 'yes' in side:
+def get_direction(title, side=None):
+    text = (str(title) + str(side or '')).lower()
+    if any(word in text for word in ['long', 'yes', 'above', 'will', 'rises']):
         return "🟢 UP"
-    if 'short' in side or 'no' in side:
+    if any(word in text for word in ['short', 'no', 'below', 'falls']):
         return "🔴 DOWN"
     return "➖"
 
@@ -41,10 +37,11 @@ col2.metric("Updated", datetime.now().strftime('%H:%M:%S'))
 if bets:
     rows = []
     for bet in bets:
-        dir = direction(bet)
+        title = bet.get('title') or bet.get('question') or ''
+        direction = get_direction(title, bet.get('side'))
         rows.append({
-            'Direction': dir,
-            'Market': str(bet.get('title') or bet.get('question') or '-')[:60],
+            'Direction': direction,
+            'Market': str(title)[:60],
             'Size': f"${float(bet.get('size', 0)):.0f}",
             'Updated': datetime.now().strftime('%H:%M:%S')
         })
@@ -52,7 +49,7 @@ if bets:
     df = pd.DataFrame(rows)
     st.dataframe(df, use_container_width=True)
 else:
-    st.info("No active bets | Try leaderboard whales")
+    st.info("No bets | [Leaderboard](https://polymarket.com/leaderboard)")
 
 st.caption("5s live")
 time.sleep(5)
