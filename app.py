@@ -10,10 +10,10 @@ st.markdown("# ₿ 0x8dxd Crypto Bot Tracker - Last 15 Min")
 
 st.info("🟢 Live crypto-only | UP/DOWN focus | Last 15min")
 
-# Live PST clock
-pst = pytz.timezone('US/Pacific')
-now_pst = datetime.now(pst)
-st.caption(f"🕐 Current: {now_pst.strftime('%Y-%m-%d %H:%M:%S %Z')} | Auto 5s + Force 🔄")
+# Live EST clock (trader uses EST)
+est = pytz.timezone('US/Eastern')
+now_est = datetime.now(est)
+st.caption(f"🕐 Current EST: {now_est.strftime('%Y-%m-%d %H:%M:%S %Z')} | Auto 5s + Force 🔄")
 
 @st.cache_data(ttl=3)
 def safe_fetch(url):
@@ -27,7 +27,7 @@ def safe_fetch(url):
         pass
     return []
 
-def is_crypto(item):  # FIXED: Scans entire item for crypto
+def is_crypto(item):  # Scans entire item for crypto
     text = str(item).lower()
     crypto_symbols = ['btc', 'eth', 'sol', 'xrp', 'ada', 'doge', 'shib', 'link', 'avax', 'matic', 'dot', 'uni']
     return any(sym in text for sym in crypto_symbols) or 'bitcoin' in text or 'ethereum' in text or 'solana' in text
@@ -78,7 +78,7 @@ def track_0x8dxd():
             ts_field = item.get('timestamp') or item.get('updatedAt') or item.get('createdAt')
             ts = int(float(ts_field)) if ts_field else now_ts
             if ts >= fifteen_min_ago and is_crypto(item):
-                key = str(item.get('title') or item.get('question') or '-')[:100]  # FIXED: Added missing )
+                key = str(item.get('title') or item.get('question') or '-')[:100]
                 if key not in seen and len(all_data) < 25:
                     seen.add(key)
                     all_data.append(item)
@@ -102,7 +102,7 @@ def track_0x8dxd():
         ts_field = item.get('timestamp') or item.get('updatedAt') or item.get('createdAt') or now_ts
         ts = int(float(ts_field)) if ts_field else now_ts
         min_ts = min(min_ts, ts)
-        update_str = datetime.fromtimestamp(ts, pst).strftime('%H:%M:%S')
+        update_str = datetime.fromtimestamp(ts, est).strftime('%H:%M:%S ET')  # CHANGED: EST + ET label
         
         row = {
             'Market': short_title,
@@ -116,7 +116,7 @@ def track_0x8dxd():
     df = pd.DataFrame(df_data)
     df = df.sort_values('Updated', ascending=False)
     
-    st.success(f"✅ {len(df)} crypto bets (15min)")
+    st.success(f"✅ {len(df)} crypto bets (15min ET)")
     st.dataframe(df, use_container_width=True, height=400)
     
     up_bets = len(df[df['UP/DOWN'] == '🟢 UP'])
@@ -124,7 +124,7 @@ def track_0x8dxd():
     st.metric("🔴 DOWN Bets", len(df) - up_bets)
     
     span_min = int((now_ts - min_ts) / 60)
-    st.metric("Newest", f"{span_min} min ago")
+    st.metric("Newest", f"{span_min} min ago (ET)")
 
 if st.button("🔄 Force Refresh"):
     st.rerun()
@@ -134,9 +134,9 @@ placeholder = st.empty()
 refresh_count = 0
 while True:
     refresh_count += 1
-    now_pst = datetime.now(pst)
+    now_est = datetime.now(est)
     with placeholder.container():
         track_0x8dxd()
-        st.caption(f"🕐 {now_pst.strftime('%H:%M:%S %Z')} | #{refresh_count}")
+        st.caption(f"🕐 {now_est.strftime('%H:%M:%S ET')} | #{refresh_count}")
     time.sleep(5)
     st.rerun()
