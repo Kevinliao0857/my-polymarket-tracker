@@ -60,27 +60,33 @@ def get_status(item, now_ts):
     title = str(item.get('title') or item.get('question') or '').lower()
     now_hour = datetime.fromtimestamp(now_ts, est).hour
     
-    # Better time parsing - handles multiple times
-    time_pattern = r'(\d{1,2})(?::\d{2})?\s*(?:am|pm|a\.?m\.?|p\.?m\.?)'
+    # Better regex - catches all AM/PM times
+    time_pattern = r'(\d{1,2})(?::\d{2})?\s*(?:am|pm|a\.?m\.?|p\.?m\.?)?'
     matches = re.findall(time_pattern, title, re.IGNORECASE)
     title_hours = []
     
     for hour_str, period in matches:
-        hour = int(hour_str)
-        if 'pm' in period.lower():
-            hour = (hour % 12) + 12
-        else:
-            hour = hour % 12 or 12
-        title_hours.append(hour)
+        try:
+            hour = int(hour_str)
+            if period and 'pm' in period.lower():
+                hour = (hour % 12) + 12 if hour != 12 else 12
+            elif period and 'am' in period.lower():
+                hour = hour % 12
+            if 0 <= hour <= 23:
+                title_hours.append(hour)
+        except:
+            pass
     
-    # Fallback standalone hours (1-12 → trader PM bias)
+    # Fallback standalone hours (PM bias)
     if not title_hours:
-        hour_pattern = r'(?<!\d)(\d{1,2})(?!\d)(?!\s*(am|pm))'
-        hours = re.findall(hour_pattern, title)
-        for h in hours:
-            hour = int(h)
-            if 1 <= hour <= 12:
-                title_hours.append(hour + 12 if hour >= 8 else hour)
+        hour_matches = re.findall(r'\b(\d{1,2})\b(?!\d)', title)
+        for h in hour_matches:
+            try:
+                hour = int(h)
+                if 1 <= hour <= 12:
+                    title_hours.append(hour + 12 if hour >= 8 else hour)
+            except:
+                pass
     
     if not title_hours:
         return "🟢 ACTIVE (no timer)"
@@ -90,7 +96,7 @@ def get_status(item, now_ts):
         return "⚫ EXPIRED"
     
     display_hour = expiry_hour % 12 or 12
-    ampm = 'PM' if expiry_hour >= 12 else 'AM'
+    ampm = 'AM' if expiry_hour < 12 else 'PM'
     return f"🟢 ACTIVE (til ~{display_hour} {ampm} ET)"
 
 
