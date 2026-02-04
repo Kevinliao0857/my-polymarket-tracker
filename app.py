@@ -1,7 +1,7 @@
 import streamlit as st
 import requests
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, time
 import time
 import pytz
 import re
@@ -62,28 +62,110 @@ def get_up_down(item):
 
 def get_status(item, now_ts):
     title = str(item.get('title') or item.get('question') or '')
-    now_hour = datetime.fromtimestamp(now_ts, est).hour
+    now_dt = datetime.fromtimestamp(now_ts, est)
+    now_hour = now_dt.hour
     
-    # Extract ALL 1-2 digit numbers
-    hour_matches = re.findall(r'\b(\d{1,2})\b', title)
-    title_hours = []
+    # Enhanced regex patterns for dates and times
+    date_patterns = [
+        r'(\d{1,2}/\d{1,2}(?:/\d{2,4})?)',  # 2/4 or 2/4/26
+        r'(\d{1,2}-\d{1,2}(?:-\d{2,4})?)',  # 2-4 or 2-4-26
+        r'(\d{4}-\d{1,2}-\d{1,2})',         # 2026-02-04
+        r'(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+(\d{1,2})(?:st|nd|rd|th)?',  # Feb 4, Dec 31st
+        r'(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2})(?:st|nd|rd|th)?',  # Full months
+    ]
+    time_patterns = [
+        r'(\d{1,2}):?(\d{2})\s*(am?|pm?)',  # 3:45pm, 15:30
+        r'(\d{1,2})\s*(am?|pm?)',           # 3pm
+        r'at\s+(\d{1,2})(?::(\d{2}))?\s*(am?|pm?)',
+    ]
     
-    for hour_str in hour_matches:
-        hour = int(hour_str)
-        if 1 <= hour <= 12:
-            if hour <= 6:  # Early = AM
-                title_hours.append(hour)
-            else:  # Later = PM
-                title_hours.append(hour + 12 if hour != 12 else 12)
+    # Extract components
+    dates = []
+    hours = []
+    minutes_list = []
+    ampm = []
     
-    if not title_hours:
+    # Dates
+    for pattern in date_patterns:
+        dates.extend(re.findall(pattern, title, re.I))
+    
+    # Times
+    for pattern in time_patterns:
+        matches = re.findall(pattern, title, re.I)
+        for match in matches:
+            if len(match) >= 1:
+                h = int(match[0])
+                hours.append(h)
+            if len(match) >= 2 and match[1]:
+                m = int(match[1])
+                minutes_list.append(m)
+            if len(match) >= 3 and match[2]:
+                ampm.append(match[2].lower())
+    
+    # Fallback hour extraction (1-2 digits)
+    if not hours:
+        hour_matches = re.findall(r'\b(\d{1,2})\b', title)
+        for hour_str in hour_matches:
+            hour = int(hour_str)
+            if 1 <= hour <= 12:
+                hours.append(hour)
+    
+    if not hours:
         return "🟢 ACTIVE (no timer)"
     
-    max_title_hour = max(title_hours)
-    if now_hour > max_title_hour:
+    # Use latest hour as deadline
+    max_hour = max(hours)
+    deadline_hour = max_hour
+    deadline_min = 59  # End of hour
+    
+    # AM/PM normalization
+    if ampm:
+        if any('pm' in p for p in ampm) and max_hour < 12:
+            deadline_hour += 12
+        elif any('am' in p for p in ampm) and max_hour == 12:
+            deadline_hour = 0
+    
+    # Parse date
+    parsed_date = None
+    for date_str in dates:
+        # Month names
+        month_match = re.match(r'(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+(\d{1,2})(?:st|nd|rd|th)?', date_str, re.I)
+        if month_match:
+            month_abbr = month_match.group(1).lower()
+            day = int(month_match.group(2))
+            month_map = {'jan':1, 'feb':2, 'mar':3, 'apr':4, 'may':5, 'jun':6,
+                         'jul':7, 'aug':8, 'sep':9, 'oct':10, 'nov':11, 'dec':12}
+            month_num = month_map.get(month_abbr)
+            if month_num:
+                try:
+                    parsed_date = now_dt.date().replace(month=month_num, day=day)
+                    break
+                except ValueError:
+                    continue
+        
+        # Numeric formats
+        for fmt in ['%m/%d/%Y', '%m/%d/%y', '%m-%d-%Y', '%m-%d-%y', '%Y-%m-%d']:
+            try:
+                temp_date = datetime.strptime(date_str, fmt).date()
+                if temp_date.year < 100:  # Two-digit year
+                    temp_date = temp_date.replace(year=now_dt.year)
+                parsed_date = temp_date
+                break
+            except:
+                pass
+    
+    # Build deadline datetime
+    if parsed_date:
+        if parsed_date < now_dt.date():
+            return "⚫ EXPIRED (past date)"
+        deadline_dt = datetime.combine(parsed_date, time(deadline_hour, deadline_min))
+    else:
+        deadline_dt = now_dt.replace(hour=deadline_hour, minute=deadline_min, second=0)
+    
+    if now_dt > deadline_dt:
         return "⚫ EXPIRED"
     
-    return f"🟢 ACTIVE (til ~{max(title_hours):02d}:00 ET)"
+    return f"🟢 ACTIVE (til ~{deadline_hour:02d}:{deadline_min:02d} ET)"
 
 @st.cache_data(ttl=1)
 def track_0x8dxd():
@@ -169,5 +251,5 @@ while True:
     with placeholder.container():
         track_0x8dxd()
         st.caption(f"🕐 {now_est.strftime('%H:%M:%S ET')} | Live ##{refresh_count}")
-    time.sleep(3)  # 3s = instant Status updates
+    time.sleep(3)
     st.rerun()
