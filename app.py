@@ -33,30 +33,37 @@ def is_crypto(item):  # Scans entire item for crypto
     return any(sym in text for sym in crypto_symbols) or 'bitcoin' in text or 'ethereum' in text or 'solana' in text
 
 def get_up_down(item):
-    outcome = str(item.get('outcome', '')).lower()
-    side = str(item.get('side', '')).lower()
+    # Check all common fields for direction
+    fields = ['outcome', 'side', 'answer', 'choice', 'direction']
+    text = ' '.join(str(item.get(f, '')).lower() for f in fields)
     title = str(item.get('title', item.get('question', ''))).lower()
     
-    if 'yes' in outcome:
+    # Priority 1: Explicit outcome/side
+    if 'yes' in text or 'buy' in text or 'long' in text:
         return "🟢 UP"
-    if 'no' in outcome:
+    if 'no' in text or 'sell' in text or 'short' in text:
         return "🔴 DOWN"
     
-    if 'buy' in side:
+    # Priority 2: Price direction in title
+    if any(word in title for word in ['above', 'higher', 'rise', 'up', 'moon']):
         return "🟢 UP"
-    if 'sell' in side:
+    if any(word in title for word in ['below', 'lower', 'drop', 'down', 'crash']):
         return "🔴 DOWN"
     
-    if any(word in title for word in ['1h', 'hour', '15m']):
-        if any(word in title for word in ['above']):
+    # Priority 3: Price thresholds (above=UP, below=DOWN)
+    price_words = ['$', 'usd', 'price']
+    if any(p in title for p in price_words):
+        if '>' in title or '>=' in title:
             return "🟢 UP"
-        if any(word in title for word in ['below']):
+        if '<' in title or '<=' in title:
             return "🔴 DOWN"
     
-    if any(word in title for word in ['yes', 'will', 'above', 'up']):
-        return "🟢 UP"
-    if any(word in title for word in ['no', 'below', 'down']):
-        return "🔴 DOWN"
+    # Priority 4: Timeframe bets (will reach = direction in title)
+    if any(word in title for word in ['1h', 'hour', '15m', 'will']):
+        if any(word in title for word in ['yes', 'will', 'reach']):
+            return "🟢 UP"
+        else:
+            return "🔴 DOWN"
     
     return "➖ ?"
 
@@ -92,7 +99,7 @@ def track_0x8dxd():
     for item in all_data:
         updown = get_up_down(item)
         title = str(item.get('title') or item.get('question') or '-')
-        short_title = (title[:55] + '...') if len(title) > 60 else title
+        short_title = (title[:85] + '...') if len(title) > 90 else title  # FIXED: 85 chars visible
         
         size_val = float(item.get('size', 0))
         price_val = item.get('curPrice', item.get('price', '-'))
@@ -102,7 +109,7 @@ def track_0x8dxd():
         ts_field = item.get('timestamp') or item.get('updatedAt') or item.get('createdAt') or now_ts
         ts = int(float(ts_field)) if ts_field else now_ts
         min_ts = min(min_ts, ts)
-        update_str = datetime.fromtimestamp(ts, est).strftime('%H:%M:%S ET')  # CHANGED: EST + ET label
+        update_str = datetime.fromtimestamp(ts, est).strftime('%H:%M:%S ET')
         
         row = {
             'Market': short_title,
@@ -117,7 +124,9 @@ def track_0x8dxd():
     df = df.sort_values('Updated', ascending=False)
     
     st.success(f"✅ {len(df)} crypto bets (15min ET)")
-    st.dataframe(df, use_container_width=True, height=400)
+    st.dataframe(df, use_container_width=True, height=500, column_config={  # FIXED: Full titles + taller
+        "Market": st.column_config.TextColumn("Market", width="medium")
+    })
     
     up_bets = len(df[df['UP/DOWN'] == '🟢 UP'])
     st.metric("🟢 UP Bets", up_bets)
