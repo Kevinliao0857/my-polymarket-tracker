@@ -5,30 +5,26 @@ from datetime import datetime
 
 st.set_page_config(layout="wide")
 
-# Real Polymarket API
+st.title("🔥 Polymarket Live Tracker - Fixed!")
+search = st.sidebar.text_input("Wallet or Username", value="nanoin123")
+
 @st.cache_data(ttl=300)
-def get_positions(wallet):
+def fetch_data(query):
+    data = []
+    # Try positions API
     try:
-        resp = requests.get(f"https://data-api.polymarket.com/positions?proxyWallet={wallet}", timeout=10)
+        resp = requests.get(f"https://data-api.polymarket.com/positions?proxyWallet={query}", timeout=10)
         if resp.status_code == 200:
-            data = resp.json()
-            if data:
-                df = pd.DataFrame(data[:15])
-                df['updated'] = datetime.now().strftime('%H:%M')
-                return df[['title', 'outcome', 'size', 'cashPnl', 'percentPnl', 'curPrice', 'updated']]
-    except:
-        pass
-    return pd.DataFrame()
-
-st.title("🔥 Live Polymarket Positions Tracker")
-wallet = st.sidebar.text_input("Wallet Address", value="0x56687bf447db6ffa42ffe2204a05edaa20f55839")  # Example whale
-
-df = get_positions(wallet)
-if not df.empty:
-    st.metric("Positions", len(df))
-    st.dataframe(df, use_container_width=True)
-    st.metric("Total PnL", f"${df['cashPnl'].sum():.0f}")
-else:
-    st.info("Enter wallet (0x...) or use leaderboard: polymarket.com/leaderboard")
-
-st.caption("Refreshes every 5 mins [web:136]")
+            data.extend(resp.json())
+    except: pass
+    
+    # Try trades API
+    try:
+        resp = requests.get(f"https://data-api.polymarket.com/trades?user={query}", timeout=10)
+        if resp.status_code == 200:
+            trades = resp.json()
+            if trades:
+                data.append({
+                    'type': 'Recent Trade',
+                    'market': trades[0].get('question', 'N/A'),
+                    'size
