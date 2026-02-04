@@ -29,13 +29,13 @@ def safe_fetch(url):
     return []
 
 def is_crypto(item):
-    text = str(item).lower()
+    title = str(item.get('title') or item.get('question') or '').lower()  # TITLE ONLY
     tickers = ['btc', 'eth', 'sol', 'xrp', 'ada', 'doge', 'shib', 'link', 'avax', 'matic', 'dot', 'uni', 'bnb', 'usdt', 'usdc']
-    full_names = ['bitcoin', 'ethereum', 'solana', 'ripple', 'xrp', 'cardano', 'dogecoin', 'shiba', 'chainlink', 'avalanche', 'polygon', 'polkadot', 'uniswap', 'binance coin', 'bsc']
+    full_names = ['bitcoin', 'ethereum', 'solana', 'ripple', 'xrp', 'cardano', 'dogecoin', 'shiba', 'chainlink', 'avalanche', 'polygon', 'polkadot', 'uniswap', 'binance coin']
     
-    return (any(t in text for t in tickers) or 
-            any(f in text for f in full_names) or 
-            'crypto' in text.lower())
+    # STRICT: Must contain ticker OR full name in TITLE (no 'crypto' wildcard, no full item text)
+    return any(t in title for t in tickers) or any(f in title for f in full_names)
+
 
 def get_up_down(item):
     fields = ['outcome', 'side', 'answer', 'choice', 'direction']
