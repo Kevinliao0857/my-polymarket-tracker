@@ -5,15 +5,15 @@ from datetime import datetime
 import time
 
 st.set_page_config(layout="wide")
-st.title("🚀 Polymarket Live Tracker")
+st.title("🚀 Polymarket Live Tracker - 5s Refresh")
 
 # Sidebar
 st.sidebar.header("Trader Search")
 trader = st.sidebar.text_input("Username/Wallet", value="nanoin123")
-if st.sidebar.button("🔄 Refresh Now"):
+if st.sidebar.button("🔄 Manual Refresh"):
     st.rerun()
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=5)  # 5 SECONDS!
 def safe_fetch(url):
     try:
         resp = requests.get(url, timeout=8)
@@ -36,31 +36,34 @@ def display_data(trader):
         all_data.extend(safe_fetch(url))
     
     if all_data:
-        # Flexible columns
         cols = ['title', 'question', 'market', 'outcome', 'side', 'size', 'cashPnl', 'pnl']
         df_data = []
         for item in all_data:
             row = {col: item.get(col, '-') for col in cols}
-            row['time'] = datetime.now().strftime('%H:%M')
+            row['time'] = datetime.now().strftime('%H:%M:%S')  # Seconds!
             df_data.append(row)
         
         df = pd.DataFrame(df_data)
-        st.success(f"✅ Found {len(df)} positions/trades")
+        st.success(f"✅ Found {len(df)} positions/trades | Updated: {datetime.now().strftime('%H:%M:%S')}")
         st.dataframe(df[['title', 'side', 'size', 'cashPnl', 'time']], use_container_width=True)
         
-        total_pnl = df['cashPnl'].sum()
-        st.metric("Total PnL", f"${total_pnl:.0f}" if pd.notna(total_pnl) else "$0")
+        total_pnl = pd.to_numeric(df['cashPnl'], errors='coerce').sum()
+        st.metric("Total PnL", f"${total_pnl:.0f}")
     else:
         st.info(f"""
         🔍 No data for "{trader}" 
         
-        **Try these active traders**:
-        • nanoin123 (leaderboard #1)
-        • beachboy4
-        • Wallet: 0x56687bf447db6ffa42ffe2204a05edaa20f55839
+        **Try whales**:
+        • nanoin123
+        • beachboy4  
+        • 0x56687bf447db6ffa42ffe2204a05edaa20f55839
         
-        [Live Leaderboard](https://polymarket.com/leaderboard)
+        [Leaderboard](https://polymarket.com/leaderboard)
         """)
 
 display_data(trader)
-st.caption("Live from Polymarket API | Refreshes every 5 mins [web:136]")
+st.caption("🔄 Auto‑refresh 5s | Polymarket API [web:136]")
+
+# Auto‑refresh loop
+time.sleep(5)
+st.rerun()
