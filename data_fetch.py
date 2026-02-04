@@ -1,15 +1,20 @@
+import streamlit as st
+import requests
 import time
 import pandas as pd
-import requests
 from utils import is_crypto, get_up_down, get_status, est
-
-@st.cache_data(ttl=3)  # st imported here? Wait, import streamlit as st at top
-import streamlit as st  # Yes, for caching in data files [web:27]
 
 @st.cache_data(ttl=3)
 def safe_fetch(url):
-    # Your full code
-    pass
+    try:
+        resp = requests.get(url, timeout=10)
+        if resp.status_code == 200:
+            data = resp.json()
+            if isinstance(data, list) and data:
+                return data[:100]
+    except:
+        pass
+    return []
 
 def track_0x8dxd():
     trader = "0x8dxd"
@@ -35,7 +40,7 @@ def track_0x8dxd():
                     all_data.append(item)
     
     if not all_data:
-        return pd.DataFrame()  # Return empty DF
+        return pd.DataFrame()
     
     df_data = []
     min_ts = now_ts
@@ -67,4 +72,8 @@ def track_0x8dxd():
     
     df = pd.DataFrame(df_data)
     df = df[df['Market'].str.lower().str.contains('btc|eth|sol|xrp|ada|doge|bitcoin|ethereum|solana', na=False, regex=True)]
+    
+    if df.empty:
+        return pd.DataFrame()
+    
     return df.sort_values('Updated', ascending=False)
