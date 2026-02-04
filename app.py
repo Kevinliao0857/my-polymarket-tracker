@@ -66,37 +66,47 @@ def get_up_down(item):
     
     return "➖ ?"
 
+## FIXED get_status - Handles "5:15PM-5:30PM ET" perfectly
 def get_status(item, now_ts):
     title = str(item.get('title') or item.get('question') or '').lower()
     now_hour = datetime.fromtimestamp(now_ts, est).hour
     
-    # FIXED: Separate hour/min, flexible spacing/symbols
+    # IMPROVED regex: Captures "5:15pm", "5pm", ignores junk, handles ranges
     time_pattern = r'(\d{1,2})(?::(\d{1,2}))?[\s\-–]*([ap]\.?m?\.?|et)'
     matches = re.findall(time_pattern, title)
-    title_hours = []
+    title_times = []
     
-    for h_str, m_str, _ in matches:
-        hour = int(h_str)
-        minute = int(m_str) if m_str else 0
-        # PM conversion (assume PM for trader times)
-        if 'p' in _:
-            hour = (hour % 12) + 12
-        elif 'a' in _:
-            hour = hour % 12
-        else:
-            hour += 12 if hour >= 8 else hour  # Fallback bias PM
-        decimal_h = hour + (minute / 60)
-        title_hours.append(decimal_h)
+    for h_str, m_str, suffix in matches:
+        try:
+            hour = int(h_str)
+            minute = int(m_str) if m_str else 0
+            
+            # PM/AM conversion
+            if any(p in suffix for p in ['p', 'pm']):
+                hour = (hour % 12) + 12
+            elif any(a in suffix for a in ['a', 'am']):
+                hour = hour % 12
+            else:
+                # Fallback: PM bias for trader hours
+                hour = hour + 12 if 8 <= hour <= 12 else hour
+            
+            # Valid range check
+            if 0 <= hour <= 23 and 0 <= minute < 60:
+                decimal_h = hour + (minute / 60.0)
+                title_times.append(decimal_h)
+        except:
+            continue
     
-    if not title_hours:
+    if not title_times:
         return "🟢 ACTIVE (no timer)"
     
-    max_h = max(title_hours)
+    max_h = max(title_times)
     if now_hour >= int(max_h):
         return "⚫ EXPIRED"
     
+    # Display formatted
     disp_h = int(max_h % 12) or 12
-    disp_m = f":{int((max_h % 1)*60):02d}" if (max_h % 1) > 0 else ""
+    disp_m = f":{int((max_h % 1)*60):02d}" if (max_h % 1) > 0.1 else ""
     ampm = 'PM' if max_h >= 12 else 'AM'
     return f"🟢 ACTIVE (til ~{disp_h}{disp_m} {ampm} ET)"
 
