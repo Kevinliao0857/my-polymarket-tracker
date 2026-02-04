@@ -65,15 +65,16 @@ def track_0x8dxd():
     now_ts = int(time.time())
     fifteen_min_ago = now_ts - 900
     
-    # Fetch data once
-    positions = safe_fetch(f"https://data-api.polymarket.com/positions?user={trader}")
-    trades = safe_fetch(f"https://data-api.polymarket.com/trades?user={trader}&limit=500")
+    urls = [
+        f"https://data-api.polymarket.com/trades?user={trader}&limit=100",
+        f"https://data-api.polymarket.com/positions?user={trader}"
+    ]
     
-    # Filter recent crypto activity
     all_data = []
     seen = set()
-    for url_data in [trades, positions]:
-        for item in url_data or []:
+    for url in urls:
+        raw_data = safe_fetch(url)
+        for item in raw_data:
             ts_field = item.get('timestamp') or item.get('updatedAt') or item.get('createdAt')
             ts = int(float(ts_field)) if ts_field else now_ts
             if ts >= fifteen_min_ago:
@@ -88,7 +89,6 @@ def track_0x8dxd():
         st.info("No crypto activity in last 15 min")
         return
     
-    # Build dataframe
     df_data = []
     min_ts = now_ts
     for item in all_data:
@@ -128,23 +128,27 @@ def track_0x8dxd():
     span_min = int((now_ts - min_ts) / 60)
     st.metric("Newest", f"{span_min} min ago")
     
-    # OFFICIAL-STYLE PNL (API only - No GraphQL!)
+    # YOUR NEW PNL CODE HERE (API only - no GraphQL!)
+    positions = safe_fetch(f"https://data-api.polymarket.com/positions?user={trader}")
+    trades = safe_fetch(f"https://data-api.polymarket.com/trades?user={trader}&limit=500")
+
     open_pnl = sum(float(p.get('cashPnl', 0)) for p in positions) if positions else 0
-    realized_pnl = sum(float(p.get('realizedPnl', 0)) for p in positions) if positions else 0
-    
+    # Approximate realized from recent closed trades
+    recent_trades = [t for t in trades if int(float(t.get('timestamp', 0))) > now_ts - 86400]  # 1 day
+    trade_pnl = sum(float(t.get('pnl', 0)) for t in recent_trades) if recent_trades else 0
+
     col1, col2, col3 = st.columns(3)
     col1.metric("Open PnL", f"${open_pnl:.0f}")
-    col2.metric("Realized PnL", f"${realized_pnl:.0f}")
+    col2.metric("Recent Trade PnL (1D)", f"${trade_pnl:.0f}")
     col3.metric("Total Positions", len(positions or []))
-    
-    # Recent PnL Trend Chart
+
     st.subheader("📈 Recent PnL Trend")
     recent_df = pd.DataFrame([{
-        'Time': datetime.fromtimestamp(int(float(p.get('updatedAt', 0) or p.get('timestamp', 0))), pst).strftime('%H:%M'),
-        'PnL': float(p.get('cashPnl', 0))
-    } for p in positions[:50] if p.get('cashPnl')])
+        'Time': datetime.fromtimestamp(int(float(t.get('timestamp', 0))), pst).strftime('%H:%M'),
+        'PnL': float(t.get('pnl', 0))
+    } for t in trades[:50] if t.get('pnl')])
     if not recent_df.empty:
-        st.line_chart(recent_df.set_index('Time')['PnL'], use_container_width=True)
+        st.line_chart(recent_df.set_index('Time')['PnL'])
 
 if st.button("🔄 Force Refresh"):
     st.rerun()
