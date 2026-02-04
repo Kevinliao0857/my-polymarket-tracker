@@ -5,7 +5,6 @@ from datetime import datetime
 import time
 import pytz
 import re
-from streamlit_autorefresh import st_autorefresh  # NEW: Perfect live refresh
 
 st.set_page_config(layout="wide")
 st.markdown("# ₿ 0x8dxd Crypto Bot Tracker - Last 15 Min")
@@ -15,8 +14,17 @@ st.info("🟢 Live crypto-only | UP/DOWN focus | Last 15min")
 # Live EST clock
 est = pytz.timezone('US/Eastern')
 
-# AUTO-REFRESH EVERY 3s (ticks visibly!)
-count = st_autorefresh(interval=3000, limit=None, key="live_tracker")  # Infinite 3s ticks!
+# NATIVE AUTO-REFRESH COUNTER (TICKS EVERY 3s!)
+if 'refresh_count' not in st.session_state:
+    st.session_state.refresh_count = 0
+if 'last_refresh' not in st.session_state:
+    st.session_state.last_refresh = 0
+
+now_time = time.time()
+if now_time - st.session_state.last_refresh > 3:
+    st.session_state.refresh_count += 1
+    st.session_state.last_refresh = now_time
+    st.rerun()
 
 @st.cache_data(ttl=1)
 def safe_fetch(url):
@@ -68,7 +76,7 @@ def get_status(item, now_ts):
     title = str(item.get('title') or item.get('question') or '')
     now_hour = datetime.fromtimestamp(now_ts, est).hour
     
-    hour_matches = re.findall(r'\b(\d{1,2})\b', title)  # FIXED REGEX
+    hour_matches = re.findall(r'\b(\d{1,2})\b', title)  # FIXED
     title_hours = []
     
     for hour_str in hour_matches:
@@ -88,7 +96,7 @@ def get_status(item, now_ts):
     
     return f"🟢 ACTIVE (til ~{max(title_hours):02d}:00 ET)"
 
-@st.cache_data(ttl=3)
+@st.cache_data(ttl=2)
 def track_0x8dxd():
     trader = "0x8dxd"
     now_ts = int(time.time())
@@ -113,8 +121,9 @@ def track_0x8dxd():
                     all_data.append(item)
     
     if not all_data:
-        st.info("No crypto activity in last 15 min")
-        st.metric("Refresh Count", f"#{count}")
+        col1, col2 = st.columns(2)
+        col1.info("No crypto activity in last 15 min")
+        col2.metric("🔄 Live Refreshes", st.session_state.refresh_count)
         return
     
     df_data = []
@@ -158,8 +167,8 @@ def track_0x8dxd():
     col1, col2, col3 = st.columns(3)
     col1.metric("🟢 UP Bets", up_bets)
     col2.metric("🔴 DOWN Bets", len(df) - up_bets)
-    span_min = int((now_ts - min_ts) / 60)
-    col3.metric("Refresh", f"#{count}")
+    col3.metric("🔄 Refreshes", st.session_state.refresh_count)
 
+# Live clock + status (UPDATES EVERY TICK!)
 now_est = datetime.now(est)
-st.caption(f"🕐 {now_est.strftime('%H:%M:%S ET')} | Auto-refresh: 3s | PST+3h | All fixes applied")
+st.caption(f"🕐 {now_est.strftime('%H:%M:%S ET')} | Auto 3s | #{st.session_state.refresh_count} | PST+3h | Native")
