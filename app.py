@@ -4,6 +4,7 @@ import pandas as pd
 from datetime import datetime
 import time
 import pytz  # pip install pytz
+import re  # NEW: For time parsing
 
 st.set_page_config(layout="wide")
 st.markdown("# ₿ 0x8dxd Crypto Bot Tracker - Last 15 Min")
@@ -68,18 +69,33 @@ def get_up_down(item):
     return "➖ ?"
 
 def get_status(item, now_ts):
-    end_fields = ['endDate', 'expiresAt', 'closeTime', 'resolutionTime']
-    for field in end_fields:
-        end_ts = item.get(field)
-        if end_ts:
-            try:
-                end_unix = int(float(end_ts))
-                if end_unix < now_ts:
-                    return "⚫ EXPIRED"
-                return f"🟢 ACTIVE ({datetime.fromtimestamp(end_unix, est).strftime('%H:%M ET')})"
-            except:
-                pass
-    return "🟢 ACTIVE"
+    title = str(item.get('title') or item.get('question') or '').lower()
+    
+    # Parse common timeframe patterns: "6AM ET", "6am", "6PM", etc.
+    time_match = re.search(r'(\d{1,2})(am|pm|am et|pm et)', title)
+    if time_match:
+        hour = int(time_match.group(1))
+        ampm = time_match.group(2).replace(' et', '')
+        
+        # Convert 12h to 24h
+        if 'pm' in ampm and hour != 12:
+            hour += 12
+        elif 'am' in ampm and hour == 12:
+            hour = 0
+        
+        # Today's date in EST
+        today_str = datetime.fromtimestamp(now_ts, est).strftime('%Y-%m-%d')
+        try:
+            bet_time = est.localize(datetime.strptime(f"{today_str} {hour:02d}:00:00", '%Y-%m-%d %H:%M:%S'))
+            bet_unix = int(bet_time.timestamp())
+            
+            if bet_unix < now_ts:
+                return "⚫ EXPIRED"
+            return f"🟢 ACTIVE ({bet_time.strftime('%H:%M ET')})"
+        except:
+            pass
+    
+    return "🟢 ACTIVE"  # Fallback
 
 def track_0x8dxd():
     trader = "0x8dxd"
@@ -124,14 +140,14 @@ def track_0x8dxd():
         ts = int(float(ts_field)) if ts_field else now_ts
         min_ts = min(min_ts, ts)
         update_str = datetime.fromtimestamp(ts, est).strftime('%H:%M:%S ET')
-        status_str = get_status(item, now_ts)  # NEW: Status column
+        status_str = get_status(item, now_ts)
         
         row = {
             'Market': short_title,
             'UP/DOWN': updown,
             'Size': f"${size_val:.0f}",
             'Price': price_val,
-            'Status': status_str,  # NEW
+            'Status': status_str,
             'Updated': update_str
         }
         df_data.append(row)
