@@ -66,34 +66,31 @@ def get_up_down(item):
 def get_status(item, now_ts):
     title = str(item.get('title') or item.get('question') or '').lower()
     
-    # Simple patterns that always work
-    patterns = [
-        r'(\d{1,2})am', r'(\d{1,2})pm', 
-        r'(\d{1,2})am et', r'(\d{1,2})pm et'
-    ]
-    
-    for pattern in patterns:
-        match = re.search(pattern, title)
-        if match:
-            hour = int(match.group(1))
-            # Assume AM/PM based on pattern match
-            if 'pm' in pattern and hour != 12:
-                hour += 12
-            if 'am' in pattern and hour == 12:
-                hour = 0
+    # Grab LAST AM/PM time (handles ranges + singles)
+    times = re.findall(r'(\d{1,2})(am|pm)', title)
+    if times:
+        # Use the LAST time found (end of range)
+        last_hour, last_ampm = times[-1]
+        hour = int(last_hour)
+        
+        if 'pm' in last_ampm and hour != 12:
+            hour += 12
+        if 'am' in last_ampm and hour == 12:
+            hour = 0
+        
+        today_str = datetime.fromtimestamp(now_ts, est).strftime('%Y-%m-%d')
+        try:
+            bet_time = est.localize(datetime.strptime(f"{today_str} {hour:02d}:00:00", '%Y-%m-%d %H:%M:%S'))
+            bet_unix = int(bet_time.timestamp())
             
-            today_str = datetime.fromtimestamp(now_ts, est).strftime('%Y-%m-%d')
-            try:
-                bet_time = est.localize(datetime.strptime(f"{today_str} {hour:02d}:00:00", '%Y-%m-%d %H:%M:%S'))
-                bet_unix = int(bet_time.timestamp())
-                
-                if bet_unix < now_ts:
-                    return "⚫ EXPIRED"
-                return f"🟢 ACTIVE ({bet_time.strftime('%H:%M ET')})"
-            except:
-                pass
+            if bet_unix < now_ts:
+                return "⚫ EXPIRED"
+            return f"🟢 ACTIVE ({bet_time.strftime('%H:%M ET')})"
+        except:
+            pass
     
     return "🟢 ACTIVE"
+
 
 def track_0x8dxd():
     trader = "0x8dxd"
