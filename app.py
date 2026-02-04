@@ -65,15 +65,14 @@ def track_0x8dxd():
     now_ts = int(time.time())
     fifteen_min_ago = now_ts - 900
     
-    # 1. LIVE BETS TABLE (your original logic)
-    urls_bets = [
+    urls = [
         f"https://data-api.polymarket.com/trades?user={trader}&limit=100",
         f"https://data-api.polymarket.com/positions?user={trader}"
     ]
     
-    all_bets = []
-    seen_bets = set()
-    for url in urls_bets:
+    all_data = []
+    seen = set()
+    for url in urls:
         raw_data = safe_fetch(url)
         for item in raw_data:
             ts_field = item.get('timestamp') or item.get('updatedAt') or item.get('createdAt')
@@ -82,86 +81,57 @@ def track_0x8dxd():
                 title = str(item.get('title') or item.get('question') or '-')
                 if is_crypto(title):
                     key = title[:100]
-                    if key not in seen_bets and len(all_bets) < 20:
-                        seen_bets.add(key)
-                        all_bets.append(item)
+                    if key not in seen and len(all_data) < 25:
+                        seen.add(key)
+                        all_data.append(item)
     
-    # Live bets DF
-    bet_df_data = []
-    for item in all_bets:
+    if not all_data:
+        st.info("No crypto activity in last 15 min")
+        return
+    
+    df_data = []
+    min_ts = now_ts
+    for item in all_data:
         updown = get_up_down(item)
         title = str(item.get('title') or item.get('question') or '-')
         short_title = (title[:55] + '...') if len(title) > 60 else title
+        
         size_val = float(item.get('size', 0))
         price_val = item.get('curPrice', item.get('price', '-'))
         if isinstance(price_val, (int, float)):
             price_val = f"${price_val:.2f}"
-        ts = int(float(item.get('timestamp') or item.get('updatedAt') or now_ts))
+        
+        ts_field = item.get('timestamp') or item.get('updatedAt') or item.get('createdAt') or now_ts
+        ts = int(float(ts_field)) if ts_field else now_ts
+        min_ts = min(min_ts, ts)
         update_str = datetime.fromtimestamp(ts, pst).strftime('%H:%M:%S')
         
-        bet_df_data.append({
+        row = {
             'Market': short_title,
             'UP/DOWN': updown,
             'Size': f"${size_val:.0f}",
             'Price': price_val,
             'Updated': update_str
-        })
+        }
+        df_data.append(row)
     
-    bet_df = pd.DataFrame(bet_df_data).sort_values('Updated', ascending=False)
+    df = pd.DataFrame(df_data)
+    df = df.sort_values('Updated', ascending=False)
     
-    # CLOSED PNL (24hr + debug)
-    day_ago = now_ts - 86400  # 24 hours
-    closed_raw = safe_fetch(f"https://data-api.polymarket.com/closed-positions?user={trader}&limit=50")
-    st.caption(f"Debug: {len(closed_raw)} total closes fetched")
+    st.success(f"✅ {len(df)} crypto bets (15min)")
+    st.dataframe(df, use_container_width=True, height=400)
     
-    closed_data = []
-    total_pnl = 0
-    crypto_count = 0
-    for item in closed_raw:
-        title = str(item.get('title', ''))
-        ts_field = item.get('timestamp') or item.get('updatedAt') or item.get('createdAt')
-        ts = int(float(ts_field)) if ts_field else 0
-        
-        if is_crypto(title) and ts >= day_ago:
-            crypto_count += 1
-            # Try multiple PnL fields
-            pnl = float(item.get('realizedPnl') or item.get('pnl') or item.get('cashPnl') or 0)
-            total_pnl += pnl
-            closed_data.append({
-                'Market': title[:45] + '...',
-                'PnL': f"${pnl:.0f}",
-                'Outcome': item.get('outcome', '?'),
-                'Closed': datetime.fromtimestamp(ts, pst).strftime('%H:%M')
-            })
+    up_bets = len(df[df['UP/DOWN'] == '🟢 UP'])
+    st.metric("🟢 UP Bets", up_bets)
+    st.metric("🔴 DOWN Bets", len(df) - up_bets)
     
-    pnl_df = pd.DataFrame(closed_data[:8])
-    st.caption(f"Debug: {crypto_count} crypto closes in 24h | Total ${total_pnl:.0f}")
-
+    span_min = int((now_ts - min_ts) / 60)
+    st.metric("Newest", f"{span_min} min ago")
     
-    # DISPLAY
-    st.success(f"✅ {len(bet_df)} live bets | 💰 {len(pnl_df)} closed PnL (15min)")
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        st.subheader("🎯 Live Bets")
-        if not bet_df.empty:
-            st.dataframe(bet_df, use_container_width=True, height=350)
-    
-    with col2:
-        st.subheader("💰 Closed PnL")
-        if not pnl_df.empty:
-            st.dataframe(pnl_df, use_container_width=True, height=350)
-            st.metric("15min Realized Total", f"${total_pnl:.0f}")
-        else:
-            st.info("No recent closes")
-    
-    if not bet_df.empty:
-        up_bets = len(bet_df[bet_df['UP/DOWN'] == '🟢 UP'])
-        st.metric("🟢 UP Bets", up_bets)
-        st.metric("🔴 DOWN Bets", len(bet_df) - up_bets)
-    
-    if not pnl_df.empty:
-        st.metric("Win Rate (Closes)", f"{len(pnl_df[pnl_df['Realized PnL'].str.contains('+', na=False)])/len(pnl_df):.0%}")
+    # LIVE TOTAL OPEN PNL (stable addition)
+    positions = safe_fetch(f"https://data-api.polymarket.com/positions?user={trader}")
+    live_pnl = sum(float(p.get('cashPnl', 0)) for p in positions) if positions else 0
+    st.metric("Open PnL Total", f"${live_pnl:.0f}")
 
 if st.button("🔄 Force Refresh"):
     st.rerun()
