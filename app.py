@@ -27,10 +27,10 @@ def safe_fetch(url):
         pass
     return []
 
-def is_crypto(market_title):
-    title_lower = market_title.lower()
+def is_crypto(item):  # FIXED: Scans entire item for crypto
+    text = str(item).lower()
     crypto_symbols = ['btc', 'eth', 'sol', 'xrp', 'ada', 'doge', 'shib', 'link', 'avax', 'matic', 'dot', 'uni']
-    return any(sym in title_lower for sym in crypto_symbols) or 'bitcoin' in title_lower or 'ethereum' in title_lower or 'solana' in title_lower
+    return any(sym in text for sym in crypto_symbols) or 'bitcoin' in text or 'ethereum' in text or 'solana' in text
 
 def get_up_down(item):
     outcome = str(item.get('outcome', '')).lower()
@@ -77,13 +77,11 @@ def track_0x8dxd():
         for item in raw_data:
             ts_field = item.get('timestamp') or item.get('updatedAt') or item.get('createdAt')
             ts = int(float(ts_field)) if ts_field else now_ts
-            if ts >= fifteen_min_ago:
-                title = str(item.get('title') or item.get('question') or '-')
-                if is_crypto(title):
-                    key = title[:100]
-                    if key not in seen and len(all_data) < 25:
-                        seen.add(key)
-                        all_data.append(item)
+            if ts >= fifteen_min_ago and is_crypto(item):  # FIXED: Crypto filter + timestamp
+                key = str(item.get('title') or item.get('question') or '-'))[:100]
+                if key not in seen and len(all_data) < 25:
+                    seen.add(key)
+                    all_data.append(item)
     
     if not all_data:
         st.info("No crypto activity in last 15 min")
@@ -127,28 +125,6 @@ def track_0x8dxd():
     
     span_min = int((now_ts - min_ts) / 60)
     st.metric("Newest", f"{span_min} min ago")
-    
-    # YOUR NEW PNL CODE HERE (API only - no GraphQL!)
-    positions = safe_fetch(f"https://data-api.polymarket.com/positions?user={trader}")
-    trades = safe_fetch(f"https://data-api.polymarket.com/trades?user={trader}&limit=500")
-
-    open_pnl = sum(float(p.get('cashPnl', 0)) for p in positions) if positions else 0
-    # Approximate realized from recent closed trades
-    recent_trades = [t for t in trades if int(float(t.get('timestamp', 0))) > now_ts - 86400]  # 1 day
-    trade_pnl = sum(float(t.get('pnl', 0)) for t in recent_trades) if recent_trades else 0
-
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Open PnL", f"${open_pnl:.0f}")
-    col2.metric("Recent Trade PnL (1D)", f"${trade_pnl:.0f}")
-    col3.metric("Total Positions", len(positions or []))
-
-    st.subheader("📈 Recent PnL Trend")
-    recent_df = pd.DataFrame([{
-        'Time': datetime.fromtimestamp(int(float(t.get('timestamp', 0))), pst).strftime('%H:%M'),
-        'PnL': float(t.get('pnl', 0))
-    } for t in trades[:50] if t.get('pnl')])
-    if not recent_df.empty:
-        st.line_chart(recent_df.set_index('Time')['PnL'])
 
 if st.button("🔄 Force Refresh"):
     st.rerun()
