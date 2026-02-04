@@ -64,32 +64,32 @@ def get_up_down(item):
     return "➖ ?"
 
 def get_status(item, now_ts):
-    title = str(item.get('title') or item.get('question') or '').lower()
+    title = str(item.get('title') or item.get('question') or '')
+    now_hour = datetime.fromtimestamp(now_ts, est).hour  # Current EST hour (0-23)
     
-    # Grab LAST AM/PM time (handles ranges + singles)
-    times = re.findall(r'(\d{1,2})(am|pm)', title)
-    if times:
-        # Use the LAST time found (end of range)
-        last_hour, last_ampm = times[-1]
-        hour = int(last_hour)
-        
-        if 'pm' in last_ampm and hour != 12:
-            hour += 12
-        if 'am' in last_ampm and hour == 12:
-            hour = 0
-        
-        today_str = datetime.fromtimestamp(now_ts, est).strftime('%Y-%m-%d')
-        try:
-            bet_time = est.localize(datetime.strptime(f"{today_str} {hour:02d}:00:00", '%Y-%m-%d %H:%M:%S'))
-            bet_unix = int(bet_time.timestamp())
-            
-            if bet_unix < now_ts:
-                return "⚫ EXPIRED"
-            return f"🟢 ACTIVE ({bet_time.strftime('%H:%M ET')})"
-        except:
-            pass
+    # Extract ALL 1-2 digit numbers (hours)
+    hour_matches = re.findall(r'\b(\d{1,2})\b', title)
+    title_hours = []
     
-    return "🟢 ACTIVE"
+    for hour_str in hour_matches:
+        hour = int(hour_str)
+        if 1 <= hour <= 12:  # Valid AM/PM hour
+            # Early hours likely AM, later PM
+            if hour <= 6:
+                title_hours.append(hour)  # 1-6 AM
+            else:
+                title_hours.append(hour + 12 if hour != 12 else 12)  # 7-11 + PM/12
+    
+    # If no valid hours found → ACTIVE
+    if not title_hours:
+        return "🟢 ACTIVE (no timer)"
+    
+    max_title_hour = max(title_hours)
+    if now_hour > max_title_hour:
+        return "⚫ EXPIRED"
+    
+    return f"🟢 ACTIVE (til ~{max(title_hours):02d}:00 ET)"
+
 
 
 def track_0x8dxd():
