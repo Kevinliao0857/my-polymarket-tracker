@@ -60,44 +60,39 @@ def get_status(item, now_ts):
     title = str(item.get('title') or item.get('question') or '').lower()
     now_hour = datetime.fromtimestamp(now_ts, est).hour
     
-    # Parse ALL explicit times AM/PM first
-    time_pattern = r'(\d{1,2})(?::\d{2})?\s*(am|pm|a\.?m\.?|p\.?m\.?)'
-    explicit_matches = re.findall(time_pattern, title, re.IGNORECASE)
+    # Better time parsing - handles multiple times
+    time_pattern = r'(\d{1,2})(?::\d{2})?\s*(?:am|pm|a\.?m\.?|p\.?m\.?)'
+    matches = re.findall(time_pattern, title, re.IGNORECASE)
     title_hours = []
     
-    for hour_str, period in explicit_matches:
+    for hour_str, period in matches:
         hour = int(hour_str)
-        period = period.lower()
-        if 'pm' in period:
-            hour = hour % 12 + 12
-        else:  # AM
-            hour = hour % 12 or 12 if hour != 0 else 0
-        if 0 <= hour <= 23:
-            title_hours.append(hour)
+        if 'pm' in period.lower():
+            hour = (hour % 12) + 12
+        else:
+            hour = hour % 12 or 12
+        title_hours.append(hour)
     
-    # Fallback: numeric hours (assume PM bias for trader hours 8am+)
+    # Fallback standalone hours (1-12 → trader PM bias)
     if not title_hours:
-        hour_matches = re.findall(r'\b(\d{1,2})(?!\d)\b', title)  # Standalone numbers
-        for hour_str in hour_matches:
-            hour = int(hour_str)
+        hour_pattern = r'(?<!\d)(\d{1,2})(?!\d)(?!\s*(am|pm))'
+        hours = re.findall(hour_pattern, title)
+        for h in hours:
+            hour = int(h)
             if 1 <= hour <= 12:
-                # Trader context: 1-7am=AM, 8-12=PM
-                assumed = hour if hour < 8 else hour + 12
-                title_hours.append(assumed)
+                title_hours.append(hour + 12 if hour >= 8 else hour)
     
     if not title_hours:
         return "🟢 ACTIVE (no timer)"
     
-    # FIX: Use LAST (latest) time in title, not MAX
-    expiry_hour = max(title_hours)  # Still max, but better parsing catches all
-    
+    expiry_hour = max(title_hours)
     if now_hour >= expiry_hour:
         return "⚫ EXPIRED"
     
-    # Nicer display: show the actual expiry time found
     display_hour = expiry_hour % 12 or 12
-    ampm = 'AM' if expiry_hour < 12 else 'PM'
-    return f"🟢 ACTIVE (til ~{display_hour}:{ampm} ET)"
+    ampm = 'PM' if expiry_hour >= 12 else 'AM'
+    return f"🟢 ACTIVE (til ~{display_hour} {ampm} ET)"
+
 
 def track_0x8dxd():
     trader = "0x8dxd"
