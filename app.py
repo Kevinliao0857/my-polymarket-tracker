@@ -2,42 +2,33 @@ import streamlit as st
 import requests
 import pandas as pd
 from datetime import datetime
-import time
 
-st.set_page_config(page_title="Polymarket Tracker", layout="wide")
+st.set_page_config(layout="wide")
 
-# Your tracker settings
-trader_name = st.sidebar.text_input("Trader Username", value="nanoin123")
-refresh_time = 300  # 5 minutes
-
-@st.cache_data(ttl=refresh_time)
-def get_polymarket_data(trader):
-    # Public Polymarket data sources
+# Real Polymarket API
+@st.cache_data(ttl=300)
+def get_positions(wallet):
     try:
-        # Leaderboard data (works reliably)
-        leaderboard = requests.get("https://polymarket.com/leaderboard").text
-        # Trader stats from analytics sites
-        stats = requests.get(f"https://polymarketanalytics.com/traders/{trader}").text
-        return {"status": "Connected", "trades": 15, "pnl": "+$825k"}
+        resp = requests.get(f"https://data-api.polymarket.com/positions?proxyWallet={wallet}", timeout=10)
+        if resp.status_code == 200:
+            data = resp.json()
+            if data:
+                df = pd.DataFrame(data[:15])
+                df['updated'] = datetime.now().strftime('%H:%M')
+                return df[['title', 'outcome', 'size', 'cashPnl', 'percentPnl', 'curPrice', 'updated']]
     except:
-        return {"status": "Loading...", "trades": "-", "pnl": "-"}
+        pass
+    return pd.DataFrame()
 
-st.title("🔥 Polymarket Trader Tracker")
-st.caption("Shows top 15 active trades • Refreshes every 5 mins")
+st.title("🔥 Live Polymarket Positions Tracker")
+wallet = st.sidebar.text_input("Wallet Address", value="0x56687bf447db6ffa42ffe2204a05edaa20f55839")  # Example whale
 
-data = get_polymarket_data(trader_name)
+df = get_positions(wallet)
+if not df.empty:
+    st.metric("Positions", len(df))
+    st.dataframe(df, use_container_width=True)
+    st.metric("Total PnL", f"${df['cashPnl'].sum():.0f}")
+else:
+    st.info("Enter wallet (0x...) or use leaderboard: polymarket.com/leaderboard")
 
-col1, col2, col3 = st.columns(3)
-col1.metric("Active Trades", data["trades"])
-col2.metric("Total PnL", data["pnl"])
-col3.metric("Last Update", datetime.now().strftime("%H:%M"))
-
-st.subheader(f"📊 {trader_name}'s Positions (Top 15)")
-st.dataframe(pd.DataFrame({
-    "Market": ["US Election Winner", "Bitcoin $100k", "Super Bowl"],
-    "Side": ["Long", "Short", "Long"],
-    "Size": ["$50k", "$25k", "$10k"],
-    "PnL": ["+$12k", "-$3k", "+$8k"]
-}))
-
-st.info("✅ Enter trader (nanoin123, beachboy4) → Watch live!")
+st.caption("Refreshes every 5 mins [web:136]")
