@@ -3,20 +3,18 @@ import requests
 import pandas as pd
 from datetime import datetime
 import time
-import pytz  # pip install pytz
-import re  # For time parsing
+import pytz
+import re
 
 st.set_page_config(layout="wide")
 st.markdown("# ₿ 0x8dxd Crypto Bot Tracker - Last 15 Min")
 
 st.info("🟢 Live crypto-only | UP/DOWN focus | Last 15min")
 
-# Live EST clock (trader uses EST)
+# Live EST clock
 est = pytz.timezone('US/Eastern')
-now_est = datetime.now(est)
-st.caption(f"🕐 Current EST: {now_est.strftime('%Y-%m-%d %H:%M:%S %Z')} | Auto 5s + Force 🔄")
 
-@st.cache_data(ttl=3)
+@st.cache_data(ttl=1)  # Ultra-fresh 1s cache
 def safe_fetch(url):
     try:
         resp = requests.get(url, timeout=10)
@@ -43,9 +41,9 @@ def get_up_down(item):
     if 'no' in text or 'sell' in text or 'short' in text:
         return "🔴 DOWN"
     
-    if any(word in title for word in ['above', 'higher', 'rise', 'up', 'moon']):
+    if any(word in title for word in ['above', 'higher', 'rise', 'up']):
         return "🟢 UP"
-    if any(word in title for word in ['below', 'lower', 'drop', 'down', 'crash']):
+    if any(word in title for word in ['below', 'lower', 'drop', 'down']):
         return "🔴 DOWN"
     
     price_words = ['$', 'usd', 'price']
@@ -58,29 +56,26 @@ def get_up_down(item):
     if any(word in title for word in ['1h', 'hour', '15m', 'will']):
         if any(word in title for word in ['yes', 'will', 'reach']):
             return "🟢 UP"
-        else:
-            return "🔴 DOWN"
+        return "🔴 DOWN"
     
     return "➖ ?"
 
 def get_status(item, now_ts):
     title = str(item.get('title') or item.get('question') or '')
-    now_hour = datetime.fromtimestamp(now_ts, est).hour  # Current EST hour (0-23)
+    now_hour = datetime.fromtimestamp(now_ts, est).hour
     
-    # Extract ALL 1-2 digit numbers (hours)
+    # Extract ALL 1-2 digit numbers
     hour_matches = re.findall(r'\b(\d{1,2})\b', title)
     title_hours = []
     
     for hour_str in hour_matches:
         hour = int(hour_str)
-        if 1 <= hour <= 12:  # Valid AM/PM hour
-            # Early hours likely AM, later PM
-            if hour <= 6:
-                title_hours.append(hour)  # 1-6 AM
-            else:
-                title_hours.append(hour + 12 if hour != 12 else 12)  # 7-11 + PM/12
+        if 1 <= hour <= 12:
+            if hour <= 6:  # Early = AM
+                title_hours.append(hour)
+            else:  # Later = PM
+                title_hours.append(hour + 12 if hour != 12 else 12)
     
-    # If no valid hours found → ACTIVE
     if not title_hours:
         return "🟢 ACTIVE (no timer)"
     
@@ -90,8 +85,7 @@ def get_status(item, now_ts):
     
     return f"🟢 ACTIVE (til ~{max(title_hours):02d}:00 ET)"
 
-
-
+@st.cache_data(ttl=1)
 def track_0x8dxd():
     trader = "0x8dxd"
     now_ts = int(time.time())
@@ -157,16 +151,16 @@ def track_0x8dxd():
     })
     
     up_bets = len(df[df['UP/DOWN'] == '🟢 UP'])
-    st.metric("🟢 UP Bets", up_bets)
-    st.metric("🔴 DOWN Bets", len(df) - up_bets)
-    
+    col1, col2, col3 = st.columns(3)
+    col1.metric("🟢 UP Bets", up_bets)
+    col2.metric("🔴 DOWN Bets", len(df) - up_bets)
     span_min = int((now_ts - min_ts) / 60)
-    st.metric("Newest", f"{span_min} min ago (ET)")
+    col3.metric("Newest", f"{span_min} min ago (ET)")
 
 if st.button("🔄 Force Refresh"):
     st.rerun()
 
-# Refresh loop
+# ULTRA-FAST 3s refresh loop
 placeholder = st.empty()
 refresh_count = 0
 while True:
@@ -174,6 +168,6 @@ while True:
     now_est = datetime.now(est)
     with placeholder.container():
         track_0x8dxd()
-        st.caption(f"🕐 {now_est.strftime('%H:%M:%S ET')} | #{refresh_count}")
-    time.sleep(5)
+        st.caption(f"🕐 {now_est.strftime('%H:%M:%S ET')} | Live ##{refresh_count}")
+    time.sleep(3)  # 3s = instant Status updates
     st.rerun()
