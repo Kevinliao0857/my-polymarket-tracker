@@ -66,13 +66,12 @@ def get_up_down(item):
     
     return "➖ ?"
 
-## FIXED get_status - Handles "5:15PM-5:30PM ET" perfectly
 def get_status(item, now_ts):
     title = str(item.get('title') or item.get('question') or '').lower()
     now_hour = datetime.fromtimestamp(now_ts, est).hour
     
-    # IMPROVED regex: Captures "5:15pm", "5pm", ignores junk, handles ranges
-    time_pattern = r'(\d{1,2})(?::(\d{1,2}))?[\s\-–]*([ap]\.?m?\.?|et)'
+    # ULTRA-FIXED: Handles "5:30PM", "5PM ET", ranges, ignores dates/prices
+    time_pattern = r'(\d{1,2})(?::(\d{1,2}))?([ap]m|et)'
     matches = re.findall(time_pattern, title)
     title_times = []
     
@@ -81,34 +80,35 @@ def get_status(item, now_ts):
             hour = int(h_str)
             minute = int(m_str) if m_str else 0
             
-            # PM/AM conversion
-            if any(p in suffix for p in ['p', 'pm']):
+            # PM/AM
+            if 'pm' in suffix or 'p' in suffix:
                 hour = (hour % 12) + 12
-            elif any(a in suffix for a in ['a', 'am']):
+            elif 'am' in suffix or 'a' in suffix:
                 hour = hour % 12
-            else:
-                # Fallback: PM bias for trader hours
-                hour = hour + 12 if 8 <= hour <= 12 else hour
             
-            # Valid range check
             if 0 <= hour <= 23 and 0 <= minute < 60:
                 decimal_h = hour + (minute / 60.0)
                 title_times.append(decimal_h)
         except:
             continue
     
+    # DEBUG: Show what it sees (remove after fix)
+    debug = f"DEBUG '{title[:50]}...' → times={title_times} now_h={now_hour}"
+    
     if not title_times:
         return "🟢 ACTIVE (no timer)"
     
     max_h = max(title_times)
     if now_hour >= int(max_h):
+        st.caption(debug + " → EXPIRED")
         return "⚫ EXPIRED"
     
-    # Display formatted
     disp_h = int(max_h % 12) or 12
     disp_m = f":{int((max_h % 1)*60):02d}" if (max_h % 1) > 0.1 else ""
     ampm = 'PM' if max_h >= 12 else 'AM'
-    return f"🟢 ACTIVE (til ~{disp_h}{disp_m} {ampm} ET)"
+    status = f"🟢 ACTIVE (til ~{disp_h}{disp_m} {ampm} ET)"
+    st.caption(debug + " → " + status)  # DEBUG
+    return status
 
 def track_0x8dxd():
     trader = "0x8dxd"
