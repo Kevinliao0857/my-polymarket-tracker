@@ -189,6 +189,8 @@ while True:
     now_est = datetime.now(est)
     with placeholder.container():
         track_0x8dxd()
+        # In track_0x8dxd(), after all_data.append(item):
+        st.write(f"✅ 0x8dxd item: {title[:50]}... | TS: {ts}")  # Confirms HIS data
         st.caption(f"🕐 {now_est.strftime('%H:%M:%S ET')} | #{refresh_count}")
     time.sleep(5)
     st.rerun()
