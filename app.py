@@ -44,7 +44,7 @@ while True:
             df['ts'] = pd.to_datetime(df['Updated'], format='%I:%M:%S %p ET').apply(lambda x: x.timestamp())
             min_ts = df['ts'].min()
             now_ts = time.time()
-            span_min = int((now_ts - min_ts) / 60)
+            span_min = min(int((now_ts - min_ts) / 60), 15)  # Caps at 15
             st.metric("Newest", f"{span_min} min ago (ET)")
         
         st.caption(f"🕐 {now_est.strftime('%H:%M:%S ET')} | #{refresh_count}")
