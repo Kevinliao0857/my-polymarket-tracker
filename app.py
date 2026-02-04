@@ -3,20 +3,30 @@ import requests
 import pandas as pd
 from datetime import datetime
 import time
-import pytz  # pip install pytz
-import re  # For time parsing
+import pytz
+import re
 
 st.set_page_config(layout="wide")
 st.markdown("# ₿ 0x8dxd Crypto Bot Tracker - Last 15 Min")
 
 st.info("🟢 Live crypto-only | UP/DOWN focus | Last 15min")
 
-# Live EST clock (trader uses EST)
+# Live EST clock
 est = pytz.timezone('US/Eastern')
-now_est = datetime.now(est)
-st.caption(f"🕐 Current EST: {now_est.strftime('%Y-%m-%d %H:%M:%S %Z')} | Auto 5s + Force 🔄")
 
-@st.cache_data(ttl=3)
+# NATIVE TICKING COUNTER (3s refreshes)
+if 'refresh_count' not in st.session_state:
+    st.session_state.refresh_count = 0
+if 'last_refresh' not in st.session_state:
+    st.session_state.last_refresh = 0
+
+now_time = time.time()
+if now_time - st.session_state.last_refresh > 3:
+    st.session_state.refresh_count += 1
+    st.session_state.last_refresh = now_time
+    st.rerun()
+
+@st.cache_data(ttl=1)
 def safe_fetch(url):
     try:
         resp = requests.get(url, timeout=10)
@@ -30,7 +40,7 @@ def safe_fetch(url):
 
 def is_crypto(item):
     text = str(item).lower()
-    crypto_symbols = ['btc', 'eth', 'sol', 'xrp', 'ada', 'doge', 'shib', 'link', 'avax', 'matic', 'dot', 'uni']
+    crypto_symbols = ['btc', 'eth', 'sol', 'xrp', 'ada', 'doge', 'shib', 'link', 'avax', 'matic', 'dot', 'uni', 'bnb', 'trx', 'pepe']
     return any(sym in text for sym in crypto_symbols) or 'bitcoin' in text or 'ethereum' in text or 'solana' in text
 
 def get_up_down(item):
@@ -43,9 +53,9 @@ def get_up_down(item):
     if 'no' in text or 'sell' in text or 'short' in text:
         return "🔴 DOWN"
     
-    if any(word in title for word in ['above', 'higher', 'rise', 'up', 'moon']):
+    if any(word in title for word in ['above', 'higher', 'rise', 'up']):
         return "🟢 UP"
-    if any(word in title for word in ['below', 'lower', 'drop', 'down', 'crash']):
+    if any(word in title for word in ['below', 'lower', 'drop', 'down']):
         return "🔴 DOWN"
     
     price_words = ['$', 'usd', 'price']
@@ -58,54 +68,49 @@ def get_up_down(item):
     if any(word in title for word in ['1h', 'hour', '15m', 'will']):
         if any(word in title for word in ['yes', 'will', 'reach']):
             return "🟢 UP"
-        else:
-            return "🔴 DOWN"
+        return "🔴 DOWN"
     
     return "➖ ?"
 
 def get_status(item, now_ts):
     title = str(item.get('title') or item.get('question') or '')
-    now_hour = datetime.fromtimestamp(now_ts, est).hour  # Current EST hour (0-23)
+    now_hour = datetime.fromtimestamp(now_ts, est).hour
     
-    # Extract ALL 1-2 digit numbers (hours)
+    # FIXED: 24hr format + better parsing
     hour_matches = re.findall(r'\b(\d{1,2})\b', title)
     title_hours = []
     
     for hour_str in hour_matches:
         hour = int(hour_str)
-        if 1 <= hour <= 12:  # Valid AM/PM hour
-            # Early hours likely AM, later PM
-            if hour <= 6:
-                title_hours.append(hour)  # 1-6 AM
-            else:
-                title_hours.append(hour + 12 if hour != 12 else 12)  # 7-11 + PM/12
+        if 0 <= hour <= 23:  # Full 24hr support
+            title_hours.append(hour)
     
-    # If no valid hours found → ACTIVE
     if not title_hours:
         return "🟢 ACTIVE (no timer)"
     
     max_title_hour = max(title_hours)
-    if now_hour > max_title_hour:
+    if now_hour >= max_title_hour:
         return "⚫ EXPIRED"
     
-    return f"🟢 ACTIVE (til ~{max(title_hours):02d}:00 ET)"
+    return f"🟢 ACTIVE (til {max_title_hour:02d}:00 ET)"
 
-
-
+@st.cache_data(ttl=2)
 def track_0x8dxd():
     trader = "0x8dxd"
     now_ts = int(time.time())
     fifteen_min_ago = now_ts - 900
     
     urls = [
-        f"https://data-api.polymarket.com/trades?user={trader}&limit=100",
-        f"https://data-api.polymarket.com/positions?user={trader}"
+        f"https://data-api.polymarket.com/trades?user={trader}&limit=50&from={fifteen_min_ago}",
+        f"https://data-api.polymarket.com/positions?user={trader}&limit=50&from={fifteen_min_ago}"
     ]
     
     all_data = []
+    total_raw = 0
     seen = set()
     for url in urls:
         raw_data = safe_fetch(url)
+        total_raw += len(raw_data)
         for item in raw_data:
             ts_field = item.get('timestamp') or item.get('updatedAt') or item.get('createdAt')
             ts = int(float(ts_field)) if ts_field else now_ts
@@ -115,8 +120,13 @@ def track_0x8dxd():
                     seen.add(key)
                     all_data.append(item)
     
+    # DEBUG INFO (remove later if wanted)
+    st.caption(f"📊 Debug: {total_raw} raw records → {len(all_data)} crypto matches")
+    
     if not all_data:
-        st.info("No crypto activity in last 15 min")
+        col1, col2 = st.columns(2)
+        col1.info("No crypto activity in last 15 min")
+        col2.metric("🔄 Refreshes", st.session_state.refresh_count)
         return
     
     df_data = []
@@ -152,28 +162,20 @@ def track_0x8dxd():
     
     st.success(f"✅ {len(df)} crypto bets (15min ET)")
     st.dataframe(df, use_container_width=True, height=500, column_config={
-        "Market": st.column_config.TextColumn("Market", width="medium"),
-        "Status": st.column_config.TextColumn("Status", width="small")
+        "Market": st.column_config.TextColumn("Market", width="large"),      # FIXED: Full titles
+        "UP/DOWN": st.column_config.TextColumn("UP/DOWN", width="small"),
+        "Size": st.column_config.TextColumn("Size", width="small"),
+        "Price": st.column_config.TextColumn("Price", width="small"),
+        "Status": st.column_config.TextColumn("Status", width="medium"),     # FIXED: No cutoff
+        "Updated": st.column_config.TextColumn("Updated", width="small")
     })
     
     up_bets = len(df[df['UP/DOWN'] == '🟢 UP'])
-    st.metric("🟢 UP Bets", up_bets)
-    st.metric("🔴 DOWN Bets", len(df) - up_bets)
-    
-    span_min = int((now_ts - min_ts) / 60)
-    st.metric("Newest", f"{span_min} min ago (ET)")
+    col1, col2, col3 = st.columns(3)
+    col1.metric("🟢 UP Bets", up_bets)
+    col2.metric("🔴 DOWN Bets", len(df) - up_bets)
+    col3.metric("🔄 Refreshes", st.session_state.refresh_count)
 
-if st.button("🔄 Force Refresh"):
-    st.rerun()
-
-# Refresh loop
-placeholder = st.empty()
-refresh_count = 0
-while True:
-    refresh_count += 1
-    now_est = datetime.now(est)
-    with placeholder.container():
-        track_0x8dxd()
-        st.caption(f"🕐 {now_est.strftime('%H:%M:%S ET')} | #{refresh_count}")
-    time.sleep(5)
-    st.rerun()
+# Live status
+now_est = datetime.now(est)
+st.caption(f"🕐 {now_est.strftime('%H:%M:%S ET')} | 3s Auto | #{st.session_state.refresh_count} | PST+3h | All fixes")
