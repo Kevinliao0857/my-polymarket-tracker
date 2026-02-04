@@ -129,23 +129,9 @@ def track_0x8dxd():
     st.metric("Newest", f"{span_min} min ago")
     
     # LIVE TOTAL OPEN PNL (stable addition)
-# 1-week Closed PnL (using realizedPnl from positions)
-all_positions = safe_fetch(f"https://data-api.polymarket.com/positions?user={trader}&limit=500")
-now_ts = int(time.time())
-week_ago = now_ts - (7 * 24 * 3600)  # 7 days in seconds
-
-closed_pnl_week = 0.0
-crypto_count = 0
-for p in all_positions:
-    ts = int(float(p.get('timestamp', 0))) if p.get('timestamp') else 0
-    if ts >= week_ago and p.get('realizedPnl', 0) != 0:  # Closed if realizedPnl non-zero
-        title = str(p.get('title', '')).lower()
-        if is_crypto(title):  # Reuse your crypto filter
-            closed_pnl_week += float(p.get('realizedPnl', 0))
-            crypto_count += 1
-
-st.metric("Closed PnL (1wk Crypto)", f"${closed_pnl_week:.0f}", delta=f"({crypto_count} bets)")
-
+    positions = safe_fetch(f"https://data-api.polymarket.com/positions?user={trader}")
+    live_pnl = sum(float(p.get('cashPnl', 0)) for p in positions) if positions else 0
+    st.metric("Open PnL Total", f"${live_pnl:.0f}")
 
 if st.button("🔄 Force Refresh"):
     st.rerun()
