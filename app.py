@@ -3,12 +3,11 @@ import time
 from datetime import datetime
 import pandas as pd
 
-# ERROR HANDLING - catches missing files
+# ERROR HANDLING
 try:
-    from data_fetch import track_0x8dxd
-    from utils import est
+    from data_fetch import track_0x8dxd, est
 except ImportError as e:
-    st.error(f"Import error: {e}. Check files in same folder.")
+    st.error(f"Import error: {e}. Check data_fetch.py in same folder.")
     st.stop()
 
 st.set_page_config(layout="wide")
@@ -42,8 +41,7 @@ while True:
             st.metric("🟢 UP Bets", up_bets)
             st.metric("🔴 DOWN Bets", len(df) - up_bets)
             
-            # Fixed timestamp calculation
-            df['ts'] = pd.to_datetime(df['Updated']).apply(lambda x: x.timestamp())
+            df['ts'] = pd.to_datetime(df['Updated'], format='%I:%M:%S %p ET').apply(lambda x: x.timestamp())
             min_ts = df['ts'].min()
             now_ts = time.time()
             span_min = int((now_ts - min_ts) / 60)
