@@ -109,14 +109,15 @@ def track_0x8dxd():
     
     bet_df = pd.DataFrame(bet_df_data).sort_values('Updated', ascending=False)
     
-    # 2. CLOSED PN L TABLE (NEW)
-    closed_raw = safe_fetch(f"https://data-api.polymarket.com/closed-positions?user={trader}&limit=30")
+    # 2. CLOSED PN L TABLE (24 HOURS)
+    day_ago = now_ts - 86400  # 24hr = 86400s
+    closed_raw = safe_fetch(f"https://data-api.polymarket.com/closed-positions?user={trader}&limit=50")
     closed_data = []
     total_pnl = 0
     for item in closed_raw:
         ts_field = item.get('timestamp') or item.get('updatedAt')
         ts = int(float(ts_field)) if ts_field else 0
-        if ts >= fifteen_min_ago and is_crypto(str(item.get('title', ''))):
+        if ts >= day_ago and is_crypto(str(item.get('title', ''))):  # 24hr crypto closes
             pnl = float(item.get('realizedPnl', item.get('pnl', 0)))
             total_pnl += pnl
             closed_data.append({
@@ -126,7 +127,7 @@ def track_0x8dxd():
                 'Closed': datetime.fromtimestamp(ts, pst).strftime('%H:%M')
             })
     
-    pnl_df = pd.DataFrame(closed_data)
+    pnl_df = pd.DataFrame(closed_data[:10])  # Top 10
     
     # DISPLAY
     st.success(f"✅ {len(bet_df)} live bets | 💰 {len(pnl_df)} closed PnL (15min)")
