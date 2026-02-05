@@ -112,6 +112,76 @@ def track_0x8dxd():
     now_ts = int(time.time())
     fifteen_min_ago = now_ts - 900
     
+    # ACTIVITY ENDPOINT ONLY - Clean recent moves
+    url = f"https://data-api.polymarket.com/activity?proxyWallet={trader}&limit=100"
+    
+    raw_data = safe_fetch(url)
+    
+    all_data = []
+    for item in raw_data:
+        ts_field = item.get('timestamp') or now_ts
+        ts = int(float(ts_field)) if ts_field else now_ts
+        
+        if ts >= fifteen_min_ago and is_crypto(item):
+            all_data.append(item)
+    
+    if not all_data:
+        st.info("No crypto activity in last 15 min")
+        return
+    
+    df_data = []
+    min_ts = now_ts
+    for item in all_data:
+        updown = get_up_down(item)
+        title = str(item.get('title') or '-')
+        short_title = (title[:85] + '...') if len(title) > 90 else title
+        
+        size_val = float(item.get('size', item.get('usdcSize', 0)) or 0)
+        price_val = item.get('price', '-')
+        if isinstance(price_val, (int, float)):
+            price_val = f"${price_val:.2f}"
+        
+        ts = int(float(item.get('timestamp', now_ts)))
+        min_ts = min(min_ts, ts)
+        update_str = datetime.fromtimestamp(ts, est).strftime('%I:%M:%S %p ET')
+        status_str = get_status(item, now_ts)
+        
+        row = {
+            'Market': short_title,
+            'UP/DOWN': updown,
+            'Size': f"${size_val:.0f}",
+            'Price': price_val,
+            'Status': status_str,
+            'Updated': update_str
+        }
+        df_data.append(row)
+    
+    df = pd.DataFrame(df_data)
+    df = df[df['Market'].str.lower().str.contains('btc|eth|sol|xrp|ada|doge|bitcoin|ethereum|solana', na=False, regex=True)]
+    
+    if df.empty:
+        st.info("No qualifying crypto activity in last 15 min")
+        return
+    
+    df = df.sort_values('Updated', ascending=False)
+    
+    st.success(f"✅ {len(df)} crypto activities (15min ET)")
+    st.dataframe(df, use_container_width=True, height=500, column_config={
+        "Market": st.column_config.TextColumn("Market", width="medium"),
+        "Status": st.column_config.TextColumn("Status", width="medium")
+    })
+    
+    up_bets = len(df[df['UP/DOWN'] == '🟢 UP'])
+    st.metric("🟢 UP Bets", up_bets)
+    st.metric("🔴 DOWN Bets", len(df) - up_bets)
+    
+    span_min = int((now_ts - min_ts) / 60)
+    st.metric("Newest", f"{span_min} min ago (ET)")
+
+    trader = "0x8dxd"
+    now_ts = int(time.time())
+    fifteen_min_ago = now_ts - 900
+    
     urls = [
         f"https://data-api.polymarket.com/trades?user={trader}&limit=100"
     ]
