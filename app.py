@@ -170,7 +170,17 @@ def track_0x8dxd():
         st.info("No qualifying crypto bets in last 15 min")
         return
     
+        # Custom sort: newest first, Active (no timer) to BOTTOM
+    df['priority'] = df['Status'].apply(lambda x: 1 if 'no timer' in str(x).lower() else 0)
+    df['parsed_updated'] = pd.to_datetime(df['Updated'], format='%I:%M:%S %p ET')
+    df = df.sort_values(['priority', 'parsed_updated'], ascending=[True, False])
+    df = df.drop(['priority', 'parsed_updated'], axis=1)
+    
+    # Original sort was here - now replaced above
+
+
     df = df.sort_values('Updated', ascending=False)
+    
     
     st.success(f"✅ {len(df)} crypto bets (15min ET)")
     st.dataframe(df, use_container_width=True, height=500, column_config={
