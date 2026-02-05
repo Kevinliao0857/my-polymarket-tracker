@@ -18,7 +18,6 @@ time_24 = now_est.strftime('%H:%M:%S')
 time_12 = now_est.strftime('%I:%M:%S %p')
 st.caption(f"🕐 Current EST: {now_est.strftime('%Y-%m-%d')} {time_24} ({time_12}) ET | Auto 5s + Force 🔄")
 
-
 @st.cache_data(ttl=3)
 def safe_fetch(url):
     try:
@@ -26,7 +25,7 @@ def safe_fetch(url):
         if resp.status_code == 200:
             data = resp.json()
             if isinstance(data, list) and data:
-                return data[:100]
+                return data[:500]  # Increased limit
     except:
         pass
     return []
@@ -109,32 +108,34 @@ def get_status(item, now_ts):
     ampm = 'PM' if max_h >= 12 else 'AM'
     return f"🟢 ACTIVE (til ~{disp_h}{disp_m} {ampm} ET)"
 
-
 def track_0x8dxd():
     trader = "0x8dxd"
     now_ts = int(time.time())
-    fifteen_min_ago = now_ts - 900
+    fifteen_min_ago = now_ts - 900  # 15 min
     
+    # FIXED: Higher limit, pagination-ready
     urls = [
-        f"https://data-api.polymarket.com/trades?user={trader}&limit=100"
+        f"https://data-api.polymarket.com/trades?user={trader}&limit=500&offset=0"
     ]
     
     all_data = []
-    seen = set()
     for url in urls:
         raw_data = safe_fetch(url)
         for item in raw_data:
             ts_field = item.get('timestamp') or item.get('updatedAt') or item.get('createdAt')
             ts = int(float(ts_field)) if ts_field else now_ts
             if ts >= fifteen_min_ago and is_crypto(item):
-                key = str(item.get('title') or item.get('question') or '-')[:100]
-                if key not in seen and len(all_data) < 25:
-                    seen.add(key)
-                    all_data.append(item)
+                # FIXED: Removed seen/len caps - get ALL recent crypto trades
+                all_data.append(item)
+    
+    # Soft cap for performance
+    all_data = all_data[-200:]  # Newest 200 max
     
     if not all_data:
         st.info("No crypto activity in last 15 min")
         return
+    
+    st.info(f"DEBUG: Fetched {len(all_data)} recent crypto trades")  # Count check
     
     df_data = []
     min_ts = now_ts
@@ -166,14 +167,14 @@ def track_0x8dxd():
     
     df = pd.DataFrame(df_data)
     
-    # STRICT FINAL FILTER: Only perfect crypto titles
-    df = df[df['Market'].str.lower().str.contains('btc|eth|sol|xrp|ada|doge|bitcoin|ethereum|solana', na=False, regex=True)]
+    # TEMP DEBUG: Show ALL recent (comment out strict filter to test)
+    # df = df[df['Market'].str.lower().str.contains('btc|eth|sol|xrp|ada|doge|bitcoin|ethereum|solana', na=False, regex=True)]
     
     if df.empty:
         st.info("No qualifying crypto bets in last 15 min")
         return
     
-        # Custom sort: Active(timer)=0 > Expired=1 > No-timer=2, then newest
+    # Custom sort: Active(timer)=0 > Expired=1 > No-timer=2, then newest
     def status_priority(x):
         x_lower = str(x).lower()
         if 'expired' in x_lower:
@@ -187,7 +188,6 @@ def track_0x8dxd():
     df['parsed_updated'] = pd.to_datetime(df['Updated'], format='%I:%M:%S %p ET')
     df = df.sort_values(['priority', 'parsed_updated'], ascending=[True, False])
     df = df.drop(['priority', 'parsed_updated'], axis=1)
-
     
     st.success(f"✅ {len(df)} crypto bets (15min ET)")
     st.dataframe(df, use_container_width=True, height=500, column_config={
@@ -205,7 +205,7 @@ def track_0x8dxd():
 if st.button("🔄 Force Refresh"):
     st.rerun()
 
-# Refresh loop
+# Refresh loop - FIXED indentation
 placeholder = st.empty()
 refresh_count = 0
 while True:
