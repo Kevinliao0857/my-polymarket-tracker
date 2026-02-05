@@ -176,11 +176,8 @@ def track_0x8dxd():
     df = df.sort_values(['priority', 'parsed_updated'], ascending=[True, False])
     df = df.drop(['priority', 'parsed_updated'], axis=1)
     
-    # Original sort was here - now replaced above
+    st.success(f"✅ {len(df)} crypto bets (15min ET)")
 
-
-    df = df.sort_values('Updated', ascending=False)
-    
     
     st.success(f"✅ {len(df)} crypto bets (15min ET)")
     st.dataframe(df, use_container_width=True, height=500, column_config={
