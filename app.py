@@ -14,7 +14,10 @@ st.info("🟢 Live crypto-only | UP/DOWN focus | Last 15min")
 # Live EST clock (trader uses EST)
 est = pytz.timezone('US/Eastern')
 now_est = datetime.now(est)
-st.caption(f"🕐 Current EST: {now_est.strftime('%Y-%m-%d %H:%M:%S %Z')} | Auto 5s + Force 🔄")
+time_24 = now_est.strftime('%H:%M:%S')
+time_12 = now_est.strftime('%I:%M:%S %p')
+st.caption(f"🕐 Current EST: {now_est.strftime('%Y-%m-%d')} {time_24} ({time_12}) ET | Auto 5s + Force 🔄")
+
 
 @st.cache_data(ttl=3)
 def safe_fetch(url):
@@ -200,6 +203,8 @@ while True:
     now_est = datetime.now(est)
     with placeholder.container():
         track_0x8dxd()
-        st.caption(f"🕐 {now_est.strftime('%H:%M:%S ET')} | #{refresh_count}")
+        time_24 = now_est.strftime('%H:%M:%S')
+        time_12 = now_est.strftime('%I:%M:%S %p')
+        st.caption(f"🕐 {time_24} ({time_12}) ET | #{refresh_count}")
     time.sleep(5)
     st.rerun()
