@@ -113,8 +113,7 @@ def track_0x8dxd():
     fifteen_min_ago = now_ts - 900
     
     urls = [
-        f"https://data-api.polymarket.com/trades?user={trader}&limit=100",
-        f"https://data-api.polymarket.com/positions?user={trader}"
+        f"https://data-api.polymarket.com/trades?user={trader}&limit=100"
     ]
     
     all_data = []
