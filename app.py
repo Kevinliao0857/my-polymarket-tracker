@@ -177,9 +177,6 @@ def track_0x8dxd():
     df = df.drop(['priority', 'parsed_updated'], axis=1)
     
     st.success(f"✅ {len(df)} crypto bets (15min ET)")
-
-    
-    st.success(f"✅ {len(df)} crypto bets (15min ET)")
     st.dataframe(df, use_container_width=True, height=500, column_config={
         "Market": st.column_config.TextColumn("Market", width="medium"),
         "Status": st.column_config.TextColumn("Status", width="medium")
