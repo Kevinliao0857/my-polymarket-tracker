@@ -16,9 +16,7 @@ try:
 except ImportError:
     st.warning("🔄 Add `streamlit-autorefresh` to requirements.txt for auto-refresh")
 
-
 st.set_page_config(layout="wide")
-
 
 if 'refresh_count' not in st.session_state:
     st.session_state.refresh_count = 0
@@ -46,7 +44,6 @@ if st.sidebar.button("🔄 Force Refresh", use_container_width=True):
 if st.sidebar.button("🧪 Test New Status API"):
     st.session_state.test_api = True  # 🆕 ADDED THIS LINE
     st.rerun()
-
 
 @st.cache_data(ttl=2)
 def safe_fetch(url: str) -> List[Dict[str, Any]]:
@@ -278,7 +275,7 @@ def track_0x8dxd():
     visible_cols = ['Market', 'UP/DOWN', 'Size', 'Price', 'Status', 'Updated']
     styled_df = df[visible_cols].style.apply(highlight_recent, axis=1)
     
-    st.dataframe(styled_df, use_container_width=True, height=500, hide_index=True,
+    st.dataframe(styled_df, use_container_width=True, height=400, hide_index=True,
                 column_config={"Market": st.column_config.TextColumn(width="medium"),
                               "Status": st.column_config.TextColumn(width="medium")})
     
@@ -289,11 +286,10 @@ def track_0x8dxd():
     
     up_bets = len(df[df['UP/DOWN'] == '🟢 UP'])
     
-    bet_col1, bet_col2, bet_col3, bet_col4 = st.columns(4)
-    bet_col1.metric("🟢 UP Bets", up_bets)
-    bet_col2.metric("🔴 DOWN Bets", len(df) - up_bets)
-    bet_col3.metric("🟢 Newest", newest_str)
-    bet_col4.metric("📊 Span", span_str)
-
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("🟢 UP", up_bets, delta=None)
+    c2.metric("🔴 DOWN", len(df)-up_bets, delta=None)
+    c3.metric("Newest", newest_str)
+    c4.metric("Span", span_str)
 
 track_0x8dxd()
