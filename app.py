@@ -123,16 +123,36 @@ def get_market_status_batch(condition_ids: List[str]) -> Dict[str, Dict]:
                 slug = market.get('slug', 'NO_SLUG')
                 market_ids.append({'cid': cid, 'slug': slug})
             
-            st.sidebar.json(market_ids, label="Raw Market IDs", expanded=True)
+            st.sidebar.markdown("### Raw Market IDs")
+            st.sidebar.json(market_ids)
             
             status_map = {}
+            matches = []  # 🆕 Debug
             for market in markets:
                 cid = market.get('conditionId')
-                if cid and cid in condition_ids:  # Exact match check
-                    # ... rest same as before ...
-                    status_map[cid] = { ... }
+                slug = market.get('slug', '')
+                if cid:
+                    st.sidebar.text(f"Market CID: {cid[:10]}... | Input has? {cid.lower() in [c.lower() for c in condition_ids]} | Slug: {slug}")
+                    if cid.lower() in [c.lower() for c in condition_ids]:  # 🆕 Case insensitive!
+                        matches.append(cid)
+                        end_iso = market.get('endDateIso')
+                        uma_status = str(market.get('umaResolutionStatus', '')).lower()
+                        past_end = False
+                        if end_iso:
+                            try:
+                                end_dt = pd.to_datetime(end_iso).tz_convert('US/Eastern')
+                                past_end = now_est >= end_dt
+                            except: pass
+
+                        status_map[cid] = {
+                            'endDateIso': end_iso, 'endPast': past_end,
+                            'umaStatus': uma_status,
+                            'resolved': past_end or 'resolved' in uma_status
+                        }
+            st.sidebar.success(f"DEBUG MATCHES: {len(matches)}")
             
-            st.sidebar.json(status_map, label="Matched Status", expanded=False)
+            st.sidebar.markdown("### Matched Status") 
+            st.sidebar.json(status_map)
             return status_map
             
     except Exception as e:
