@@ -262,6 +262,13 @@ def track_0x8dxd():
     df['parsed_updated'] = pd.to_datetime(df['Updated'], format='%I:%M:%S %p ET', errors='coerce')
     df = df.sort_values(['priority', 'parsed_updated'], ascending=[True, False]).drop(['priority', 'parsed_updated'], axis=1)
     
+    newest_sec = df['age_sec'].min()
+    newest_str = f"{int(newest_sec)//60}m {int(newest_sec)%60}s ago"
+    span_sec = df['age_sec'].max()
+    span_str = f"{int(span_sec)//60}m {int(span_sec)%60}s"
+    up_bets = len(df[df['UP/DOWN'] == '🟢 UP'])
+
+
     st.info(f"✅ {len(df)} LIVE crypto bets ({MINUTES_BACK}min window)")
     st.caption(f"📈 Filtered from sidebar: {len(filtered_data)} raw trades")
     
@@ -287,15 +294,5 @@ def track_0x8dxd():
     st.dataframe(styled_df, use_container_width=True, height=400, hide_index=True,
                 column_config={"Market": st.column_config.TextColumn(width="medium"),
                               "Status": st.column_config.TextColumn(width="medium")})  
-
-    newest_sec = df['age_sec'].min()
-    newest_str = f"{int(newest_sec)//60}m {int(newest_sec)%60}s ago"
-    span_sec = df['age_sec'].max()
-    span_str = f"{int(span_sec)//60}m {int(span_sec)%60}s"
-    
-    up_bets = len(df[df['UP/DOWN'] == '🟢 UP'])
-    
-
-
 
 track_0x8dxd()
