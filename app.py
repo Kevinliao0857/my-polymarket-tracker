@@ -258,8 +258,8 @@ def track_0x8dxd(minutes_back):  # Receives slider value
     
     st.sidebar.info(f"📊 API: {len(all_raw)} total trades")
     
-    filtered_data = []
     global filtered_data  # 🆕 Make global for live API
+    filtered_data = []
     condition_ids = set()  # 🆕 Collect for batch lookup
     for item in all_raw:
         proxy = str(item.get("proxyWallet", "")).lower()
