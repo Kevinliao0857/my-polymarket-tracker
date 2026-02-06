@@ -110,10 +110,10 @@ def get_status(item: Dict[str, Any], now_ts: int) -> str:
     return f"🟢 ACTIVE (til ~{disp_h}{disp_m} {ampm} ET)"
 
 @st.cache_data(ttl=30)
-def track_0x8dxd():
+def track_0x8dxd(minutes_back: int):
     trader = "0x63ce342161250d705dc0b16df89036c8e5f9ba9a".lower()
     now_ts = int(time.time())
-    ago_ts = now_ts - (MINUTES_BACK * 60)
+    ago_ts = now_ts - (minutes_back * 60)
     
     all_raw = []
     offset = 0
@@ -232,4 +232,4 @@ def track_0x8dxd():
     bet_col3.metric("🟢 Newest", newest_str)
     bet_col4.metric("📊 Span", span_str)
 
-track_0x8dxd()
+track_0x8dxd(MINUTES_BACK)
