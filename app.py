@@ -103,41 +103,51 @@ def get_up_down(item: Dict[str, Any]) -> str:
 # 🆕 BATCH MARKET STATUS (key fix for PnL!)
 @st.cache_data(ttl=60)
 def get_market_status_batch(condition_ids: List[str]) -> Dict[str, Dict]:
-    """Batch fetch market status & resolution for multiple conditionIds."""
+    """Batch fetch + DEBUG LOGGING."""
     if not condition_ids:
         return {}
     
     status_map = {}
-    # Gamma API supports comma-separated conditionIds (up to ~50)
-    ids_str = ','.join(set(condition_ids))  # Dedupe
+    ids_str = ','.join(set(condition_ids[:50]))  # Limit 50
     url = f"https://gamma-api.polymarket.com/markets?conditionIds={ids_str}"
+    
+    st.sidebar.markdown("### 🔍 **API Debug**")
     
     try:
         resp = requests.get(url, timeout=8)
+        st.sidebar.code(f"Gamma URL: {url}\nStatus: {resp.status_code}", language="bash")
+        
         if resp.status_code == 200:
             markets = resp.json()
+            st.sidebar.success(f"✅ Got {len(markets)} markets")
+            st.sidebar.json(markets[0] if markets else {}, expanded=False)  # Sample
+            
             for market in markets:
                 cid = market.get('conditionId')
                 if cid:
                     end_iso = market.get('endDateIso')
-                    status_map[cid] = {
-                        'endDateIso': end_iso,
-                        'resolved': False,  # Default
-                        'umaStatus': str(market.get('umaResolutionStatus', '')).lower()
-                    }
+                    uma_status = market.get('umaResolutionStatus', '')
+                    past_end = False
                     if end_iso:
                         try:
                             end_dt = pd.to_datetime(end_iso).tz_convert('US/Eastern')
-                            status_map[cid]['pastEnd'] = now_est >= end_dt
-                            if status_map[cid]['pastEnd']:
-                                status_map[cid]['resolved'] = True
+                            past_end = now_est >= end_dt
                         except:
                             pass
-                    if 'resolved' in status_map[cid]['umaStatus']:
-                        status_map[cid]['resolved'] = True
-    except:
-        pass
+                    
+                    status_map[cid] = {
+                        'endDateIso': end_iso,
+                        'endPast': past_end,
+                        'umaStatus': uma_status,
+                        'resolved': past_end or ('resolved' in str(uma_status).lower())
+                    }
+        else:
+            st.sidebar.error(f"❌ Gamma failed: {resp.text[:200]}")
+    except Exception as e:
+        st.sidebar.error(f"❌ Exception: {str(e)}")
+    
     return status_map
+
 
 
 def get_status_hybrid(item: Dict[str, Any], market_status: Dict) -> str:
@@ -268,6 +278,23 @@ def track_0x8dxd(minutes_back):  # Receives slider value
     
     st.sidebar.success(f"✅ {len(filtered_data)} crypto trades | {MINUTES_BACK}min | {len(condition_ids)} markets")
     
+    #DEBUG BLOCK
+    if filtered_data:
+        st.sidebar.markdown("### 📋 **Trades Debug**")
+        sample_trade = filtered_data[0]
+        st.sidebar.json({
+            'has_conditionId': bool(sample_trade.get('conditionId')),
+            'conditionId_sample': sample_trade.get('conditionId', 'MISSING'),
+            'title_sample': sample_trade.get('title', 'MISSING'),
+            'timestamp': sample_trade.get('timestamp'),
+            'side': sample_trade.get('side'),
+            'size': sample_trade.get('size'),
+            'price': sample_trade.get('price', sample_trade.get('curPrice'))
+        }, expanded=False)
+    
+        sample_cids = [item.get('conditionId') for item in filtered_data[:5] if item.get('conditionId')]
+        st.sidebar.info(f"Sample CIDs ({len(sample_cids)}): {sample_cids}")
+
     if not filtered_data:
         st.info("No crypto trades found")
         return
@@ -275,6 +302,15 @@ def track_0x8dxd(minutes_back):  # Receives slider value
     # 🆕 BATCH MARKET LOOKUP (efficient!)
     market_status = get_market_status_batch(list(condition_ids))
     
+    st.sidebar.markdown("### 📊 **Status Debug**")
+    hits = sum(1 for cid in condition_ids if cid in market_status)
+    st.sidebar.metric("Market Status Hits", f"{hits}/{len(condition_ids)}")
+    resolved_cids = [cid for cid, ms in market_status.items() if ms.get('resolved')]
+    st.sidebar.metric("Resolved Markets", len(resolved_cids))
+    if resolved_cids:
+        st.sidebar.json({cid: market_status[cid] for cid in resolved_cids[:3]})
+
+
     # 🆕 TEST BUTTON RESULT
     if 'test_api' in st.session_state:
         sample_cid = filtered_data[0].get('conditionId')
