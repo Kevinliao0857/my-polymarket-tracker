@@ -32,13 +32,11 @@ time_24 = now_est.strftime('%H:%M:%S')
 time_12 = now_est.strftime('%I:%M:%S %p')
 st.caption(f"🕐 Current EST: {now_est.strftime('%Y-%m-%d')} {time_24} ({time_12}) ET | Auto 5s ✓ #{st.session_state.refresh_count}🔄")
 
-
 # SIDEBAR LOCATION
 st.sidebar.title("⚙️ Settings")
 MINUTES_BACK = st.sidebar.slider("⏰ Minutes back", 15, 120, 30, 5)
 now_ts = int(time.time())
 st.sidebar.caption(f"From: {datetime.fromtimestamp(now_ts - MINUTES_BACK*60, est).strftime('%H:%M %p ET')}")
-
 
 if st.sidebar.button("🔄 Force Refresh", use_container_width=True):
     st.rerun()
@@ -47,10 +45,7 @@ if st.sidebar.button("🧪 Test New Status API"):
     st.session_state.test_api = True  # 🆕 ADDED THIS LINE
     st.rerun()
 
-
-
 st.markdown(f"# ₿ 0x8dxd Crypto Bot Tracker - Last {MINUTES_BACK} Min")
-
 
 @st.cache_data(ttl=2)
 def safe_fetch(url: str) -> List[Dict[str, Any]]:
@@ -65,7 +60,6 @@ def safe_fetch(url: str) -> List[Dict[str, Any]]:
     except Exception:
         pass
     return []
-
 
 def is_crypto(item: Dict[str, Any]) -> bool:
     title = str(item.get('title') or item.get('question') or '').lower()
@@ -140,7 +134,7 @@ def get_status_hybrid(item: Dict[str, Any], now_ts: int) -> str:
         except:
             pass
     
-    # 2. Regex fallback (your original smarts)
+    # 2. Regex fallback
     title = str(item.get('title') or item.get('question') or '').lower()
     now_decimal = now_est.hour + (now_est.minute / 60.0) + (now_est.second / 3600.0)
     
