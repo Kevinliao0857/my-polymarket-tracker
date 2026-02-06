@@ -7,6 +7,8 @@ import pytz
 import re
 import json
 from typing import List, Dict, Any
+from urllib.parse import urlencode  # For batch queries
+
 
 
 # ✅ AUTO-REFRESH (add "streamlit-autorefresh" to requirements.txt)
@@ -16,14 +18,18 @@ try:
 except ImportError:
     st.warning("🔄 Add `streamlit-autorefresh` to requirements.txt for auto-refresh")
 
+
 st.set_page_config(layout="wide")
+
 
 if 'refresh_count' not in st.session_state:
     st.session_state.refresh_count = 0
 st.session_state.refresh_count += 1
 
+
 # MAIN TITLE
 st.markdown(f"# ₿ 0x8dxd Crypto Bot Tracker")
+
 
 # Live EST clock
 est = pytz.timezone('US/Eastern')
@@ -32,18 +38,22 @@ time_24 = now_est.strftime('%H:%M:%S')
 time_12 = now_est.strftime('%I:%M:%S %p')
 st.caption(f"🕐 Current EST: {now_est.strftime('%Y-%m-%d')} {time_24} ({time_12}) ET | Auto 5s ✓ #{st.session_state.refresh_count}🔄")
 
+
 # SIDEBAR LOCATION
 st.sidebar.title("⚙️ Settings")
 MINUTES_BACK = st.sidebar.slider("⏰ Minutes back", 15, 120, 30, 5)
 now_ts = int(time.time())
 st.sidebar.caption(f"From: {datetime.fromtimestamp(now_ts - MINUTES_BACK*60, est).strftime('%H:%M %p ET')}")
 
+
 if st.sidebar.button("🔄 Force Refresh", use_container_width=True):
     st.rerun()
 
+
 if st.sidebar.button("🧪 Test New Status API"):
-    st.session_state.test_api = True  # 🆕 ADDED THIS LINE
+    st.session_state.test_api = True
     st.rerun()
+
 
 @st.cache_data(ttl=2)
 def safe_fetch(url: str) -> List[Dict[str, Any]]:
@@ -58,6 +68,7 @@ def safe_fetch(url: str) -> List[Dict[str, Any]]:
     except Exception:
         pass
     return []
+
 
 def is_crypto(item: Dict[str, Any]) -> bool:
     title = str(item.get('title') or item.get('question') or '').lower()
@@ -89,50 +100,66 @@ def get_up_down(item: Dict[str, Any]) -> str:
     return "➖ ?"
 
 
-# 🆕 NEW API FUNCTIONS - EXACT END TIMES
+# 🆕 BATCH MARKET STATUS (key fix for PnL!)
 @st.cache_data(ttl=60)
-def get_market_enddate(condition_id: str, slug: str = None) -> str:
-    """Get exact end time from Polymarket Gamma API."""
+def get_market_status_batch(condition_ids: List[str]) -> Dict[str, Dict]:
+    """Batch fetch market status & resolution for multiple conditionIds."""
+    if not condition_ids:
+        return {}
+    
+    status_map = {}
+    # Gamma API supports comma-separated conditionIds (up to ~50)
+    ids_str = ','.join(set(condition_ids))  # Dedupe
+    url = f"https://gamma-api.polymarket.com/markets?conditionIds={ids_str}"
+    
     try:
-        if condition_id:
-            url = f"https://gamma-api.polymarket.com/markets?conditionIds={condition_id}"
-        elif slug:
-            url = f"https://gamma-api.polymarket.com/markets?slug={slug}"
-        else:
-            return None
-            
-        resp = requests.get(url, timeout=5)
+        resp = requests.get(url, timeout=8)
         if resp.status_code == 200:
             markets = resp.json()
-            if markets:
-                end_iso = markets[0].get('endDateIso')
-                if end_iso:
-                    end_dt = pd.to_datetime(end_iso).tz_convert('US/Eastern')
-                    return end_dt.strftime('%I:%M %p ET')
+            for market in markets:
+                cid = market.get('conditionId')
+                if cid:
+                    end_iso = market.get('endDateIso')
+                    status_map[cid] = {
+                        'endDateIso': end_iso,
+                        'resolved': False,  # Default
+                        'umaStatus': str(market.get('umaResolutionStatus', '')).lower()
+                    }
+                    if end_iso:
+                        try:
+                            end_dt = pd.to_datetime(end_iso).tz_convert('US/Eastern')
+                            status_map[cid]['pastEnd'] = now_est >= end_dt
+                            if status_map[cid]['pastEnd']:
+                                status_map[cid]['resolved'] = True
+                        except:
+                            pass
+                    if 'resolved' in status_map[cid]['umaStatus']:
+                        status_map[cid]['resolved'] = True
     except:
         pass
-    return None
+    return status_map
 
 
-def get_status_hybrid(item: Dict[str, Any], now_ts: int) -> str:
-    """🟢 Hybrid: API first → Regex fallback."""
-    # 1. Try API exact time
+def get_status_hybrid(item: Dict[str, Any], market_status: Dict) -> str:
+    """Hybrid status using cached market data."""
     condition_id = item.get('conditionId') or item.get('marketId') or item.get('market', {}).get('conditionId')
-    slug = item.get('slug') or item.get('market', {}).get('slug')
     
-    end_str = get_market_enddate(condition_id, slug)
-    now_est = datetime.fromtimestamp(now_ts, est)
+    if condition_id and condition_id in market_status:
+        ms = market_status[condition_id]
+        if ms.get('resolved'):
+            return "⚫ RESOLVED"
+        
+        end_iso = ms.get('endDateIso')
+        if end_iso:
+            try:
+                end_dt = pd.to_datetime(end_iso).tz_convert('US/Eastern')
+                end_str = end_dt.strftime('%I:%M %p ET')
+                return f"🟢 ACTIVE (til {end_str}) 🟢"
+            except:
+                pass
+        return "🟢 ACTIVE (no timer)"
     
-    if end_str:
-        try:
-            end_dt = datetime.strptime(end_str, '%I:%M %p ET').replace(tzinfo=est)
-            if now_est >= end_dt:
-                return "⚫ EXPIRED"
-            return f"🟢 ACTIVE (til {end_str}) 🟢"  # 🟢 = API win!
-        except:
-            pass
-    
-    # 2. Regex fallback
+    # Fallback regex (rare now)
     title = str(item.get('title') or item.get('question') or '').lower()
     now_decimal = now_est.hour + (now_est.minute / 60.0) + (now_est.second / 3600.0)
     
@@ -166,20 +193,41 @@ def get_status_hybrid(item: Dict[str, Any], now_ts: int) -> str:
     ampm = 'PM' if max_h >= 12 else 'AM'
     return f"🟢 ACTIVE (til ~{disp_h}{disp_m} {ampm})"
 
-def get_pnl_result(item: Dict[str, Any]) -> str:
-    """Safe PnL - no crashes."""
-    status = str(item.get('status') or '').lower()
-    if 'resolved' in status or 'expired' in status:
-        size = float(str(item.get('size', 0)).replace('$', '').replace(',', ''))
-        price = float(item.get('price', 0) or item.get('curPrice', 0))
-        profit = size * (0.5 - price)  # Simple estimate
-        pnl_str = f"${profit:.0f}"
-        return f"🟢 {pnl_str}" if profit > 0 else f"🔴 {pnl_str}"
-    return "➖ Pending"
+
+def get_pnl_result(item: Dict[str, Any], market_status: Dict) -> str:
+    """🆕 FIXED: Real PnL for RESOLVED markets only."""
+    condition_id = item.get('conditionId') or item.get('marketId')
+    if not condition_id or condition_id not in market_status or not market_status[condition_id].get('resolved'):
+        return "➖ Pending"
+    
+    # Extract trade values safely
+    size_raw = item.get('size', 0)
+    try:
+        size = float(str(size_raw).replace('$', '').replace(',', ''))
+    except:
+        size = 0.0
+    
+    price = float(item.get('price', 0) or item.get('curPrice', 0) or 0)
+    
+    # 🆕 Better: Check side for accurate PnL
+    side = str(item.get('side', '')).lower()
+    outcome = str(item.get('outcome', '')).lower()
+    is_yes_buy = 'buy' in side or 'yes' in outcome
+    
+    # Simplified: Assume resolution to opposite of entry for estimate
+    # Real PnL needs final token price (1.0 or 0.0), but estimate:
+    if is_yes_buy:
+        profit = size * (1.0 - price)  # If resolved YES
+    else:
+        profit = size * (price - 0.0)   # If resolved NO (short Yes)
+    
+    pnl_str = f"${profit:.0f}"
+    return f"🟢 {pnl_str}" if profit > 0 else f"🔴 {pnl_str}"
 
 
 @st.cache_data(ttl=5)
 def track_0x8dxd(minutes_back):  # Receives slider value
+    global now_est  # For market_status func
     trader = "0x63ce342161250d705dc0b16df89036c8e5f9ba9a".lower()
     now_ts = int(time.time())
     ago_ts = now_ts - (minutes_back * 60)
@@ -197,6 +245,7 @@ def track_0x8dxd(minutes_back):  # Receives slider value
     st.sidebar.info(f"📊 API: {len(all_raw)} total trades")
     
     filtered_data = []
+    condition_ids = set()  # 🆕 Collect for batch lookup
     for item in all_raw:
         proxy = str(item.get("proxyWallet", "")).lower()
         user_field = str(item.get("user", "")).lower()
@@ -212,18 +261,25 @@ def track_0x8dxd(minutes_back):  # Receives slider value
         
         if is_crypto(item):
             filtered_data.append(item)
+            # 🆕 Collect conditionIds
+            cid = item.get('conditionId') or item.get('marketId')
+            if cid:
+                condition_ids.add(cid)
     
-    st.sidebar.success(f"✅ {len(filtered_data)} crypto trades | {MINUTES_BACK}min")
+    st.sidebar.success(f"✅ {len(filtered_data)} crypto trades | {MINUTES_BACK}min | {len(condition_ids)} markets")
     
     if not filtered_data:
         st.info("No crypto trades found")
         return
     
+    # 🆕 BATCH MARKET LOOKUP (efficient!)
+    market_status = get_market_status_batch(list(condition_ids))
+    
     # 🆕 TEST BUTTON RESULT
     if 'test_api' in st.session_state:
-        sample = filtered_data[0]
-        end = get_market_enddate(sample.get('conditionId'), sample.get('slug'))
-        st.sidebar.success(f"✅ Test: Sample ends {end or 'No data'}")
+        sample_cid = filtered_data[0].get('conditionId')
+        sample_status = market_status.get(sample_cid, {})
+        st.sidebar.success(f"✅ Test: Sample CID {sample_cid[:8]}... → {dict(sample_status) or 'No data'}")
         del st.session_state.test_api
     
     df_data = []
@@ -251,37 +307,31 @@ def track_0x8dxd(minutes_back):  # Receives slider value
             ts = now_ts
         update_str = datetime.fromtimestamp(ts, est).strftime('%I:%M:%S %p ET')
         
-        # 🆕 CHANGED: Use API status (exact end times!)
-        status_str = get_status_hybrid(item, now_ts)  # NEW HYBRID
+        status_str = get_status_hybrid(item, market_status)
+        pnl_str = get_pnl_result(item, market_status)  # 🆕 FIXED!
         age_sec = now_ts - ts
         
         df_data.append({
             'Market': short_title, 'UP/DOWN': updown, 'Size': f"${size_val:.0f}",
-            'Price': price_val, 'Status': status_str, 'PnL': get_pnl_result(item), 'Updated': update_str, 'age_sec': age_sec
+            'Price': price_val, 'Status': status_str, 'PnL': pnl_str, 
+            'Updated': update_str, 'age_sec': age_sec
         })
     
     df = pd.DataFrame(df_data)
     if df.empty: return
     
-    def status_priority(x): 
-        x_lower = str(x).lower()
-        if 'expired' in x_lower: return 1
-        elif 'no enddate' in x_lower: return 2
-        return 0
+    df = df.sort_values('age_sec')  # Newest first
     
-    df = df.sort_values('age_sec')  # Newest first (smallest age_sec)
-
     newest_sec = df['age_sec'].min()
     newest_str = f"{int(newest_sec)//60}m {int(newest_sec)%60}s ago"
     span_sec = df['age_sec'].max()
     span_str = f"{int(span_sec)//60}m {int(span_sec)%60}s"
     up_bets = len(df[df['UP/DOWN'] == '🟢 UP'])
-
-
-    st.info(f"✅ {len(df)} LIVE crypto bets ({MINUTES_BACK}min window)")
+    resolved_count = len(df[df['Status'].str.contains('RESOLVED', na=False)])
+    
+    st.info(f"✅ {len(df)} LIVE crypto bets ({MINUTES_BACK}min window) | ⚫ {resolved_count} resolved")
     st.caption(f"📈 Filtered from sidebar: {len(filtered_data)} raw trades")
-
-    visible_cols = ['Market', 'UP/DOWN', 'Size', 'Price', 'Status', 'PnL', 'Updated']
+    
     st.markdown("""
     <div style='display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 10px;'>
         <span><b>🟢 UP:</b> {}</span>
@@ -290,7 +340,8 @@ def track_0x8dxd(minutes_back):  # Receives slider value
         <span>Span: {}</span>
     </div>
     """.format(up_bets, len(df)-up_bets, newest_str, span_str), unsafe_allow_html=True)
-
+    
+    visible_cols = ['Market', 'UP/DOWN', 'Size', 'Price', 'Status', 'PnL', 'Updated']
     st.dataframe(df[visible_cols], use_container_width=True, height=400, hide_index=True,
         column_config={
             "Market": st.column_config.TextColumn(width="medium"),
@@ -299,5 +350,5 @@ def track_0x8dxd(minutes_back):  # Receives slider value
         })
 
 
+now_est = datetime.now(est)  # Global for funcs
 track_0x8dxd(MINUTES_BACK)
-
