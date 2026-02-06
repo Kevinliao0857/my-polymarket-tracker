@@ -16,8 +16,8 @@ except ImportError:
     st.warning("🔄 Add `streamlit-autorefresh` to requirements.txt for auto-refresh")
 
 st.set_page_config(layout="wide")
-st.markdown("# ₿ 0x8dxd Crypto Bot Tracker - Last 15 Min")
-st.info("🟢 Live crypto-only | UP/DOWN focus | Last 15min")
+st.markdown("# ₿ 0x8dxd Crypto Bot Tracker - Last  {MINUTES_BACK} Min")
+st.info("🟢 Live crypto-only | UP/DOWN focus | Last  {MINUTES_BACK}min")
 
 if 'refresh_count' not in st.session_state:
     st.session_state.refresh_count = 0
