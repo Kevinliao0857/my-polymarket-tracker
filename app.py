@@ -109,6 +109,123 @@ def get_status(item, now_ts):
     return f"🟢 ACTIVE (til ~{disp_h}{disp_m} {ampm} ET)"
 
 def track_0x8dxd():
+    trader = "0x63ce342161250d705dc0b16df89036c8e5f9ba9a".lower()  # Target wallet
+    display_name = "0x8dxd"
+    now_ts = int(time.time())
+    fifteen_min_ago = now_ts - 900  # 15 min
+    
+    urls = [
+        f"https://data-api.polymarket.com/trades?user={trader}&limit=500&offset=0"
+    ]
+    
+    all_data = []
+    for url in urls:
+        raw_data = safe_fetch(url)
+        
+        # GUARD: Only keep trades for our target wallet
+        filtered_data = []
+        for item in raw_data:
+            proxy = str(item.get("proxyWallet", "")).lower()
+            user_field = str(item.get("user", "")).lower()
+            if proxy == trader or user_field == trader:
+                filtered_data.append(item)
+        raw_data = filtered_data
+        
+        for item in raw_data:
+            ts_field = item.get('timestamp') or item.get('updatedAt') or item.get('createdAt')
+            ts = int(float(ts_field)) if ts_field else now_ts
+            if ts >= fifteen_min_ago and is_crypto(item):
+                all_data.append(item)
+    
+    all_data = all_data[-200:]
+    
+    if not all_data:
+        st.info("No crypto activity in last 15 min")
+        return
+    
+    st.info(f"DEBUG: Fetched {len(all_data)} recent crypto trades for {display_name}")
+    
+    df_data = []
+    min_ts = now_ts
+    for item in all_data:
+        updown = get_up_down(item)
+        title = str(item.get('title') or item.get('question') or '-')
+        short_title = (title[:85] + '...') if len(title) > 90 else title
+        
+        size_val = float(item.get('size', 0))
+        price_val = item.get('curPrice', item.get('price', '-'))
+        if isinstance(price_val, (int, float)):
+            price_val = f"${price_val:.2f}"
+        
+        ts_field = item.get('timestamp') or item.get('updatedAt') or item.get('createdAt') or now_ts
+        ts = int(float(ts_field)) if ts_field else now_ts
+        min_ts = min(min_ts, ts)
+        update_str = datetime.fromtimestamp(ts, est).strftime('%I:%M:%S %p ET')
+        status_str = get_status(item, now_ts)
+        
+        row = {
+            'Market': short_title,
+            'UP/DOWN': updown,
+            'Size': f"${size_val:.0f}",
+            'Price': price_val,
+            'Status': status_str,
+            'Updated': update_str,
+            'ts_raw': ts  # NEW: For highlighting recent trades
+        }
+        df_data.append(row)
+    
+    df = pd.DataFrame(df_data)
+    df['age_sec'] = now_ts - df['ts_raw']  # NEW: Age in seconds
+    
+    if df.empty:
+        st.info("No qualifying crypto bets in last 15 min")
+        return
+    
+    # Custom sort (unchanged)
+    def status_priority(x):
+        x_lower = str(x).lower()
+        if 'expired' in x_lower:
+            return 1
+        elif 'no timer' in x_lower:
+            return 2
+        else:
+            return 0
+    
+    df['priority'] = df['Status'].apply(status_priority)
+    df['parsed_updated'] = pd.to_datetime(df['Updated'], format='%I:%M:%S %p ET')
+    df = df.sort_values(['priority', 'parsed_updated'], ascending=[True, False])
+    df = df.drop(['priority', 'parsed_updated'], axis=1)
+    
+    st.success(f"✅ {len(df)} crypto bets (15min ET)")
+    
+    # NEW: Styling function for recent rows
+    def highlight_recent(row, threshold=30):  # 30 seconds = "recent"
+        if row.get('age_sec', 9999) <= threshold:
+            return ['background-color: rgba(0, 255, 0, 0.15)'] * len(row)
+        return [''] * len(row)
+    
+    # NEW: Styled dataframe (only visible columns)
+    visible_cols = ['Market', 'UP/DOWN', 'Size', 'Price', 'Status', 'Updated']
+    styled_df = df[visible_cols].style.apply(highlight_recent, axis=1)
+    
+    st.dataframe(
+        styled_df,
+        use_container_width=True,
+        height=500,
+        hide_index=True,
+        column_config={
+            "Market": st.column_config.TextColumn("Market", width="medium"),
+            "Status": st.column_config.TextColumn("Status", width="medium")
+        }
+    )
+    
+    up_bets = len(df[df['UP/DOWN'] == '🟢 UP'])
+    st.metric("🟢 UP Bets", up_bets)
+    st.metric("🔴 DOWN Bets", len(df) - up_bets)
+    
+    span_min = int((now_ts - min_ts) / 60)
+    st.metric("Newest", f"{span_min} min ago (ET)")
+
     trader = "0x8dxd"
     now_ts = int(time.time())
     fifteen_min_ago = now_ts - 900  # 15 min
