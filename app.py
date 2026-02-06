@@ -25,7 +25,7 @@ if 'refresh_count' not in st.session_state:
 st.session_state.refresh_count += 1
 
 # MAIN TITLE
-st.markdown(f"# ₿ 0x8dxd Crypto Bot Tracker - Last {MINUTES_BACK} Min")
+st.markdown(f"# ₿ 0x8dxd Crypto Bot Tracker")
 
 # Live EST clock
 est = pytz.timezone('US/Eastern')
