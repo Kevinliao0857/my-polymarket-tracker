@@ -99,105 +99,57 @@ def get_up_down(item: Dict[str, Any]) -> str:
     
     return "➖ ?"
 
-@st.cache_data(ttl=60)
-def get_market_status_batch(condition_ids: List[str]) -> Dict[str, Dict]:
-    if not condition_ids:
-        return {}
+@st.cache_data(ttl=30)
+def get_live_market_status(condition_ids: List[str]) -> Dict[str, Dict]:
+    """🆕 LIVE Polymarket API - gamma.markets NOT gamma-api"""
+    st.sidebar.markdown("### 🟢 **LIVE API Debug**")
     
-    # ✅ STEP 1: Try exact CID match (double-lowercase)
-    ids_str = ','.join(set(condition_ids[:20]))
-    url = f"https://gamma-api.polymarket.com/markets?conditionIds={ids_str}"
-    
-    st.sidebar.markdown("### 🔍 **API Debug**")
+    # 🆕 CORRECT LIVE ENDPOINT
+    live_url = "https://gamma.markets/markets?active=true&closed=true&limit=500"
     try:
-        resp = requests.get(url, timeout=8)
-        st.sidebar.code(f"Input CIDs: {list(set(condition_ids[:3]))}", language="bash")
+        resp = requests.get(live_url, timeout=10)
+        st.sidebar.code(f"LIVE URL: {live_url}", language="bash")
         
         if resp.status_code == 200:
-            markets = resp.json()
-            st.sidebar.success(f"✅ Got {len(markets)} markets")
+            live_markets = resp.json()
+            st.sidebar.success(f"✅ LIVE: {len(live_markets)} recent markets")
+            
+            # Show sample slugs/titles
+            recent = live_markets[:3]
+            st.sidebar.json([{'slug': m.get('slug'), 'question': m.get('question')[:50]} for m in recent])
             
             status_map = {}
-            matches = []
-            for market in markets:
-                cid = market.get('conditionId', '')
-                if cid:
-                    cid_lower = cid.lower()
-                    input_cids_lower = [c.lower() for c in condition_ids]
-                    
-                    # 🆕 DOUBLE LOWERCASE MATCH
-                    st.sidebar.text(f"CID: {cid[:10]}... | lower: {cid_lower[:10]}... | In input? {cid_lower in input_cids_lower}")
-                    
-                    if cid_lower in input_cids_lower:
-                        matches.append(cid)
-                        end_iso = market.get('endDateIso')
-                        uma_status = str(market.get('umaResolutionStatus', '')).lower()
-                        past_end = False
-                        if end_iso:
-                            try:
-                                end_dt = pd.to_datetime(end_iso).tz_convert('US/Eastern')
-                                past_end = now_est >= end_dt
-                            except: pass
-                        
-                        # ✅ USE LOWERCASE KEY
-                        status_map[cid_lower] = {
-                            'endDateIso': end_iso, 'endPast': past_end,
-                            'umaStatus': uma_status,
-                            'resolved': past_end or 'resolved' in uma_status
-                        }
-            
-            st.sidebar.success(f"DEBUG MATCHES: {len(matches)}")
-            st.sidebar.markdown("### Matched Status") 
-            st.sidebar.json(status_map)
-            return status_map
-            
-    except Exception as e:
-        st.sidebar.error(f"❌ CID match failed: {e}")
-    
-    # ✅ STEP 2: FALLBACK - Get ALL recent markets & match by title/slug
-    st.sidebar.info("🔄 Fallback: Searching all markets by title...")
-    try:
-        url = "https://gamma-api.polymarket.com/markets?active=true&closed=true&limit=200"
-        resp = requests.get(url, timeout=10)
-        if resp.status_code == 200:
-            all_markets = resp.json()
-            status_map = {}
-            
-            for item in filtered_data[:20]:  # Match recent trades
-                title_lower = str(item.get('title') or item.get('question') or '').lower()
-                cid_lower = (item.get('conditionId') or item.get('marketId') or '').lower()
-                if not cid_lower: continue
+            for item in filtered_data[:10]:  # Match your trades
+                cid = (item.get('conditionId') or '').lower()
+                title_lower = str(item.get('title') or '').lower()
                 
-                for market in all_markets:
-                    market_title = str(market.get('question') or market.get('title') or '').lower()
-                    market_slug = market.get('slug', '').lower()
+                for market in live_markets:
+                    m_cid = market.get('conditionId', '').lower()
+                    m_slug = market.get('slug', '').lower()
+                    m_question = str(market.get('question') or '').lower()
                     
-                    # 🆕 FUZZY TITLE/SLUG MATCH
-                    if (title_lower in market_title or market_title in title_lower or 
-                        any(t in market_slug for t in ['btc', 'eth', 'sol', 'bitcoin', 'ethereum'])):
+                    # 🆕 3-WAY MATCH
+                    if (cid == m_cid or 
+                        title_lower in m_question or 
+                        any(crypto in m_slug for crypto in ['btc', 'eth', 'sol', 'bitcoin'])):
                         
                         end_iso = market.get('endDateIso')
-                        uma_status = str(market.get('umaResolutionStatus', '')).lower()
-                        past_end = False
-                        if end_iso:
-                            try:
-                                end_dt = pd.to_datetime(end_iso).tz_convert('US/Eastern')
-                                past_end = now_est >= end_dt
-                            except: pass
+                        uma_status = str(market.get('umaResolutionStatus') or '').lower()
                         
-                        status_map[cid_lower] = {
-                            'endDateIso': end_iso, 'endPast': past_end,
+                        status_map[cid] = {
+                            'endDateIso': end_iso,
                             'umaStatus': uma_status,
-                            'resolved': past_end or 'resolved' in uma_status
+                            'resolved': 'resolved' in uma_status,
+                            'matched': f"{m_slug[:20]}..."
                         }
-                        st.sidebar.success(f"✅ TITLE MATCH: {title_lower[:50]}...")
+                        st.sidebar.success(f"✅ HIT: {title_lower[:30]}...")
                         break
             
-            st.sidebar.success(f"🔄 Fallback got {len(status_map)} title matches")
+            st.sidebar.metric("Live Matches", len(status_map))
             return status_map
             
     except Exception as e:
-        st.sidebar.error(f"❌ Fallback failed: {e}")
+        st.sidebar.error(f"❌ LIVE API: {e}")
     
     return {}
 
@@ -258,7 +210,7 @@ def get_status_hybrid(item: Dict[str, Any], market_status: Dict) -> str:
 
 def get_pnl_result(item: Dict[str, Any], market_status: Dict) -> str:
     """🆕 FIXED: Real PnL for RESOLVED markets only."""
-    condition_id = item.get('conditionId') or item.get('marketId')
+    condition_id = (item.get('conditionId') or item.get('marketId') or '').lower()
     if not condition_id or condition_id not in market_status or not market_status[condition_id].get('resolved'):
         return "➖ Pending"
     
@@ -307,6 +259,7 @@ def track_0x8dxd(minutes_back):  # Receives slider value
     st.sidebar.info(f"📊 API: {len(all_raw)} total trades")
     
     filtered_data = []
+    global filtered_data  # 🆕 Make global for live API
     condition_ids = set()  # 🆕 Collect for batch lookup
     for item in all_raw:
         proxy = str(item.get("proxyWallet", "")).lower()
@@ -352,7 +305,7 @@ def track_0x8dxd(minutes_back):  # Receives slider value
         return
     
     # 🆕 BATCH MARKET LOOKUP (efficient!)
-    market_status = get_market_status_batch(list(condition_ids))
+    market_status = get_live_market_status(list(condition_ids))
     
     st.sidebar.markdown("### 📊 **Status Debug**")
     hits = sum(1 for cid in condition_ids if cid in market_status)
