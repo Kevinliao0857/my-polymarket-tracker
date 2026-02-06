@@ -123,8 +123,9 @@ def get_market_enddate(condition_id: str, slug: str = None) -> str:
     return None
 
 
-def get_status_api(item: Dict[str, Any], now_ts: int) -> str:
-    """🆕 NEW: Precise status using API endDate."""
+def get_status_hybrid(item: Dict[str, Any], now_ts: int) -> str:
+    """🟢 Hybrid: API first → Regex fallback."""
+    # 1. Try API exact time
     condition_id = item.get('conditionId') or item.get('marketId') or item.get('market', {}).get('conditionId')
     slug = item.get('slug') or item.get('market', {}).get('slug')
     
@@ -136,11 +137,43 @@ def get_status_api(item: Dict[str, Any], now_ts: int) -> str:
             end_dt = datetime.strptime(end_str, '%I:%M %p ET').replace(tzinfo=est)
             if now_est >= end_dt:
                 return "⚫ EXPIRED"
-            return f"🟢 ACTIVE (til {end_str})"
+            return f"🟢 ACTIVE (til {end_str}) 🟢"  # 🟢 = API win!
         except:
             pass
     
-    return "🟢 ACTIVE (no endDate)"
+    # 2. Regex fallback (your original smarts)
+    title = str(item.get('title') or item.get('question') or '').lower()
+    now_decimal = now_est.hour + (now_est.minute / 60.0) + (now_est.second / 3600.0)
+    
+    time_pattern = r'(\d{1,2})(?::(\d{1,2}))?([ap]m|et)'
+    matches = re.findall(time_pattern, title)
+    title_times = []
+    
+    for h_str, m_str, suffix in matches:
+        try:
+            hour = int(h_str)
+            minute = int(m_str) if m_str else 0
+            if 'pm' in suffix.lower() or 'p' in suffix.lower(): 
+                hour = (hour % 12) + 12
+            elif 'am' in suffix.lower() or 'a' in suffix.lower(): 
+                hour = hour % 12
+            if 0 <= hour <= 23 and 0 <= minute < 60:
+                decimal_h = hour + (minute / 60.0)
+                title_times.append(decimal_h)
+        except:
+            continue
+    
+    if not title_times: 
+        return "🟢 ACTIVE (no timer)"
+    
+    max_h = max(title_times)
+    if now_decimal >= max_h: 
+        return "⚫ EXPIRED"
+    
+    disp_h = int(max_h % 12) or 12
+    disp_m = f":{int((max_h % 1)*60):02d}" if (max_h % 1) > 0.1 else ""
+    ampm = 'PM' if max_h >= 12 else 'AM'
+    return f"🟢 ACTIVE (til ~{disp_h}{disp_m} {ampm})"
 
 
 @st.cache_data(ttl=30)
@@ -217,7 +250,7 @@ def track_0x8dxd():
         update_str = datetime.fromtimestamp(ts, est).strftime('%I:%M:%S %p ET')
         
         # 🆕 CHANGED: Use API status (exact end times!)
-        status_str = get_status_api(item, now_ts)
+        status_str = get_status_hybrid(item, now_ts)  # NEW HYBRID
         age_sec = now_ts - ts
         
         df_data.append({
