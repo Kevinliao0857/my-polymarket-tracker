@@ -34,7 +34,7 @@ def rtds_listener():
         # Subscribe to trades channel
         ws.send(json.dumps({"type": "subscribe", "channel": "trades"}))
     
-    ws = websocket.WebSocketApp("wss://data-api.polymarket.com/ws",
+    ws = websocket.WebSocketApp("wss://ws-subscriptions-clob.polymarket.com/ws/market",
                                 on_message=on_message,
                                 on_open=on_open)
     ws.run_forever()
