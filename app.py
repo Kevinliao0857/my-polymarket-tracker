@@ -22,6 +22,14 @@ MINUTES_BACK = st.sidebar.slider("⏰ Minutes back", 15, 120, 30, 5)
 now_ts = int(time.time())
 st.sidebar.caption(f"From: {datetime.fromtimestamp(now_ts - MINUTES_BACK*60, est).strftime('%H:%M %p ET')}")
 
+# AUTO REFRESHER
+if 'last_auto_refresh' not in st.session_state:
+    st.session_state.last_auto_refresh = 0
+now_ts = int(time.time())
+if now_ts - st.session_state.last_auto_refresh >= 5:
+    st.session_state.last_auto_refresh = now_ts
+    st.rerun()
+
 @st.cache_data(ttl=3)
 def safe_fetch(url):
     try:
@@ -252,14 +260,5 @@ def track_0x8dxd():
 
 track_0x8dxd()
 
-if 'last_auto_refresh' not in st.session_state:
-    st.session_state.last_auto_refresh = 0
-now_ts = int(time.time())
-if now_ts - st.session_state.last_auto_refresh >= 5:
-    st.session_state.last_auto_refresh = now_ts
+if st.button("🔄 Force Refresh"):
     st.rerun()
-# 👆 END PASTE
-
-if st.button("🔄 Force Refresh"):  # ← BEFORE THIS LINE
-    st.rerun()
-    
