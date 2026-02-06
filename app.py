@@ -12,9 +12,15 @@ st.set_page_config(layout="wide")
 st.markdown("# ₿ 0x8dxd Crypto Bot Tracker - Last 15 Min")
 st.info("🟢 Live crypto-only | UP/DOWN focus | Last 15min")
 
+# ✅ FIXED AUTO-REFRESH using streamlit-autorefresh (install: pip install streamlit-autorefresh)
+try:
+    from streamlit_autorefresh import st_autorefresh
+    # Auto refresh every 5 seconds (5000ms), no limit
+    st_autorefresh(interval=5000, limit=None, key="crypto_refresh")
+except ImportError:
+    st.warning("❌ Install `pip install streamlit-autorefresh` for auto-refresh OR use manual button")
+
 # Initialize session state safely
-if 'refresh_start' not in st.session_state:
-    st.session_state.refresh_start = time.time()
 if 'refresh_count' not in st.session_state:
     st.session_state.refresh_count = 0
 
@@ -30,14 +36,9 @@ MINUTES_BACK = st.sidebar.slider("⏰ Minutes back", 15, 120, 30, 5)
 now_ts = int(time.time())
 st.sidebar.caption(f"From: {datetime.fromtimestamp(now_ts - MINUTES_BACK*60, est).strftime('%H:%M %p ET')}")
 
-# Auto-refresh logic
-elapsed = time.time() - st.session_state.refresh_start
-if elapsed >= 5:
-    st.session_state.refresh_start = time.time()
-    st.session_state.refresh_count += 1
-    st.rerun()
-
-st.sidebar.caption(f"🔄 Refresh #{st.session_state.refresh_count} | Every 5s ✓")
+# Manual refresh counter (increments on every run)
+st.session_state.refresh_count += 1
+st.sidebar.caption(f"🔄 Refresh #{st.session_state.refresh_count} | Auto 5s ✓")
 
 @st.cache_data(ttl=2)
 def safe_fetch(url: str) -> List[Dict[str, Any]]:
@@ -48,9 +49,9 @@ def safe_fetch(url: str) -> List[Dict[str, Any]]:
             if isinstance(data, list) and data:
                 return data[:500]
     except json.JSONDecodeError:
-        pass  # Non-JSON response
+        pass
     except Exception:
-        pass  # Other errors (timeout, connection, etc.)
+        pass
     return []
 
 def is_crypto(item: Dict[str, Any]) -> bool:
@@ -144,7 +145,7 @@ def track_0x8dxd():
         try:
             ts = int(float(ts_field)) if ts_field else now_ts
         except (ValueError, TypeError):
-            continue  # Skip invalid timestamps
+            continue
         
         if ts < ago_ts: continue
         
@@ -159,8 +160,7 @@ def track_0x8dxd():
     
     # Build dataframe
     df_data = []
-    min_ts = now_ts
-    for item in filtered_data[-200:]:  # Latest 200
+    for item in filtered_data[-200:]:
         updown = get_up_down(item)
         title = str(item.get('title') or item.get('question') or '-')
         short_title = (title[:85] + '...') if len(title) > 90 else title
@@ -182,19 +182,19 @@ def track_0x8dxd():
             ts = int(float(ts_field))
         except (ValueError, TypeError):
             ts = now_ts
-        min_ts = min(min_ts, ts)
         update_str = datetime.fromtimestamp(ts, est).strftime('%I:%M:%S %p ET')
         status_str = get_status(item, now_ts)
+        age_sec = now_ts - ts
         
         df_data.append({
             'Market': short_title, 'UP/DOWN': updown, 'Size': f"${size_val:.0f}",
-            'Price': price_val, 'Status': status_str, 'Updated': update_str, 'age_sec': now_ts - ts
+            'Price': price_val, 'Status': status_str, 'Updated': update_str, 'age_sec': age_sec
         })
     
     df = pd.DataFrame(df_data)
     if df.empty: return
     
-    # Sort + style
+    # Sort
     def status_priority(x): 
         x_lower = str(x).lower()
         if 'expired' in x_lower: return 1
@@ -207,13 +207,11 @@ def track_0x8dxd():
     
     st.success(f"✅ {len(df)} LIVE crypto bets | {MINUTES_BACK}min")
     
-    # Recent highlight - FIXED: use df['age_sec'] column directly, no row['age_sec']
+    # ✅ SIMPLIFIED HIGHLIGHT: Pre-compute recent rows before subset
+    recent_mask = df['age_sec'] <= 30
     def highlight_recent(row):
-        # row is a pandas Series with visible columns only
-        # Access age_sec via df since it's not in visible_cols
-        # But since we sort after, better to use index-based or precompute
-        idx = row.name  # row index
-        if idx < len(df) and 'age_sec' in df.columns and df.iloc[idx]['age_sec'] <= 30:
+        idx = row.name
+        if recent_mask.iloc[idx]:
             return ['background-color: rgba(0, 255, 0, 0.15)'] * len(row)
         return [''] * len(row)
     
@@ -226,9 +224,9 @@ def track_0x8dxd():
     
     # Live metrics
     newest_sec = df['age_sec'].min()
-    newest_str = f"{newest_sec//60}m {newest_sec%60}s ago"
+    newest_str = f"{int(newest_sec)//60}m {int(newest_sec)%60}s ago"
     span_sec = df['age_sec'].max()
-    span_str = f"{span_sec//60}m {span_sec%60}s"
+    span_str = f"{int(span_sec)//60}m {int(span_sec)%60}s"
     
     up_bets = len(df[df['UP/DOWN'] == '🟢 UP'])
     
@@ -239,9 +237,7 @@ def track_0x8dxd():
     col4.metric("📊 Span", span_str)
 
 # Force refresh button
-if st.button("🔄 Force Refresh", use_container_width=True):
-    st.session_state.refresh_start = time.time()
-    st.session_state.refresh_count += 1
+if st.button("🔄 Force Refresh NOW", use_container_width=True):
     st.rerun()
 
 track_0x8dxd()
