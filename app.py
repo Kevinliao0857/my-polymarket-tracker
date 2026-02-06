@@ -43,9 +43,10 @@ st.sidebar.caption(f"From: {datetime.fromtimestamp(now_ts - MINUTES_BACK*60, est
 if st.sidebar.button("🔄 Force Refresh", use_container_width=True):
     st.rerun()
 
-# 🆕 TEST BUTTON
 if st.sidebar.button("🧪 Test New Status API"):
-    # Test will run after data loads below
+    st.session_state.test_api = True  # 🆕 ADDED THIS LINE
+    st.rerun()
+
 
 
 st.markdown(f"# ₿ 0x8dxd Crypto Bot Tracker - Last {MINUTES_BACK} Min")
