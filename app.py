@@ -8,6 +8,7 @@ import re
 import json
 from typing import List, Dict, Any
 
+
 # ✅ AUTO-REFRESH (add "streamlit-autorefresh" to requirements.txt)
 try:
     from streamlit_autorefresh import st_autorefresh
@@ -15,11 +16,14 @@ try:
 except ImportError:
     st.warning("🔄 Add `streamlit-autorefresh` to requirements.txt for auto-refresh")
 
+
 st.set_page_config(layout="wide")
+
 
 if 'refresh_count' not in st.session_state:
     st.session_state.refresh_count = 0
 st.session_state.refresh_count += 1
+
 
 # Live EST clock
 est = pytz.timezone('US/Eastern')
@@ -28,17 +32,25 @@ time_24 = now_est.strftime('%H:%M:%S')
 time_12 = now_est.strftime('%I:%M:%S %p')
 st.caption(f"🕐 Current EST: {now_est.strftime('%Y-%m-%d')} {time_24} ({time_12}) ET | Auto 5s ✓ #{st.session_state.refresh_count}🔄")
 
+
 # SIDEBAR LOCATION
 st.sidebar.title("⚙️ Settings")
 MINUTES_BACK = st.sidebar.slider("⏰ Minutes back", 15, 120, 30, 5)
 now_ts = int(time.time())
 st.sidebar.caption(f"From: {datetime.fromtimestamp(now_ts - MINUTES_BACK*60, est).strftime('%H:%M %p ET')}")
 
+
 if st.sidebar.button("🔄 Force Refresh", use_container_width=True):
     st.rerun()
 
+# 🆕 TEST BUTTON
+if st.sidebar.button("🧪 Test New Status API"):
+    # Test will run after data loads below
+
+
 st.markdown(f"# ₿ 0x8dxd Crypto Bot Tracker - Last {MINUTES_BACK} Min")
-st.info(f"🟢 Live crypto-only | UP/DOWN focus | Last {MINUTES_BACK}min")
+st.info(f"🟢 Live crypto-only | UP/DOWN focus | Last {MINUTES_BACK}min | 🔄 EXACT END TIMES")
+
 
 @st.cache_data(ttl=2)
 def safe_fetch(url: str) -> List[Dict[str, Any]]:
@@ -54,11 +66,13 @@ def safe_fetch(url: str) -> List[Dict[str, Any]]:
         pass
     return []
 
+
 def is_crypto(item: Dict[str, Any]) -> bool:
     title = str(item.get('title') or item.get('question') or '').lower()
     tickers = ['btc', 'eth', 'sol', 'xrp', 'ada', 'doge', 'shib', 'link', 'avax', 'matic', 'dot', 'uni', 'bnb', 'usdt', 'usdc']
     full_names = ['bitcoin', 'ethereum', 'solana', 'ripple', 'xrp', 'cardano', 'dogecoin', 'shiba', 'chainlink', 'avalanche', 'polygon', 'polkadot', 'uniswap', 'binance coin']
     return any(t in title for t in tickers) or any(f in title for f in full_names)
+
 
 def get_up_down(item: Dict[str, Any]) -> str:
     fields = ['outcome', 'side', 'answer', 'choice', 'direction']
@@ -82,39 +96,51 @@ def get_up_down(item: Dict[str, Any]) -> str:
     
     return "➖ ?"
 
-def get_status(item: Dict[str, Any], now_ts: int) -> str:
-    title = str(item.get('title') or item.get('question') or '').lower()
+
+# 🆕 NEW API FUNCTIONS - EXACT END TIMES
+@st.cache_data(ttl=60)
+def get_market_enddate(condition_id: str, slug: str = None) -> str:
+    """Get exact end time from Polymarket Gamma API."""
+    try:
+        if condition_id:
+            url = f"https://gamma-api.polymarket.com/markets?conditionIds={condition_id}"
+        elif slug:
+            url = f"https://gamma-api.polymarket.com/markets?slug={slug}"
+        else:
+            return None
+            
+        resp = requests.get(url, timeout=5)
+        if resp.status_code == 200:
+            markets = resp.json()
+            if markets:
+                end_iso = markets[0].get('endDateIso')
+                if end_iso:
+                    end_dt = pd.to_datetime(end_iso).tz_convert('US/Eastern')
+                    return end_dt.strftime('%I:%M %p ET')
+    except:
+        pass
+    return None
+
+
+def get_status_api(item: Dict[str, Any], now_ts: int) -> str:
+    """🆕 NEW: Precise status using API endDate."""
+    condition_id = item.get('conditionId') or item.get('marketId') or item.get('market', {}).get('conditionId')
+    slug = item.get('slug') or item.get('market', {}).get('slug')
     
-    now_dt = datetime.fromtimestamp(now_ts, est)
-    now_decimal = now_dt.hour + (now_dt.minute / 60.0) + (now_dt.second / 3600.0)
+    end_str = get_market_enddate(condition_id, slug)
+    now_est = datetime.fromtimestamp(now_ts, est)
     
-    time_pattern = r'(\d{1,2})(?::(\d{1,2}))?([ap]m|et)'
-    matches = re.findall(time_pattern, title)
-    title_times = []
-    
-    for h_str, m_str, suffix in matches:
+    if end_str:
         try:
-            hour = int(h_str)
-            minute = int(m_str) if m_str else 0
-            
-            if 'pm' in suffix.lower() or 'p' in suffix.lower(): hour = (hour % 12) + 12
-            elif 'am' in suffix.lower() or 'a' in suffix.lower(): hour = hour % 12
-            
-            if 0 <= hour <= 23 and 0 <= minute < 60:
-                decimal_h = hour + (minute / 60.0)
-                title_times.append(decimal_h)
-        except ValueError:
-            continue
+            end_dt = datetime.strptime(end_str, '%I:%M %p ET').replace(tzinfo=est)
+            if now_est >= end_dt:
+                return "⚫ EXPIRED"
+            return f"🟢 ACTIVE (til {end_str})"
+        except:
+            pass
     
-    if not title_times: return "🟢 ACTIVE (no timer)"
-    
-    max_h = max(title_times)
-    if now_decimal >= max_h: return "⚫ EXPIRED"
-    
-    disp_h = int(max_h % 12) or 12
-    disp_m = f":{int((max_h % 1)*60):02d}" if (max_h % 1) > 0.1 else ""
-    ampm = 'PM' if max_h >= 12 else 'AM'
-    return f"🟢 ACTIVE (til ~{disp_h}{disp_m} {ampm} ET)"
+    return "🟢 ACTIVE (no endDate)"
+
 
 @st.cache_data(ttl=30)
 def track_0x8dxd():
@@ -157,6 +183,13 @@ def track_0x8dxd():
         st.info("No crypto trades found")
         return
     
+    # 🆕 TEST BUTTON RESULT
+    if 'test_api' in st.session_state:
+        sample = filtered_data[0]
+        end = get_market_enddate(sample.get('conditionId'), sample.get('slug'))
+        st.sidebar.success(f"✅ Test: Sample ends {end or 'No data'}")
+        del st.session_state.test_api
+    
     df_data = []
     for item in filtered_data[-200:]:
         updown = get_up_down(item)
@@ -181,7 +214,9 @@ def track_0x8dxd():
         except (ValueError, TypeError):
             ts = now_ts
         update_str = datetime.fromtimestamp(ts, est).strftime('%I:%M:%S %p ET')
-        status_str = get_status(item, now_ts)
+        
+        # 🆕 CHANGED: Use API status (exact end times!)
+        status_str = get_status_api(item, now_ts)
         age_sec = now_ts - ts
         
         df_data.append({
@@ -195,14 +230,14 @@ def track_0x8dxd():
     def status_priority(x): 
         x_lower = str(x).lower()
         if 'expired' in x_lower: return 1
-        elif 'no timer' in x_lower: return 2
+        elif 'no enddate' in x_lower: return 2
         return 0
     
     df['priority'] = df['Status'].apply(status_priority)
     df['parsed_updated'] = pd.to_datetime(df['Updated'], format='%I:%M:%S %p ET', errors='coerce')
     df = df.sort_values(['priority', 'parsed_updated'], ascending=[True, False]).drop(['priority', 'parsed_updated'], axis=1)
     
-    st.success(f"✅ {len(df)} LIVE crypto bets ({MINUTES_BACK}min window)")
+    st.success(f"✅ {len(df)} LIVE crypto bets ({MINUTES_BACK}min window) | 🔄 EXACT END TIMES")
     st.caption(f"📈 Filtered from sidebar: {len(filtered_data)} raw trades")
     
     recent_mask = df['age_sec'] <= 30
@@ -231,5 +266,6 @@ def track_0x8dxd():
     bet_col2.metric("🔴 DOWN Bets", len(df) - up_bets)
     bet_col3.metric("🟢 Newest", newest_str)
     bet_col4.metric("📊 Span", span_str)
+
 
 track_0x8dxd()
