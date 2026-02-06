@@ -279,13 +279,6 @@ def track_0x8dxd():
                 column_config={"Market": st.column_config.TextColumn(width="medium"),
                               "Status": st.column_config.TextColumn(width="medium")})
     
-    newest_sec = df['age_sec'].min()
-    newest_str = f"{int(newest_sec)//60}m {int(newest_sec)%60}s ago"
-    span_sec = df['age_sec'].max()
-    span_str = f"{int(span_sec)//60}m {int(span_sec)%60}s"
-    
-    up_bets = len(df[df['UP/DOWN'] == '🟢 UP'])
-    
     st.markdown("""
     <div style='display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 10px;'>
         <span><b>🟢 UP:</b> {}</span>
@@ -294,6 +287,15 @@ def track_0x8dxd():
         <span>Span: {}</span>
     </div>
     """.format(up_bets, len(df)-up_bets, newest_str, span_str), unsafe_allow_html=True)
+
+    newest_sec = df['age_sec'].min()
+    newest_str = f"{int(newest_sec)//60}m {int(newest_sec)%60}s ago"
+    span_sec = df['age_sec'].max()
+    span_str = f"{int(span_sec)//60}m {int(span_sec)%60}s"
+    
+    up_bets = len(df[df['UP/DOWN'] == '🟢 UP'])
+    
+
 
 
 track_0x8dxd()
