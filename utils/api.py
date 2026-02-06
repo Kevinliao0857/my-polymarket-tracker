@@ -4,11 +4,45 @@ import pandas as pd
 from datetime import datetime
 import time
 import json
-import re  # 🆕 ADDED explicit import
+import re
 from typing import List, Dict, Any
+import websocket  # 🆕 For RTDS WebSocket
+import threading
+from collections import deque
+
 
 from .config import EST, TRADER
 from .filters import is_crypto, get_up_down
+
+
+# 🆕 Global live trades cache (thread-safe deque)
+live_trades: deque = deque(maxlen=2000)
+
+
+def rtds_listener():
+    """🆕 Background WebSocket listener for ~1s live trades."""
+    def on_message(ws, msg):
+        try:
+            trade = json.loads(msg)
+            if isinstance(trade, dict) and trade.get('proxyWallet', '').lower() == TRADER:
+                ts = trade.get('timestamp')
+                if ts:  # Only recent-ish
+                    live_trades.append(trade)
+        except: pass
+    
+    def on_open(ws):
+        # Subscribe to trades channel
+        ws.send(json.dumps({"type": "subscribe", "channel": "trades"}))
+    
+    ws = websocket.WebSocketApp("wss://data-api.polymarket.com/ws",
+                                on_message=on_message,
+                                on_open=on_open)
+    ws.run_forever()
+
+
+# 🆕 Start WS listener once (daemon thread)
+threading.Thread(target=rtds_listener, daemon=True).start()
+
 
 @st.cache_data(ttl=2)
 def safe_fetch(url: str) -> List[Dict[str, Any]]:
@@ -23,6 +57,7 @@ def safe_fetch(url: str) -> List[Dict[str, Any]]:
     except Exception:
         pass
     return []
+
 
 @st.cache_data(ttl=60)
 def get_market_enddate(condition_id: str, slug: str = None) -> str:
@@ -47,6 +82,7 @@ def get_market_enddate(condition_id: str, slug: str = None) -> str:
         pass
     return None
 
+
 def get_status_hybrid(item: Dict[str, Any], now_ts: int) -> str:
     """🟢 Hybrid: API first → Regex fallback."""
     # 1. Try API exact time
@@ -65,7 +101,7 @@ def get_status_hybrid(item: Dict[str, Any], now_ts: int) -> str:
         except:
             pass
     
-    # 2. Regex fallback 🆕 FIXED: Safe str() everywhere
+    # 2. Regex fallback
     title_safe = str(item.get('title') or item.get('question') or '').lower()
     now_decimal = now_est.hour + (now_est.minute / 60.0) + (now_est.second / 3600.0)
     
@@ -100,11 +136,17 @@ def get_status_hybrid(item: Dict[str, Any], now_ts: int) -> str:
     ampm = 'PM' if max_h >= 12 else 'AM'
     return f"🟢 ACTIVE (til ~{disp_h}{disp_m} {ampm})"
 
+
 @st.cache_data(ttl=5)
 def track_0x8dxd(minutes_back: int) -> pd.DataFrame:
     now_ts = int(time.time())
     ago_ts = now_ts - (minutes_back * 60)
     
+    # 🆕 PRIORITY 1: Live WS trades (1s fresh)
+    recent_live = [t for t in live_trades if (t.get('timestamp') or 0) >= ago_ts]
+    ws_count = len(recent_live)
+    
+    # PRIORITY 2: REST fallback (historical)
     all_raw = []
     offset = 0
     while len(all_raw) < 2000:
@@ -115,9 +157,8 @@ def track_0x8dxd(minutes_back: int) -> pd.DataFrame:
         offset += 500
         if len(batch) < 500: break
     
-    st.sidebar.info(f"📊 API: {len(all_raw)} total trades")
-    
-    filtered_data = []
+    # Filter REST for recent + our trader
+    rest_recent = []
     for item in all_raw:
         proxy = str(item.get("proxyWallet", "")).lower()
         user_field = str(item.get("user", "")).lower()
@@ -129,18 +170,29 @@ def track_0x8dxd(minutes_back: int) -> pd.DataFrame:
         except (ValueError, TypeError):
             continue
         
-        if ts < ago_ts: continue
-        
-        if is_crypto(item):
-            filtered_data.append(item)
+        if ts >= ago_ts:
+            rest_recent.append(item)
     
+    # 🆕 Combine: live + recent REST (dedupe by tx hash)
+    combined = recent_live + rest_recent
+    seen_tx = set()
+    unique_combined = []
+    for item in combined:
+        tx_hash = str(item.get('transactionHash', '')).lower()
+        if tx_hash not in seen_tx:
+            seen_tx.add(tx_hash)
+            unique_combined.append(item)
+    
+    filtered_data = [item for item in unique_combined if is_crypto(item)]
+    
+    st.sidebar.info(f"📊 REST: {len(all_raw)} total | WS: {ws_count} live")
     st.sidebar.success(f"✅ {len(filtered_data)} crypto trades | {minutes_back}min")
     
     if not filtered_data:
         return pd.DataFrame()
     
     df_data = []
-    for item in filtered_data[-200:]:
+    for item in filtered_data[-200:]:  # Latest 200
         updown = get_up_down(item)
         title = str(item.get('title') or item.get('question') or '-')
         short_title = (title[:85] + '...') if len(title) > 90 else title
