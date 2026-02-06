@@ -21,13 +21,6 @@ if 'refresh_count' not in st.session_state:
     st.session_state.refresh_count = 0
 st.session_state.refresh_count += 1
 
-# Live EST clock
-est = pytz.timezone('US/Eastern')
-now_est = datetime.now(est)
-time_24 = now_est.strftime('%H:%M:%S')
-time_12 = now_est.strftime('%I:%M:%S %p')
-st.caption(f"🕐 Current EST: {now_est.strftime('%Y-%m-%d')} {time_24} ({time_12}) ET | Auto 5s ✓ #{st.session_state.refresh_count}🔄")
-
 # SIDEBAR LOCATION
 st.sidebar.title("⚙️ Settings")
 MINUTES_BACK = st.sidebar.slider("⏰ Minutes back", 15, 120, 30, 5)
@@ -205,6 +198,13 @@ def track_0x8dxd():
     st.success(f"✅ {len(df)} LIVE crypto bets ({MINUTES_BACK}min window)")
     st.caption(f"📈 Filtered from sidebar: {len(filtered_data)} raw trades")
     
+    # Live EST clock
+    est = pytz.timezone('US/Eastern')
+    now_est = datetime.now(est)
+    time_24 = now_est.strftime('%H:%M:%S')
+    time_12 = now_est.strftime('%I:%M:%S %p')
+    st.caption(f"🕐 Current EST: {now_est.strftime('%Y-%m-%d')} {time_24} ({time_12}) ET | Auto 5s ✓ #{st.session_state.refresh_count}🔄")
+
     recent_mask = df['age_sec'] <= 30
     def highlight_recent(row):
         idx = row.name
