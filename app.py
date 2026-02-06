@@ -286,14 +286,14 @@ def track_0x8dxd():
     
     up_bets = len(df[df['UP/DOWN'] == '🟢 UP'])
     
-st.markdown(f"""
+st.markdown("""
 <div style='display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 10px;'>
-    <span><b>🟢 UP:</b> {up_bets}</span>
-    <span><b>🔴 DOWN:</b> {len(df)-up_bets}</span>
-    <span>Newest: {newest_str}</span>
-    <span>Span: {span_str}</span>
+    <span><b>🟢 UP:</b> {}</span>
+    <span><b>🔴 DOWN:</b> {}</span>
+    <span>Newest: {}</span>
+    <span>Span: {}</span>
 </div>
-""", unsafe_allow_html=True)
+""".format(up_bets, len(df)-up_bets, newest_str, span_str), unsafe_allow_html=True)
 
 
 track_0x8dxd()
