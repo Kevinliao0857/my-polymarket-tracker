@@ -275,10 +275,6 @@ def track_0x8dxd():
     visible_cols = ['Market', 'UP/DOWN', 'Size', 'Price', 'Status', 'Updated']
     styled_df = df[visible_cols].style.apply(highlight_recent, axis=1)
     
-    st.dataframe(styled_df, use_container_width=True, height=400, hide_index=True,
-                column_config={"Market": st.column_config.TextColumn(width="medium"),
-                              "Status": st.column_config.TextColumn(width="medium")})
-    
     st.markdown("""
     <div style='display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 10px;'>
         <span><b>🟢 UP:</b> {}</span>
@@ -287,6 +283,10 @@ def track_0x8dxd():
         <span>Span: {}</span>
     </div>
     """.format(up_bets, len(df)-up_bets, newest_str, span_str), unsafe_allow_html=True)
+
+    st.dataframe(styled_df, use_container_width=True, height=400, hide_index=True,
+                column_config={"Market": st.column_config.TextColumn(width="medium"),
+                              "Status": st.column_config.TextColumn(width="medium")})  
 
     newest_sec = df['age_sec'].min()
     newest_str = f"{int(newest_sec)//60}m {int(newest_sec)%60}s ago"
