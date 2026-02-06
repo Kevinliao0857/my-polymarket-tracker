@@ -109,26 +109,19 @@ def get_status(item, now_ts):
     return f"🟢 ACTIVE (til ~{disp_h}{disp_m} {ampm} ET)"
 
 def track_0x8dxd():
-    trader = "0x63ce342161250d705dc0b16df89036c8e5f9ba9a".lower()  # ← NEW: Correct wallet address (lowercase)
-    display_name = "0x8dxd"  # ← NEW: Keep your display name separate
+    trader = "0x8dxd"
     now_ts = int(time.time())
     fifteen_min_ago = now_ts - 900  # 15 min
     
     # FIXED: Higher limit, pagination-ready
     urls = [
-        f"https://data-api.polymarket.com/trades?user={trader}&limit=500&offset=0"  # ← Uses correct trader address
+        f"https://data-api.polymarket.com/trades?user={trader}&limit=500&offset=0"
     ]
     
     all_data = []
     for url in urls:
         raw_data = safe_fetch(url)
         for item in raw_data:
-            # ← NEW GUARD: Skip trades not belonging to our target wallet
-            proxy = str(item.get("proxyWallet", "")).lower()
-            user_field = str(item.get("user", "")).lower()
-            if proxy != trader and user_field != trader:
-                continue  # Skip other users' trades
-            
             ts_field = item.get('timestamp') or item.get('updatedAt') or item.get('createdAt')
             ts = int(float(ts_field)) if ts_field else now_ts
             if ts >= fifteen_min_ago and is_crypto(item):
@@ -142,8 +135,72 @@ def track_0x8dxd():
         st.info("No crypto activity in last 15 min")
         return
     
-    st.info(f"DEBUG: Fetched {len(all_data)} recent crypto trades for {display_name}")  # ← Updated debug message
+    st.info(f"DEBUG: Fetched {len(all_data)} recent crypto trades")  # Count check
     
+    df_data = []
+    min_ts = now_ts
+    for item in all_data:
+        updown = get_up_down(item)
+        title = str(item.get('title') or item.get('question') or '-')
+        short_title = (title[:85] + '...') if len(title) > 90 else title
+        
+        size_val = float(item.get('size', 0))
+        price_val = item.get('curPrice', item.get('price', '-'))
+        if isinstance(price_val, (int, float)):
+            price_val = f"${price_val:.2f}"
+        
+        ts_field = item.get('timestamp') or item.get('updatedAt') or item.get('createdAt') or now_ts
+        ts = int(float(ts_field)) if ts_field else now_ts
+        min_ts = min(min_ts, ts)
+        update_str = datetime.fromtimestamp(ts, est).strftime('%I:%M:%S %p ET')  # 12h format
+        status_str = get_status(item, now_ts)
+        
+        row = {
+            'Market': short_title,
+            'UP/DOWN': updown,
+            'Size': f"${size_val:.0f}",
+            'Price': price_val,
+            'Status': status_str,
+            'Updated': update_str
+        }
+        df_data.append(row)
+    
+    df = pd.DataFrame(df_data)
+    
+    # TEMP DEBUG: Show ALL recent (comment out strict filter to test)
+    # df = df[df['Market'].str.lower().str.contains('btc|eth|sol|xrp|ada|doge|bitcoin|ethereum|solana', na=False, regex=True)]
+    
+    if df.empty:
+        st.info("No qualifying crypto bets in last 15 min")
+        return
+    
+    # Custom sort: Active(timer)=0 > Expired=1 > No-timer=2, then newest
+    def status_priority(x):
+        x_lower = str(x).lower()
+        if 'expired' in x_lower:
+            return 1
+        elif 'no timer' in x_lower:
+            return 2
+        else:  # ACTIVE (til...)
+            return 0
+    
+    df['priority'] = df['Status'].apply(status_priority)
+    df['parsed_updated'] = pd.to_datetime(df['Updated'], format='%I:%M:%S %p ET')
+    df = df.sort_values(['priority', 'parsed_updated'], ascending=[True, False])
+    df = df.drop(['priority', 'parsed_updated'], axis=1)
+    
+    st.success(f"✅ {len(df)} crypto bets (15min ET)")
+    st.dataframe(df, use_container_width=True, height=500, hide_index=True, column_config={
+        "Market": st.column_config.TextColumn("Market", width="medium"),
+        "Status": st.column_config.TextColumn("Status", width="medium")
+    })
+    
+    up_bets = len(df[df['UP/DOWN'] == '🟢 UP'])
+    st.metric("🟢 UP Bets", up_bets)
+    st.metric("🔴 DOWN Bets", len(df) - up_bets)
+    
+    span_min = int((now_ts - min_ts) / 60)
+    st.metric("Newest", f"{span_min} min ago (ET)")
 
 if st.button("🔄 Force Refresh"):
     st.rerun()
