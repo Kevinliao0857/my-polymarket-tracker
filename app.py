@@ -199,10 +199,6 @@ def track_0x8dxd():
     
     st.success(f"✅ {len(df)} LIVE crypto bets ({MINUTES_BACK}min window)")
     st.caption(f"📈 Filtered from sidebar: {len(filtered_data)} raw trades")
-
-    col1, col2 = st.columns(2)
-    col1.metric("⏰ Window", f"{MINUTES_BACK}min")
-    col2.metric("📊 Raw Trades", f"{len(filtered_data)}")
     
     recent_mask = df['age_sec'] <= 30
     def highlight_recent(row):
