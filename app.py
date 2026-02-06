@@ -24,6 +24,7 @@ st.session_state.refresh_count += 1
 # SIDEBAR LOCATION
 st.sidebar.title("⚙️ Settings")
 MINUTES_BACK = st.sidebar.slider("⏰ Minutes back", 15, 120, 30, 5)
+est = pytz.timezone('US/Eastern')
 now_ts = int(time.time())
 st.sidebar.caption(f"From: {datetime.fromtimestamp(now_ts - MINUTES_BACK*60, est).strftime('%H:%M %p ET')}")
 
@@ -144,7 +145,7 @@ def track_0x8dxd(minutes_back: int):
         if is_crypto(item):
             filtered_data.append(item)
     
-    st.sidebar.success(f"✅ {len(filtered_data)} crypto trades | {MINUTES_BACK}min")
+    st.sidebar.success(f"✅ {len(filtered_data)} crypto trades | {minutes_back}min")
     
     if not filtered_data:
         st.info("No crypto trades found")
@@ -197,13 +198,6 @@ def track_0x8dxd(minutes_back: int):
     
     st.success(f"✅ {len(df)} LIVE crypto bets ({MINUTES_BACK}min window)")
     st.caption(f"📈 Filtered from sidebar: {len(filtered_data)} raw trades")
-    
-    # Live EST clock
-    est = pytz.timezone('US/Eastern')
-    now_est = datetime.now(est)
-    time_24 = now_est.strftime('%H:%M:%S')
-    time_12 = now_est.strftime('%I:%M:%S %p')
-    st.caption(f"🕐 Current EST: {now_est.strftime('%Y-%m-%d')} {time_24} ({time_12}) ET | Auto 5s ✓ #{st.session_state.refresh_count}🔄")
 
     recent_mask = df['age_sec'] <= 30
     def highlight_recent(row):
@@ -219,6 +213,13 @@ def track_0x8dxd(minutes_back: int):
                 column_config={"Market": st.column_config.TextColumn(width="medium"),
                               "Status": st.column_config.TextColumn(width="medium")})
     
+    # Live EST clock
+    est = pytz.timezone('US/Eastern')
+    now_est = datetime.now(est)
+    time_24 = now_est.strftime('%H:%M:%S')
+    time_12 = now_est.strftime('%I:%M:%S %p')
+    st.caption(f"🕐 Current EST: {now_est.strftime('%Y-%m-%d')} {time_24} ({time_12}) ET | Auto 5s ✓ #{st.session_state.refresh_count}🔄")
+
     newest_sec = df['age_sec'].min()
     newest_str = f"{int(newest_sec)//60}m {int(newest_sec)%60}s ago"
     span_sec = df['age_sec'].max()
