@@ -28,7 +28,7 @@ est = pytz.timezone('US/Eastern')
 now_est = datetime.now(est)
 time_24 = now_est.strftime('%H:%M:%S')
 time_12 = now_est.strftime('%I:%M:%S %p')
-st.caption(f"🕐 Current EST: {now_est.strftime('%Y-%m-%d')} {time_24} ({time_12}) ET | Auto 5s ✓ #{st.session_state.refresh_count}")
+st.caption(f"🕐 Current EST: {now_est.strftime('%Y-%m-%d')} {time_24} ({time_12}) ET | Auto 5s ✓ #{st.session_state.refresh_count}🔄")
 
 # SIDEBAR LOCATION
 st.sidebar.title("⚙️ Settings")
