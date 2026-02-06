@@ -6,14 +6,22 @@ import time
 import pytz
 import re
 
+st.set_page_config(layout="wide")
+st.markdown("# ₿ 0x8dxd Crypto Bot Tracker - Last 15 Min")
+st.info("🟢 Live crypto-only | UP/DOWN focus | Last 15min")
 
-st.caption(f"🕐 Current EST: ...")
+# Live EST clock
+est = pytz.timezone('US/Eastern')  # 👈 MOVED UP
+now_est = datetime.now(est)
+time_24 = now_est.strftime('%H:%M:%S')
+time_12 = now_est.strftime('%I:%M:%S %p')
+st.caption(f"🕐 Current EST: {now_est.strftime('%Y-%m-%d')} {time_24} ({time_12}) ET | Auto 5s + Force 🔄")
+
 st.sidebar.title("⚙️ Settings")
 MINUTES_BACK = st.sidebar.slider("⏰ Minutes back", 15, 120, 30, 5)
 now_ts = int(time.time())
 st.sidebar.caption(f"From: {datetime.fromtimestamp(now_ts - MINUTES_BACK*60, est).strftime('%H:%M %p ET')}")
 
-# CLOUDSAFE AUTO-REFRESH
 if 'refresh_start' not in st.session_state:
     st.session_state.refresh_start = time.time()
 elapsed = time.time() - st.session_state.refresh_start
@@ -203,7 +211,7 @@ def track_0x8dxd():
     col2.metric("🔴 DOWN Bets", len(df) - up_bets)
     col3.metric("🟢 Newest", newest_str)
     col4.metric("📊 Span", span_str)
-    
+
 # Force refresh button
 if st.button("🔄 Force Refresh", use_container_width=True):
     st.rerun()
