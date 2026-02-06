@@ -19,6 +19,8 @@ time_12 = now_est.strftime('%I:%M:%S %p')
 st.caption(f"🕐 Current EST: {now_est.strftime('%Y-%m-%d')} {time_24} ({time_12}) ET | Auto 5s + Force 🔄")
 st.sidebar.title("⚙️ Settings")
 MINUTES_BACK = st.sidebar.slider("⏰ Minutes back", 15, 120, 30, 5)
+now_ts = int(time.time())
+st.sidebar.caption(f"From: {datetime.fromtimestamp(now_ts - MINUTES_BACK*60, est).strftime('%H:%M %p ET')}")
 
 @st.cache_data(ttl=3)
 def safe_fetch(url):
