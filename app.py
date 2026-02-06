@@ -3,27 +3,37 @@ import requests
 import pandas as pd
 from datetime import datetime
 import time
-import pytz  # pip install pytz
-import re  # For time parsing
-# pip install streamlit-autorefresh
-from streamlit_autorefresh import st_autorefresh
+import pytz
+import re
 
 st.set_page_config(layout="wide")
 st.markdown("# ₿ 0x8dxd Crypto Bot Tracker - Last 15 Min")
 
 st.info("🟢 Live crypto-only | UP/DOWN focus | Last 15min")
 
-# Live EST clock (trader uses EST)
+# Live EST clock
 est = pytz.timezone('US/Eastern')
 now_est = datetime.now(est)
-time_24 = now_est.strftime('%H:%M:%S')
-time_12 = now_est.strftime('%I:%M:%S %p')
-st.caption(f"🕐 Current EST: {now_est.strftime('%Y-%m-%d')} {time_24} ({time_12}) ET | Auto 5s")
+st.caption(f"🕐 Current EST: {now_est.strftime('%Y-%m-%d %H:%M:%S')} ET | Auto 5s")
 
-# AUTO-REFRESH EVERY 5s (replaces manual session_state + button)
-st_autorefresh(interval=5000, limit=None, key="crypto_refresh")
+# MANUAL 5s AUTO-REFRESH (no external package needed)
+if 'last_refresh' not in st.session_state:
+    st.session_state.last_refresh = 0
+if 'refresh_count' not in st.session_state:
+    st.session_state.refresh_count = 0
 
-@st.cache_data(ttl=2)  # Short TTL for live data
+now_ts = int(time.time())
+if now_ts - st.session_state.last_refresh >= 5:
+    st.session_state.last_refresh = now_ts
+    st.session_state.refresh_count += 1
+    st.rerun()  # Triggers refresh
+
+# FORCE REFRESH BUTTON (backup)
+if st.button("🔄 Force Refresh Now"):
+    st.session_state.last_refresh = 0
+    st.rerun()
+
+@st.cache_data(ttl=2)
 def safe_fetch(url):
     try:
         resp = requests.get(url, timeout=10)
@@ -196,7 +206,7 @@ def fetch_crypto_data():
 current_df = fetch_crypto_data()
 
 def display_data(df, now_ts):
-    st.success(f"✅ {len(df)} crypto bets (15min ET)")
+    st.success(f"✅ {len(df)} crypto bets (15min ET) | Refresh #{st.session_state.refresh_count}")
     
     def highlight_recent(row, threshold=30):
         if row.get('ts_raw', 9999) >= (now_ts - threshold):
@@ -224,32 +234,23 @@ def display_data(df, now_ts):
         
         newest_sec = now_ts - max_ts
         newest_min = newest_sec // 60
-        newest_str = f"{newest_min}m {newest_sec % 60}s ago"
+        newest_str = f"{newest_min}m {newest_sec%60}s **ago**"
         
         span_sec = now_ts - min_ts
         span_min = span_sec // 60
-        span_str = f"{span_min}m {span_sec % 60}s"
+        span_str = f"{span_min}m {span_sec%60}s"
         
         col1, col2, col3, col4 = st.columns(4)
         up_count = len(df[df['UP/DOWN'] == '🟢 UP'])
-        with col1:
-            st.metric("🟢 UP Bets", up_count)
-        with col2:
-            st.metric("🔴 DOWN Bets", len(df) - up_count)
-        with col3:
-            st.metric("🟢 Newest", newest_str)
-        with col4:
-            st.metric("📊 Span", span_str)
+        with col1: st.metric("🟢 UP Bets", up_count)
+        with col2: st.metric("🔴 DOWN Bets", len(df) - up_count)
+        with col3: st.metric("🟢 Newest", newest_str)
+        with col4: st.metric("📊 Span", span_str)
         
-        # Extra live ticker line
-        st.markdown(f"**🔄 Live: Newest {newest_str} | Span {span_str} | Refresh #{st_autorefresh.count()}**")
+        st.markdown(f"**🔄 LIVE: {newest_str} | Span {span_str}**")
 
 if not current_df.empty:
     now_ts = int(time.time())
     display_data(current_df, now_ts)
-    now_est = datetime.now(est)
-    time_24 = now_est.strftime('%H:%M:%S')
-    time_12 = now_est.strftime('%I:%M:%S %p')
-    st.caption(f"🕐 {time_24} ({time_12}) ET | Auto every 5s")
 else:
     st.info("No crypto activity in last 15 min")
