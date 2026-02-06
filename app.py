@@ -30,10 +30,14 @@ time_24 = now_est.strftime('%H:%M:%S')
 time_12 = now_est.strftime('%I:%M:%S %p')
 st.caption(f"🕐 Current EST: {now_est.strftime('%Y-%m-%d')} {time_24} ({time_12}) ET | Auto 5s ✓ #{st.session_state.refresh_count}")
 
+# SIDEBAR LOCATION
 st.sidebar.title("⚙️ Settings")
 MINUTES_BACK = st.sidebar.slider("⏰ Minutes back", 15, 120, 30, 5)
 now_ts = int(time.time())
 st.sidebar.caption(f"From: {datetime.fromtimestamp(now_ts - MINUTES_BACK*60, est).strftime('%H:%M %p ET')}")
+
+if st.sidebar.button("🔄 Force Refresh", use_container_width=True):
+    st.rerun()
 
 @st.cache_data(ttl=2)
 def safe_fetch(url: str) -> List[Dict[str, Any]]:
@@ -226,8 +230,5 @@ def track_0x8dxd():
     bet_col2.metric("🔴 DOWN Bets", len(df) - up_bets)
     bet_col3.metric("🟢 Newest", newest_str)
     bet_col4.metric("📊 Span", span_str)
-
-if st.button("🔄 Force Refresh NOW", use_container_width=True):
-    st.rerun()
 
 track_0x8dxd()
