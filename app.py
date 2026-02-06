@@ -228,7 +228,7 @@ def track_0x8dxd():
     max_ts = max(max_ts, ts)
     # After loop:
     newest_min = int((now_ts - max_ts) / 60)
-    st.metric("🟢 Newest", f"{newest_min} min ago (ET)")
+    st.metric("🕐 Newest", f"{newest_min} min ago (ET)")
 
 
 if st.button("🔄 Force Refresh"):
