@@ -17,6 +17,8 @@ now_est = datetime.now(est)
 time_24 = now_est.strftime('%H:%M:%S')
 time_12 = now_est.strftime('%I:%M:%S %p')
 st.caption(f"🕐 Current EST: {now_est.strftime('%Y-%m-%d')} {time_24} ({time_12}) ET | Auto 5s + Force 🔄")
+st.sidebar.title("⚙️ Settings")
+MINUTES_BACK = st.sidebar.slider("⏰ Minutes back", 15, 120, 30, 5)
 
 @st.cache_data(ttl=3)
 def safe_fetch(url):
@@ -112,7 +114,8 @@ def track_0x8dxd():
     trader = "0x63ce342161250d705dc0b16df89036c8e5f9ba9a".lower()  # Target wallet
     display_name = "0x8dxd"
     now_ts = int(time.time())
-    fifteen_min_ago = now_ts - 900  # 15 min
+    ago_ts = now_ts - (MINUTES_BACK * 60)  # Dynamic!
+
     
     urls = [
         f"https://data-api.polymarket.com/trades?user={trader}&limit=500&offset=0"
@@ -134,7 +137,7 @@ def track_0x8dxd():
         for item in raw_data:
             ts_field = item.get('timestamp') or item.get('updatedAt') or item.get('createdAt')
             ts = int(float(ts_field)) if ts_field else now_ts
-            if ts >= fifteen_min_ago and is_crypto(item):
+            if ts >= ago_ts and is_crypto(item):  # ✅ Use dynamic slider value
                 all_data.append(item)
     
     all_data = all_data[-200:]
@@ -245,20 +248,9 @@ def track_0x8dxd():
     with col4:
         st.metric("📊 Span", window_str)
 
+track_0x8dxd()
 
 if st.button("🔄 Force Refresh"):
     st.rerun()
 
-# Improved refresh loop with safety
-placeholder = st.empty()
-refresh_count = 0
-while True:
-    refresh_count += 1
-    now_est = datetime.now(est)
-    with placeholder.container():
-        track_0x8dxd()
-        time_24 = now_est.strftime('%H:%M:%S')
-        time_12 = now_est.strftime('%I:%M:%S %p')
-        st.caption(f"🕐 {time_24} ({time_12}) ET | #{refresh_count}")
-    time.sleep(5)
-    st.rerun()
+st.caption(f"🕐 {MINUTES_BACK}min window - Slide sidebar for more trades!")
