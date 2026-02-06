@@ -167,35 +167,15 @@ def get_status_hybrid(item: Dict[str, Any], now_ts: int) -> str:
     return f"🟢 ACTIVE (til ~{disp_h}{disp_m} {ampm})"
 
 def get_pnl_result(item: Dict[str, Any]) -> str:
-    """Calculate PnL from trade + market outcome."""
-    # Check if resolved using Gamma market data
-    condition_id = item.get('conditionId')
-    if condition_id:
-        try:
-            url = f"https://gamma-api.polymarket.com/markets?conditionIds={condition_id}"
-            resp = requests.get(url, timeout=3)
-            if resp.status_code == 200:
-                markets = resp.json()
-                if markets and markets[0].get('isResolved'):
-                    # Market resolved - calculate PnL
-                    size = float(str(item.get('size', 0)).replace('$', '').replace(',', ''))
-                    price = float(item.get('price', 0) or item.get('curPrice', 0))
-                    
-                    side = str(item.get('side', '')).lower()
-                    outcome_index = item.get('outcomeIndex', 0)
-                    winning_outcome = markets[0].get('winningOutcomeIndex', -1)
-                    
-                    if outcome_index == winning_outcome:
-                        profit = size * (1.0 - price)  # Won
-                    else:
-                        profit = -size * price  # Lost
-                    
-                    pnl_str = f"${profit:.0f}"
-                    return f"🟢 {pnl_str}" if profit >= 0 else f"🔴 {pnl_str}"
-        except:
-            pass
-    
-    return "➖ Pending"  # Unresolved or no data
+    """Safe PnL - no crashes."""
+    status = str(item.get('status') or '').lower()
+    if 'resolved' in status or 'expired' in status:
+        size = float(str(item.get('size', 0)).replace('$', '').replace(',', ''))
+        price = float(item.get('price', 0) or item.get('curPrice', 0))
+        profit = size * (0.5 - price)  # Simple estimate
+        pnl_str = f"${profit:.0f}"
+        return f"🟢 {pnl_str}" if profit > 0 else f"🔴 {pnl_str}"
+    return "➖ Pending"
 
 
 @st.cache_data(ttl=5)
@@ -300,16 +280,8 @@ def track_0x8dxd(minutes_back):  # Receives slider value
 
     st.info(f"✅ {len(df)} LIVE crypto bets ({MINUTES_BACK}min window)")
     st.caption(f"📈 Filtered from sidebar: {len(filtered_data)} raw trades")
-    
-    recent_mask = df['age_sec'] <= 30
-    def highlight_recent(row):
-        if recent_mask.iloc[row.name]:  # Use global mask + row index
-            return ['background-color: rgba(0, 255, 0, 0.15)'] * 7 
-        return [''] * 7
-    
-    visible_cols = ['Market', 'UP/DOWN', 'Size', 'Price', 'Status', 'PnL', 'Updated']  # ✅ ADD 'PnL'
-    styled_df = df[visible_cols].style.apply(highlight_recent, axis=1)
-    
+
+    visible_cols = ['Market', 'UP/DOWN', 'Size', 'Price', 'Status', 'PnL', 'Updated']
     st.markdown("""
     <div style='display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 10px;'>
         <span><b>🟢 UP:</b> {}</span>
@@ -319,10 +291,10 @@ def track_0x8dxd(minutes_back):  # Receives slider value
     </div>
     """.format(up_bets, len(df)-up_bets, newest_str, span_str), unsafe_allow_html=True)
 
-    st.dataframe(styled_df, use_container_width=True, height=400, hide_index=True,
+    st.dataframe(df[visible_cols], use_container_width=True, height=400, hide_index=True,
         column_config={
             "Market": st.column_config.TextColumn(width="medium"),
-            "Status": st.column_config.TextColumn(width="medium"),
+            "Status": st.column_config.TextColumn(width="medium"), 
             "PnL": st.column_config.TextColumn(width="small")
         })
 
