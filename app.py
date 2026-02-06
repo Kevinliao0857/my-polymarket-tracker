@@ -99,20 +99,16 @@ def get_up_down(item: Dict[str, Any]) -> str:
     
     return "➖ ?"
 
-
-# 🆕 BATCH MARKET STATUS (key fix for PnL!)
 @st.cache_data(ttl=60)
 def get_market_status_batch(condition_ids: List[str]) -> Dict[str, Dict]:
-    """Batch fetch + DEBUG LOGGING."""
+    """conditionId → slug mapping + status."""
     if not condition_ids:
         return {}
     
-    status_map = {}
-    ids_str = ','.join(set(condition_ids[:50]))  # Limit 50
+    ids_str = ','.join(set(condition_ids[:20]))
     url = f"https://gamma-api.polymarket.com/markets?conditionIds={ids_str}"
     
     st.sidebar.markdown("### 🔍 **API Debug**")
-    
     try:
         resp = requests.get(url, timeout=8)
         st.sidebar.code(f"Gamma URL: {url}\nStatus: {resp.status_code}", language="bash")
@@ -120,34 +116,31 @@ def get_market_status_batch(condition_ids: List[str]) -> Dict[str, Dict]:
         if resp.status_code == 200:
             markets = resp.json()
             st.sidebar.success(f"✅ Got {len(markets)} markets")
-            st.sidebar.json(markets[0] if markets else {}, expanded=False)  # Sample
             
+            status_map = {}  # 🆕 conditionId → status
             for market in markets:
-                cid = market.get('conditionId')
-                if cid:
+                cid = market.get('conditionId')  # Matches input!
+                if cid in condition_ids:  # 🆕 Direct match!
                     end_iso = market.get('endDateIso')
-                    uma_status = market.get('umaResolutionStatus', '')
+                    uma_status = str(market.get('umaResolutionStatus', '')).lower()
                     past_end = False
                     if end_iso:
                         try:
                             end_dt = pd.to_datetime(end_iso).tz_convert('US/Eastern')
                             past_end = now_est >= end_dt
-                        except:
-                            pass
+                        except: pass
                     
                     status_map[cid] = {
-                        'endDateIso': end_iso,
-                        'endPast': past_end,
+                        'endDateIso': end_iso, 'endPast': past_end,
                         'umaStatus': uma_status,
-                        'resolved': past_end or ('resolved' in str(uma_status).lower())
+                        'resolved': past_end or 'resolved' in uma_status
                     }
-        else:
-            st.sidebar.error(f"❌ Gamma failed: {resp.text[:200]}")
+            st.sidebar.json(status_map, expanded=False)  # 🆕 Show mapping!
+            return status_map
+            
     except Exception as e:
-        st.sidebar.error(f"❌ Exception: {str(e)}")
-    
-    return status_map
-
+        st.sidebar.error(f"❌ {e}")
+    return {}
 
 
 def get_status_hybrid(item: Dict[str, Any], market_status: Dict) -> str:
