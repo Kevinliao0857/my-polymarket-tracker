@@ -50,7 +50,6 @@ if st.sidebar.button("🧪 Test New Status API"):
 
 
 st.markdown(f"# ₿ 0x8dxd Crypto Bot Tracker - Last {MINUTES_BACK} Min")
-st.info(f"🟢 Live crypto-only | UP/DOWN focus | Last {MINUTES_BACK}min")
 
 
 @st.cache_data(ttl=2)
@@ -271,6 +270,7 @@ def track_0x8dxd():
     df['parsed_updated'] = pd.to_datetime(df['Updated'], format='%I:%M:%S %p ET', errors='coerce')
     df = df.sort_values(['priority', 'parsed_updated'], ascending=[True, False]).drop(['priority', 'parsed_updated'], axis=1)
     
+    st.info(f"✅ {len(df)} LIVE crypto bets ({MINUTES_BACK}min window)")
     st.caption(f"📈 Filtered from sidebar: {len(filtered_data)} raw trades")
     
     recent_mask = df['age_sec'] <= 30
