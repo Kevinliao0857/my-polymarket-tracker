@@ -188,13 +188,11 @@ def track_0x8dxd():
         
         df_data.append({
             'Market': short_title, 'UP/DOWN': updown, 'Size': f"${size_val:.0f}",
-            'Price': price_val, 'Status': status_str, 'Updated': update_str, 'ts_raw': ts
+            'Price': price_val, 'Status': status_str, 'Updated': update_str, 'age_sec': now_ts - ts
         })
     
     df = pd.DataFrame(df_data)
     if df.empty: return
-    
-    df['age_sec'] = now_ts - df['ts_raw']
     
     # Sort + style
     def status_priority(x): 
@@ -209,9 +207,15 @@ def track_0x8dxd():
     
     st.success(f"✅ {len(df)} LIVE crypto bets | {MINUTES_BACK}min")
     
-    # Recent highlight
-    def highlight_recent(row): 
-        return ['background-color: rgba(0, 255, 0, 0.15)'] * len(row) if row['age_sec'] <= 30 else [''] * len(row)
+    # Recent highlight - FIXED: use df['age_sec'] column directly, no row['age_sec']
+    def highlight_recent(row):
+        # row is a pandas Series with visible columns only
+        # Access age_sec via df since it's not in visible_cols
+        # But since we sort after, better to use index-based or precompute
+        idx = row.name  # row index
+        if idx < len(df) and 'age_sec' in df.columns and df.iloc[idx]['age_sec'] <= 30:
+            return ['background-color: rgba(0, 255, 0, 0.15)'] * len(row)
+        return [''] * len(row)
     
     visible_cols = ['Market', 'UP/DOWN', 'Size', 'Price', 'Status', 'Updated']
     styled_df = df[visible_cols].style.apply(highlight_recent, axis=1)
@@ -221,10 +225,9 @@ def track_0x8dxd():
                               "Status": st.column_config.TextColumn(width="medium")})
     
     # Live metrics
-    max_ts = df['ts_raw'].max()
-    newest_sec = now_ts - max_ts
+    newest_sec = df['age_sec'].min()
     newest_str = f"{newest_sec//60}m {newest_sec%60}s ago"
-    span_sec = now_ts - min_ts
+    span_sec = df['age_sec'].max()
     span_str = f"{span_sec//60}m {span_sec%60}s"
     
     up_bets = len(df[df['UP/DOWN'] == '🟢 UP'])
