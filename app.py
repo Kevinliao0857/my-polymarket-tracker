@@ -286,41 +286,27 @@ def display_data(df, now_ts):
     """, unsafe_allow_html=True)
 
 
+# HYBRID: Responsive 5s data + 1s JS timers (PASTE THIS BLOCK)
+if 'last_fetch' not in st.session_state:
+    st.session_state.last_fetch = 0
+if 'current_df' not in st.session_state:
+    st.session_state.current_df = pd.DataFrame()
+
+now_ts = int(time.time())
+if now_ts - st.session_state.last_fetch >= 5:
+    st.session_state.current_df = fetch_crypto_data()
+    st.session_state.last_fetch = now_ts
+
 if st.button("🔄 Force Refresh"):
+    st.session_state.current_df = fetch_crypto_data()
+    st.session_state.last_fetch = now_ts
     st.rerun()
 
-# MAIN LOOP: Responsive 1s ticks + button detection
-placeholder = st.empty()
-refresh_count = 0
-last_fetch = 0
-current_df = pd.DataFrame()
-force_refresh_key = 0  # Track button state
-
-while True:
-    refresh_count += 1
-    now_ts = int(time.time())
+if not st.session_state.current_df.empty:
+    display_data(st.session_state.current_df, now_ts)
     now_est = datetime.now(est)
-    
-    # Check for force refresh button (non-blocking)
-    if st.button("🔄 Force Refresh", key=f"force_{force_refresh_key}"):
-        current_df = fetch_crypto_data()
-        last_fetch = now_ts
-        force_refresh_key += 1  # Unique key for new button
-    
-    # Fetch/update data every 5s OR on button
-    if now_ts - last_fetch >= 5:
-        current_df = fetch_crypto_data()
-        last_fetch = now_ts
-    
-    with placeholder.container():
-        if not current_df.empty:
-            display_data(current_df, now_ts)
-        else:
-            st.info("No crypto activity in last 15 min")
-        
-        time_24 = now_est.strftime('%H:%M:%S')
-        time_12 = now_est.strftime('%I:%M:%S %p')
-        st.caption(f"🕐 {time_24} ({time_12}) ET | #{refresh_count} | Data: {datetime.fromtimestamp(last_fetch, est).strftime('%H:%M:%S')} | Sleep:1s")
-    
-    time.sleep(1)
-
+    time_24 = now_est.strftime('%H:%M:%S')
+    time_12 = now_est.strftime('%I:%M:%S %p')
+    st.caption(f"🕐 {time_24} ({time_12}) ET | Data: {datetime.fromtimestamp(st.session_state.last_fetch, est).strftime('%H:%M:%S')} | Next auto: ~{5 - ((now_ts - st.session_state.last_fetch) % 5)}s")
+else:
+    st.info("No crypto activity in last 15 min")
