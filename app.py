@@ -167,11 +167,11 @@ def get_status_hybrid(item: Dict[str, Any], now_ts: int) -> str:
     return f"🟢 ACTIVE (til ~{disp_h}{disp_m} {ampm})"
 
 
-@st.cache_data(ttl=30)
-def track_0x8dxd():
+@st.cache_data(ttl=5)
+def track_0x8dxd(minutes_back):  # Receives slider value
     trader = "0x63ce342161250d705dc0b16df89036c8e5f9ba9a".lower()
     now_ts = int(time.time())
-    ago_ts = now_ts - (MINUTES_BACK * 60)
+    ago_ts = now_ts - (minutes_back * 60)
     
     all_raw = []
     offset = 0
@@ -258,10 +258,8 @@ def track_0x8dxd():
         elif 'no enddate' in x_lower: return 2
         return 0
     
-    df['priority'] = df['Status'].apply(status_priority)
-    df['parsed_updated'] = pd.to_datetime(df['Updated'], format='%I:%M:%S %p ET', errors='coerce')
-    df = df.sort_values(['priority', 'parsed_updated'], ascending=[True, False]).drop(['priority', 'parsed_updated'], axis=1)
-    
+    df = df.sort_values('age_sec')  # Newest first (smallest age_sec)
+
     newest_sec = df['age_sec'].min()
     newest_str = f"{int(newest_sec)//60}m {int(newest_sec)%60}s ago"
     span_sec = df['age_sec'].max()
@@ -274,10 +272,10 @@ def track_0x8dxd():
     
     recent_mask = df['age_sec'] <= 30
     def highlight_recent(row):
-        idx = row.name
-        if idx < len(recent_mask) and recent_mask.iloc[idx]:
+        if row['age_sec'] <= 30:  # Direct, no index issues
             return ['background-color: rgba(0, 255, 0, 0.15)'] * len(row)
         return [''] * len(row)
+
     
     visible_cols = ['Market', 'UP/DOWN', 'Size', 'Price', 'Status', 'Updated']
     styled_df = df[visible_cols].style.apply(highlight_recent, axis=1)
@@ -295,4 +293,5 @@ def track_0x8dxd():
                 column_config={"Market": st.column_config.TextColumn(width="medium"),
                               "Status": st.column_config.TextColumn(width="medium")})  
 
-track_0x8dxd()
+track_0x8dxd(MINUTES_BACK)
+
