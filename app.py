@@ -24,6 +24,8 @@ if 'refresh_count' not in st.session_state:
     st.session_state.refresh_count = 0
 st.session_state.refresh_count += 1
 
+# MAIN TITLE
+st.markdown(f"# ₿ 0x8dxd Crypto Bot Tracker - Last {MINUTES_BACK} Min")
 
 # Live EST clock
 est = pytz.timezone('US/Eastern')
@@ -45,7 +47,6 @@ if st.sidebar.button("🧪 Test New Status API"):
     st.session_state.test_api = True  # 🆕 ADDED THIS LINE
     st.rerun()
 
-st.markdown(f"# ₿ 0x8dxd Crypto Bot Tracker - Last {MINUTES_BACK} Min")
 
 @st.cache_data(ttl=2)
 def safe_fetch(url: str) -> List[Dict[str, Any]]:
