@@ -5,13 +5,21 @@ from datetime import datetime
 import time
 import pytz
 import re
+import json
+from typing import List, Dict, Any
 
 st.set_page_config(layout="wide")
 st.markdown("# ₿ 0x8dxd Crypto Bot Tracker - Last 15 Min")
 st.info("🟢 Live crypto-only | UP/DOWN focus | Last 15min")
 
+# Initialize session state safely
+if 'refresh_start' not in st.session_state:
+    st.session_state.refresh_start = time.time()
+if 'refresh_count' not in st.session_state:
+    st.session_state.refresh_count = 0
+
 # Live EST clock
-est = pytz.timezone('US/Eastern')  # 👈 MOVED UP
+est = pytz.timezone('US/Eastern')
 now_est = datetime.now(est)
 time_24 = now_est.strftime('%H:%M:%S')
 time_12 = now_est.strftime('%I:%M:%S %p')
@@ -22,36 +30,36 @@ MINUTES_BACK = st.sidebar.slider("⏰ Minutes back", 15, 120, 30, 5)
 now_ts = int(time.time())
 st.sidebar.caption(f"From: {datetime.fromtimestamp(now_ts - MINUTES_BACK*60, est).strftime('%H:%M %p ET')}")
 
-if 'refresh_start' not in st.session_state:
-    st.session_state.refresh_start = time.time()
+# Auto-refresh logic
 elapsed = time.time() - st.session_state.refresh_start
 if elapsed >= 5:
     st.session_state.refresh_start = time.time()
+    st.session_state.refresh_count += 1
     st.rerun()
-refresh_count = st.session_state.get('refresh_count', 0) + 1
-st.session_state.refresh_count = refresh_count
-st.sidebar.caption(f"🔄 Refresh #{refresh_count} | Every 5s ✓")
 
+st.sidebar.caption(f"🔄 Refresh #{st.session_state.refresh_count} | Every 5s ✓")
 
 @st.cache_data(ttl=2)
-def safe_fetch(url):
+def safe_fetch(url: str) -> List[Dict[str, Any]]:
     try:
         resp = requests.get(url, timeout=10)
         if resp.status_code == 200:
             data = resp.json()
             if isinstance(data, list) and data:
                 return data[:500]
-    except:
-        pass
+    except json.JSONDecodeError:
+        pass  # Non-JSON response
+    except Exception:
+        pass  # Other errors (timeout, connection, etc.)
     return []
 
-def is_crypto(item):
+def is_crypto(item: Dict[str, Any]) -> bool:
     title = str(item.get('title') or item.get('question') or '').lower()
     tickers = ['btc', 'eth', 'sol', 'xrp', 'ada', 'doge', 'shib', 'link', 'avax', 'matic', 'dot', 'uni', 'bnb', 'usdt', 'usdc']
     full_names = ['bitcoin', 'ethereum', 'solana', 'ripple', 'xrp', 'cardano', 'dogecoin', 'shiba', 'chainlink', 'avalanche', 'polygon', 'polkadot', 'uniswap', 'binance coin']
     return any(t in title for t in tickers) or any(f in title for f in full_names)
 
-def get_up_down(item):
+def get_up_down(item: Dict[str, Any]) -> str:
     fields = ['outcome', 'side', 'answer', 'choice', 'direction']
     text = ' '.join(str(item.get(f, '')).lower() for f in fields)
     title = str(item.get('title', item.get('question', ''))).lower()
@@ -73,7 +81,7 @@ def get_up_down(item):
     
     return "➖ ?"
 
-def get_status(item, now_ts):
+def get_status(item: Dict[str, Any], now_ts: int) -> str:
     title = str(item.get('title') or item.get('question') or '').lower()
     
     now_dt = datetime.fromtimestamp(now_ts, est)
@@ -88,13 +96,13 @@ def get_status(item, now_ts):
             hour = int(h_str)
             minute = int(m_str) if m_str else 0
             
-            if 'pm' in suffix or 'p' in suffix: hour = (hour % 12) + 12
-            elif 'am' in suffix or 'a' in suffix: hour = hour % 12
+            if 'pm' in suffix.lower() or 'p' in suffix.lower(): hour = (hour % 12) + 12
+            elif 'am' in suffix.lower() or 'a' in suffix.lower(): hour = hour % 12
             
             if 0 <= hour <= 23 and 0 <= minute < 60:
                 decimal_h = hour + (minute / 60.0)
                 title_times.append(decimal_h)
-        except:
+        except ValueError:
             continue
     
     if not title_times: return "🟢 ACTIVE (no timer)"
@@ -133,7 +141,11 @@ def track_0x8dxd():
         if proxy != trader and user_field != trader: continue
         
         ts_field = item.get('timestamp') or item.get('updatedAt') or item.get('createdAt')
-        ts = int(float(ts_field)) if ts_field else now_ts
+        try:
+            ts = int(float(ts_field)) if ts_field else now_ts
+        except (ValueError, TypeError):
+            continue  # Skip invalid timestamps
+        
         if ts < ago_ts: continue
         
         if is_crypto(item):
@@ -153,12 +165,23 @@ def track_0x8dxd():
         title = str(item.get('title') or item.get('question') or '-')
         short_title = (title[:85] + '...') if len(title) > 90 else title
         
-        size_val = float(item.get('size', 0))
-        price_val = item.get('curPrice', item.get('price', '-'))
-        if isinstance(price_val, (int, float)): price_val = f"${price_val:.2f}"
+        size_raw = item.get('size', 0)
+        try:
+            size_val = float(str(size_raw).replace('$', '').replace(',', ''))
+        except (ValueError, TypeError):
+            size_val = 0.0
+        
+        price_raw = item.get('curPrice', item.get('price', '-'))
+        if isinstance(price_raw, (int, float)):
+            price_val = f"${price_raw:.2f}"
+        else:
+            price_val = str(price_raw)
         
         ts_field = item.get('timestamp') or item.get('updatedAt') or item.get('createdAt') or now_ts
-        ts = int(float(ts_field))
+        try:
+            ts = int(float(ts_field))
+        except (ValueError, TypeError):
+            ts = now_ts
         min_ts = min(min_ts, ts)
         update_str = datetime.fromtimestamp(ts, est).strftime('%I:%M:%S %p ET')
         status_str = get_status(item, now_ts)
@@ -181,7 +204,7 @@ def track_0x8dxd():
         return 0
     
     df['priority'] = df['Status'].apply(status_priority)
-    df['parsed_updated'] = pd.to_datetime(df['Updated'], format='%I:%M:%S %p ET')
+    df['parsed_updated'] = pd.to_datetime(df['Updated'], format='%I:%M:%S %p ET', errors='coerce')
     df = df.sort_values(['priority', 'parsed_updated'], ascending=[True, False]).drop(['priority', 'parsed_updated'], axis=1)
     
     st.success(f"✅ {len(df)} LIVE crypto bets | {MINUTES_BACK}min")
@@ -214,6 +237,8 @@ def track_0x8dxd():
 
 # Force refresh button
 if st.button("🔄 Force Refresh", use_container_width=True):
+    st.session_state.refresh_start = time.time()
+    st.session_state.refresh_count += 1
     st.rerun()
 
 track_0x8dxd()
