@@ -1,31 +1,29 @@
 import streamlit as st
-from streamlit_autorefresh import st_autorefresh  # pip install streamlit-autorefresh
 import requests
 import pandas as pd
 from datetime import datetime
 import time
-import pytz  # pip install pytz
-import re  # For time parsing
+import pytz
+import re
 
-st.set_page_config(layout="wide")
-st.markdown("# ₿ 0x8dxd Crypto Bot Tracker - Live")
 
-st.info("🟢 Live crypto-only | UP/DOWN focus | Auto 5s refresh")
-
-# Live EST clock
-est = pytz.timezone('US/Eastern')
-now_est = datetime.now(est)
-st.caption(f"🕐 EST: {now_est.strftime('%Y-%m-%d %H:%M:%S')}")
-
-# Sidebar controls + PERFECT auto-refresh
+st.caption(f"🕐 Current EST: ...")
 st.sidebar.title("⚙️ Settings")
 MINUTES_BACK = st.sidebar.slider("⏰ Minutes back", 15, 120, 30, 5)
 now_ts = int(time.time())
-st.sidebar.caption(f"📅 From: {datetime.fromtimestamp(now_ts - MINUTES_BACK*60, est).strftime('%H:%M %p ET')}")
+st.sidebar.caption(f"From: {datetime.fromtimestamp(now_ts - MINUTES_BACK*60, est).strftime('%H:%M %p ET')}")
 
-# BULLETPROOF 5s AUTO-REFRESH (works with sliders!)
-refresh_count = st_autorefresh(interval=5000, limit=None, key="crypto_timer")
+# CLOUDSAFE AUTO-REFRESH
+if 'refresh_start' not in st.session_state:
+    st.session_state.refresh_start = time.time()
+elapsed = time.time() - st.session_state.refresh_start
+if elapsed >= 5:
+    st.session_state.refresh_start = time.time()
+    st.rerun()
+refresh_count = st.session_state.get('refresh_count', 0) + 1
+st.session_state.refresh_count = refresh_count
 st.sidebar.caption(f"🔄 Refresh #{refresh_count} | Every 5s ✓")
+
 
 @st.cache_data(ttl=2)
 def safe_fetch(url):
@@ -205,7 +203,7 @@ def track_0x8dxd():
     col2.metric("🔴 DOWN Bets", len(df) - up_bets)
     col3.metric("🟢 Newest", newest_str)
     col4.metric("📊 Span", span_str)
-
+    
 # Force refresh button
 if st.button("🔄 Force Refresh", use_container_width=True):
     st.rerun()
