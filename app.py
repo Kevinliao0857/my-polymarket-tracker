@@ -112,9 +112,9 @@ def get_status(item: Dict[str, Any], now_ts: int) -> str:
 
 @st.cache_data(ttl=30)
 def track_0x8dxd(minutes_back: int):
+    est = pytz.timezone('US/Eastern')
     trader = "0x63ce342161250d705dc0b16df89036c8e5f9ba9a".lower()
     now_ts = int(time.time())
-    ago_ts = now_ts - (minutes_back * 60)
     
     all_raw = []
     offset = 0
