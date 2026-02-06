@@ -241,9 +241,9 @@ def track_0x8dxd():
     with col2:
         st.metric("🔴 DOWN Bets", len(df) - up_bets)
     with col3:
-    st.metric("🟢 Newest", newest_str + " ago")
+        st.metric("🟢 Newest", newest_str + " ago")
     with col4:
-    st.metric("📊 Span", window_str)
+        st.metric("📊 Span", window_str)
 
 
 if st.button("🔄 Force Refresh"):
