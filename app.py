@@ -252,7 +252,14 @@ def track_0x8dxd():
 
 track_0x8dxd()
 
-if st.button("🔄 Force Refresh"):
+if 'last_auto_refresh' not in st.session_state:
+    st.session_state.last_auto_refresh = 0
+now_ts = int(time.time())
+if now_ts - st.session_state.last_auto_refresh >= 5:
+    st.session_state.last_auto_refresh = now_ts
     st.rerun()
+# 👆 END PASTE
 
-st.caption(f"🕐 {MINUTES_BACK}min window - Slide sidebar for more trades!")
+if st.button("🔄 Force Refresh"):  # ← BEFORE THIS LINE
+    st.rerun()
+    
