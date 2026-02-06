@@ -318,12 +318,12 @@ def track_0x8dxd(minutes_back):  # Receives slider value
     </div>
     """.format(up_bets, len(df)-up_bets, newest_str, span_str), unsafe_allow_html=True)
 
-st.dataframe(styled_df, use_container_width=True, height=400, hide_index=True,
-    column_config={
-        "Market": st.column_config.TextColumn(width="medium"),
-        "Status": st.column_config.TextColumn(width="medium"),
-        "PnL": st.column_config.TextColumn(width="small")
-    })
+    st.dataframe(styled_df, use_container_width=True, height=400, hide_index=True,
+        column_config={
+            "Market": st.column_config.TextColumn(width="medium"),
+            "Status": st.column_config.TextColumn(width="medium"),
+            "PnL": st.column_config.TextColumn(width="small")
+        })
 
 
 track_0x8dxd(MINUTES_BACK)
