@@ -219,16 +219,24 @@ def track_0x8dxd():
         }
     )
     
-    up_bets = len(df[df['UP/DOWN'] == '🟢 UP'])
-    st.metric("🟢 UP Bets", up_bets)
-    st.metric("🔴 DOWN Bets", len(df) - up_bets)
-    
+    # Fixed: Track max_ts for true "Newest"
     max_ts = 0
-    # In loop:
-    max_ts = max(max_ts, ts)
-    # After loop:
+    for _, row in df.iterrows():  # Use df since ts_raw available
+        max_ts = max(max_ts, row['ts_raw'])
+    
+    up_bets = len(df[df['UP/DOWN'] == '🟢 UP'])
     newest_min = int((now_ts - max_ts) / 60)
-    st.metric("🕐 Newest", f"{newest_min} min ago (ET)")
+    window_min = int((now_ts - min_ts) / 60)
+    
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("🟢 UP Bets", up_bets)
+    with col2:
+        st.metric("🔴 DOWN Bets", len(df) - up_bets)
+    with col3:
+        st.metric("🟢 Newest", f"{newest_min} min ago")
+    with col4:
+        st.metric("📊 Span", f"{window_min} min")
 
 
 if st.button("🔄 Force Refresh"):
