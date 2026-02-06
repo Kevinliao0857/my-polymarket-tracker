@@ -303,17 +303,11 @@ def track_0x8dxd(minutes_back):  # Receives slider value
     recent_mask = df['age_sec'] <= 30
     def highlight_recent(row):
         if recent_mask.iloc[row.name]:  # Use global mask + row index
-            return ['background-color: rgba(0, 255, 0, 0.15)'] * 6  # 6 visible cols
-        return [''] * 6
+            return ['background-color: rgba(0, 255, 0, 0.15)'] * 7 
+        return [''] * 7
     
     visible_cols = ['Market', 'UP/DOWN', 'Size', 'Price', 'Status', 'PnL', 'Updated']  # ✅ ADD 'PnL'
     styled_df = df[visible_cols].style.apply(highlight_recent, axis=1)
-
-    # Update highlight (7 columns now)
-    def highlight_recent(row):
-        if recent_mask.iloc[row.name]:
-            return ['background-color: rgba(0, 255, 0, 0.15)'] * 7  # 7 cols
-        return [''] * 7
     
     st.markdown("""
     <div style='display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 10px;'>
