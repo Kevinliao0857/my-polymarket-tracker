@@ -166,6 +166,36 @@ def get_status_hybrid(item: Dict[str, Any], now_ts: int) -> str:
     ampm = 'PM' if max_h >= 12 else 'AM'
     return f"🟢 ACTIVE (til ~{disp_h}{disp_m} {ampm})"
 
+def get_pnl_result(item: Dict[str, Any]) -> str:
+    """🟢 +$47  🔴 -$12  ➖ Pending"""
+    status = str(item.get('status', '')).lower()
+    if 'expired' not in status and 'resolved' not in status:
+        return "➖ Pending"
+    
+    # Try direct PnL fields from trades API
+    realized_pnl = item.get('realizedPnl') or item.get('pnl')
+    if realized_pnl:
+        pnl_str = f"${float(realized_pnl):.0f}"
+        return f"🟢 {pnl_str}" if float(realized_pnl) >= 0 else f"🔴 {pnl_str}"
+    
+    # Fallback: simple buy price → $1/$0 on resolution
+    size = float(str(item.get('size', 0)).replace('$', '').replace(',', ''))
+    price_paid = float(item.get('price', 0) or item.get('curPrice', 0))
+    if size > 0 and price_paid > 0:
+        # UP bet won → $1 - price_paid per share
+        up_bet = "🟢 up" in str(item.get('side', '')).lower()
+        outcome = item.get('outcome', '').lower()
+        if up_bet and 'yes' in outcome:
+            profit = size * (1.0 - price_paid)
+        elif not up_bet and 'no' in outcome:
+            profit = size * (1.0 - price_paid)
+        else:
+            profit = -size * price_paid  # Lost investment
+        
+        pnl_str = f"${profit:.0f}"
+        return f"🟢 {pnl_str}" if profit >= 0 else f"🔴 {pnl_str}"
+    
+    return "➖ Resolved?"
 
 @st.cache_data(ttl=5)
 def track_0x8dxd(minutes_back):  # Receives slider value
@@ -246,7 +276,7 @@ def track_0x8dxd(minutes_back):  # Receives slider value
         
         df_data.append({
             'Market': short_title, 'UP/DOWN': updown, 'Size': f"${size_val:.0f}",
-            'Price': price_val, 'Status': status_str, 'Updated': update_str, 'age_sec': age_sec
+            'Price': price_val, 'Status': status_str, 'PnL': get_pnl_result(item), 'Updated': update_str, 'age_sec': age_sec
         })
     
     df = pd.DataFrame(df_data)
@@ -276,8 +306,14 @@ def track_0x8dxd(minutes_back):  # Receives slider value
             return ['background-color: rgba(0, 255, 0, 0.15)'] * 6  # 6 visible cols
         return [''] * 6
     
-    visible_cols = ['Market', 'UP/DOWN', 'Size', 'Price', 'Status', 'Updated']
-    styled_df = df[visible_cols].style.apply(highlight_recent, axis=1)
+    visible_cols = ['Market', 'UP/DOWN', 'Size', 'Price', 'Status', 'PnL', 'Updated']  # ✅ ADD 'PnL'
+    styled_df = df[visible_cols].style.apply(highline_recent, axis=1)
+
+    # Update highlight (7 columns now)
+    def highlight_recent(row):
+        if recent_mask.iloc[row.name]:
+            return ['background-color: rgba(0, 255, 0, 0.15)'] * 7  # 7 cols
+        return [''] * 7
     
     st.markdown("""
     <div style='display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 10px;'>
@@ -290,7 +326,8 @@ def track_0x8dxd(minutes_back):  # Receives slider value
 
     st.dataframe(styled_df, use_container_width=True, height=400, hide_index=True,
                 column_config={"Market": st.column_config.TextColumn(width="medium"),
-                              "Status": st.column_config.TextColumn(width="medium")})  
+                              "Status": st.column_config.TextColumn(width="medium"), 
+                              "PnL": st.column_config.TextColumn(width="small")})  
 
 track_0x8dxd(MINUTES_BACK)
 
