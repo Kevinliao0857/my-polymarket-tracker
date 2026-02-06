@@ -197,7 +197,12 @@ def track_0x8dxd():
     df['parsed_updated'] = pd.to_datetime(df['Updated'], format='%I:%M:%S %p ET', errors='coerce')
     df = df.sort_values(['priority', 'parsed_updated'], ascending=[True, False]).drop(['priority', 'parsed_updated'], axis=1)
     
-    st.success(f"✅ {len(df)} LIVE crypto bets | {MINUTES_BACK}min")
+    st.success(f"✅ {len(df)} LIVE crypto bets ({MINUTES_BACK}min window)")
+    st.caption(f"📈 Filtered from sidebar: {len(filtered_data)} raw trades")
+
+    col1, col2 = st.columns(2)
+    col1.metric("⏰ Window", f"{MINUTES_BACK}min")
+    col2.metric("📊 Raw Trades", f"{len(filtered_data)}")
     
     recent_mask = df['age_sec'] <= 30
     def highlight_recent(row):
@@ -220,11 +225,11 @@ def track_0x8dxd():
     
     up_bets = len(df[df['UP/DOWN'] == '🟢 UP'])
     
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("🟢 UP Bets", up_bets)
-    col2.metric("🔴 DOWN Bets", len(df) - up_bets)
-    col3.metric("🟢 Newest", newest_str)
-    col4.metric("📊 Span", span_str)
+    bet_col1, bet_col2, bet_col3, bet_col4 = st.columns(4)
+    bet_col1.metric("🟢 UP Bets", up_bets)
+    bet_col2.metric("🔴 DOWN Bets", len(df) - up_bets)
+    bet_col3.metric("🟢 Newest", newest_str)
+    bet_col4.metric("📊 Span", span_str)
 
 if st.button("🔄 Force Refresh NOW", use_container_width=True):
     st.rerun()
