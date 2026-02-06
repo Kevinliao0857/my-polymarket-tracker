@@ -307,7 +307,7 @@ def track_0x8dxd(minutes_back):  # Receives slider value
         return [''] * 6
     
     visible_cols = ['Market', 'UP/DOWN', 'Size', 'Price', 'Status', 'PnL', 'Updated']  # ✅ ADD 'PnL'
-    styled_df = df[visible_cols].style.apply(highline_recent, axis=1)
+    styled_df = df[visible_cols].style.apply(highlight_recent, axis=1)
 
     # Update highlight (7 columns now)
     def highlight_recent(row):
