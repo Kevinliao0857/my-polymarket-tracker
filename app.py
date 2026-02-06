@@ -12,17 +12,17 @@ st.set_page_config(layout="wide")
 st.markdown("# ₿ 0x8dxd Crypto Bot Tracker - Last 15 Min")
 st.info("🟢 Live crypto-only | UP/DOWN focus | Last 15min")
 
-# ✅ FIXED AUTO-REFRESH using streamlit-autorefresh (install: pip install streamlit-autorefresh)
-try:
-    from streamlit_autorefresh import st_autorefresh
-    # Auto refresh every 5 seconds (5000ms), no limit
-    st_autorefresh(interval=5000, limit=None, key="crypto_refresh")
-except ImportError:
-    st.warning("❌ Install `pip install streamlit-autorefresh` for auto-refresh OR use manual button")
-
-# Initialize session state safely
+# ✅ PURE STREAMLIT AUTO-REFRESH (NO EXTERNAL PACKAGES)
 if 'refresh_count' not in st.session_state:
     st.session_state.refresh_count = 0
+if 'last_refresh' not in st.session_state:
+    st.session_state.last_refresh = time.time()
+
+# Auto-refresh logic (runs AFTER UI loads)
+if time.time() - st.session_state.last_refresh > 5:
+    st.session_state.last_refresh = time.time()
+    st.session_state.refresh_count += 1
+    st.rerun()
 
 # Live EST clock
 est = pytz.timezone('US/Eastern')
@@ -36,9 +36,10 @@ MINUTES_BACK = st.sidebar.slider("⏰ Minutes back", 15, 120, 30, 5)
 now_ts = int(time.time())
 st.sidebar.caption(f"From: {datetime.fromtimestamp(now_ts - MINUTES_BACK*60, est).strftime('%H:%M %p ET')}")
 
-# Manual refresh counter (increments on every run)
-st.session_state.refresh_count += 1
-st.sidebar.caption(f"🔄 Refresh #{st.session_state.refresh_count} | Auto 5s ✓")
+# Refresh status (shows countdown)
+time_since = time.time() - st.session_state.last_refresh
+next_in = max(0, int(5 - time_since))
+st.sidebar.caption(f"🔄 Auto #{st.session_state.refresh_count} | Next in {next_in}s")
 
 @st.cache_data(ttl=2)
 def safe_fetch(url: str) -> List[Dict[str, Any]]:
@@ -121,7 +122,6 @@ def track_0x8dxd():
     now_ts = int(time.time())
     ago_ts = now_ts - (MINUTES_BACK * 60)
     
-    # Fetch ALL pages
     all_raw = []
     offset = 0
     while len(all_raw) < 2000:
@@ -134,7 +134,6 @@ def track_0x8dxd():
     
     st.sidebar.info(f"📊 API: {len(all_raw)} total trades")
     
-    # Filter: wallet + time + crypto
     filtered_data = []
     for item in all_raw:
         proxy = str(item.get("proxyWallet", "")).lower()
@@ -158,7 +157,6 @@ def track_0x8dxd():
         st.info("No crypto trades found")
         return
     
-    # Build dataframe
     df_data = []
     for item in filtered_data[-200:]:
         updown = get_up_down(item)
@@ -194,7 +192,6 @@ def track_0x8dxd():
     df = pd.DataFrame(df_data)
     if df.empty: return
     
-    # Sort
     def status_priority(x): 
         x_lower = str(x).lower()
         if 'expired' in x_lower: return 1
@@ -207,11 +204,10 @@ def track_0x8dxd():
     
     st.success(f"✅ {len(df)} LIVE crypto bets | {MINUTES_BACK}min")
     
-    # ✅ SIMPLIFIED HIGHLIGHT: Pre-compute recent rows before subset
     recent_mask = df['age_sec'] <= 30
     def highlight_recent(row):
         idx = row.name
-        if recent_mask.iloc[idx]:
+        if idx < len(recent_mask) and recent_mask.iloc[idx]:
             return ['background-color: rgba(0, 255, 0, 0.15)'] * len(row)
         return [''] * len(row)
     
@@ -222,7 +218,6 @@ def track_0x8dxd():
                 column_config={"Market": st.column_config.TextColumn(width="medium"),
                               "Status": st.column_config.TextColumn(width="medium")})
     
-    # Live metrics
     newest_sec = df['age_sec'].min()
     newest_str = f"{int(newest_sec)//60}m {int(newest_sec)%60}s ago"
     span_sec = df['age_sec'].max()
@@ -236,8 +231,9 @@ def track_0x8dxd():
     col3.metric("🟢 Newest", newest_str)
     col4.metric("📊 Span", span_str)
 
-# Force refresh button
 if st.button("🔄 Force Refresh NOW", use_container_width=True):
+    st.session_state.last_refresh = time.time()
+    st.session_state.refresh_count += 1
     st.rerun()
 
 track_0x8dxd()
