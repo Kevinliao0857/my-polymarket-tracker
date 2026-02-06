@@ -4,6 +4,7 @@ import pandas as pd
 from datetime import datetime
 import time
 import json
+import re  # 🆕 ADDED explicit import
 from typing import List, Dict, Any
 
 from .config import EST, TRADER
@@ -49,8 +50,8 @@ def get_market_enddate(condition_id: str, slug: str = None) -> str:
 def get_status_hybrid(item: Dict[str, Any], now_ts: int) -> str:
     """🟢 Hybrid: API first → Regex fallback."""
     # 1. Try API exact time
-    condition_id = item.get('conditionId') or item.get('marketId') or item.get('market', {}).get('conditionId')
-    slug = item.get('slug') or item.get('market', {}).get('slug')
+    condition_id = str(item.get('conditionId') or item.get('marketId') or item.get('market', {}).get('conditionId') or '')
+    slug = str(item.get('slug') or item.get('market', {}).get('slug') or '')
     
     end_str = get_market_enddate(condition_id, slug)
     now_est = datetime.fromtimestamp(now_ts, EST)
@@ -64,21 +65,22 @@ def get_status_hybrid(item: Dict[str, Any], now_ts: int) -> str:
         except:
             pass
     
-    # 2. Regex fallback
-    title = str(item.get('title') or item.get('question') or '').lower()
+    # 2. Regex fallback 🆕 FIXED: Safe str() everywhere
+    title_safe = str(item.get('title') or item.get('question') or '').lower()
     now_decimal = now_est.hour + (now_est.minute / 60.0) + (now_est.second / 3600.0)
     
     time_pattern = r'(\d{1,2})(?::(\d{2}))?([ap]m|et)'
-    matches = re.findall(time_pattern, title)
+    matches = re.findall(time_pattern, title_safe)
     title_times = []
     
     for h_str, m_str, suffix in matches:
         try:
             hour = int(h_str)
             minute = int(m_str) if m_str else 0
-            if 'pm' in suffix.lower() or 'p' in suffix.lower(): 
+            suffix_lower = str(suffix).lower()
+            if 'pm' in suffix_lower or 'p' in suffix_lower: 
                 hour = (hour % 12) + 12
-            elif 'am' in suffix.lower() or 'a' in suffix.lower(): 
+            elif 'am' in suffix_lower or 'a' in suffix_lower: 
                 hour = hour % 12
             if 0 <= hour <= 23 and 0 <= minute < 60:
                 decimal_h = hour + (minute / 60.0)
