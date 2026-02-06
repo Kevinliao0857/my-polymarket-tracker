@@ -8,38 +8,32 @@ import re
 import json
 from typing import List, Dict, Any
 
+# ✅ AUTO-REFRESH (add "streamlit-autorefresh" to requirements.txt)
+try:
+    from streamlit_autorefresh import st_autorefresh
+    st_autorefresh(interval=5000, limit=None, key="crypto_bot")  # 5s infinite
+except ImportError:
+    st.warning("🔄 Add `streamlit-autorefresh` to requirements.txt for auto-refresh")
+
 st.set_page_config(layout="wide")
 st.markdown("# ₿ 0x8dxd Crypto Bot Tracker - Last 15 Min")
 st.info("🟢 Live crypto-only | UP/DOWN focus | Last 15min")
 
-# ✅ PURE STREAMLIT AUTO-REFRESH (NO EXTERNAL PACKAGES)
 if 'refresh_count' not in st.session_state:
     st.session_state.refresh_count = 0
-if 'last_refresh' not in st.session_state:
-    st.session_state.last_refresh = time.time()
-
-# Auto-refresh logic (runs AFTER UI loads)
-if time.time() - st.session_state.last_refresh > 5:
-    st.session_state.last_refresh = time.time()
-    st.session_state.refresh_count += 1
-    st.rerun()
+st.session_state.refresh_count += 1
 
 # Live EST clock
 est = pytz.timezone('US/Eastern')
 now_est = datetime.now(est)
 time_24 = now_est.strftime('%H:%M:%S')
 time_12 = now_est.strftime('%I:%M:%S %p')
-st.caption(f"🕐 Current EST: {now_est.strftime('%Y-%m-%d')} {time_24} ({time_12}) ET | Auto 5s + Force 🔄")
+st.caption(f"🕐 Current EST: {now_est.strftime('%Y-%m-%d')} {time_24} ({time_12}) ET | Auto 5s ✓ #{st.session_state.refresh_count}")
 
 st.sidebar.title("⚙️ Settings")
 MINUTES_BACK = st.sidebar.slider("⏰ Minutes back", 15, 120, 30, 5)
 now_ts = int(time.time())
 st.sidebar.caption(f"From: {datetime.fromtimestamp(now_ts - MINUTES_BACK*60, est).strftime('%H:%M %p ET')}")
-
-# Refresh status (shows countdown)
-time_since = time.time() - st.session_state.last_refresh
-next_in = max(0, int(5 - time_since))
-st.sidebar.caption(f"🔄 Auto #{st.session_state.refresh_count} | Next in {next_in}s")
 
 @st.cache_data(ttl=2)
 def safe_fetch(url: str) -> List[Dict[str, Any]]:
@@ -232,8 +226,6 @@ def track_0x8dxd():
     col4.metric("📊 Span", span_str)
 
 if st.button("🔄 Force Refresh NOW", use_container_width=True):
-    st.session_state.last_refresh = time.time()
-    st.session_state.refresh_count += 1
     st.rerun()
 
 track_0x8dxd()
