@@ -30,6 +30,8 @@ if now_ts - st.session_state.last_auto_refresh >= 5:
     st.session_state.last_auto_refresh = now_ts
     st.rerun()
 
+st.sidebar.caption(f"🔄 Auto-refresh active | Next: ~{5 - (now_ts - st.session_state.last_auto_refresh)}s")
+
 @st.cache_data(ttl=3)
 def safe_fetch(url):
     try:
