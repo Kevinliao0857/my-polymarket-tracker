@@ -271,7 +271,6 @@ def track_0x8dxd():
     df['parsed_updated'] = pd.to_datetime(df['Updated'], format='%I:%M:%S %p ET', errors='coerce')
     df = df.sort_values(['priority', 'parsed_updated'], ascending=[True, False]).drop(['priority', 'parsed_updated'], axis=1)
     
-    st.success(f"✅ {len(df)} LIVE crypto bets ({MINUTES_BACK}min window)")
     st.caption(f"📈 Filtered from sidebar: {len(filtered_data)} raw trades")
     
     recent_mask = df['age_sec'] <= 30
