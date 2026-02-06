@@ -167,35 +167,36 @@ def get_status_hybrid(item: Dict[str, Any], now_ts: int) -> str:
     return f"🟢 ACTIVE (til ~{disp_h}{disp_m} {ampm})"
 
 def get_pnl_result(item: Dict[str, Any]) -> str:
-    """🟢 +$47  🔴 -$12  ➖ Pending"""
-    status = str(item.get('status', '')).lower()
-    if 'expired' not in status and 'resolved' not in status:
-        return "➖ Pending"
+    """Calculate PnL from trade + market outcome."""
+    # Check if resolved using Gamma market data
+    condition_id = item.get('conditionId')
+    if condition_id:
+        try:
+            url = f"https://gamma-api.polymarket.com/markets?conditionIds={condition_id}"
+            resp = requests.get(url, timeout=3)
+            if resp.status_code == 200:
+                markets = resp.json()
+                if markets and markets[0].get('isResolved'):
+                    # Market resolved - calculate PnL
+                    size = float(str(item.get('size', 0)).replace('$', '').replace(',', ''))
+                    price = float(item.get('price', 0) or item.get('curPrice', 0))
+                    
+                    side = str(item.get('side', '')).lower()
+                    outcome_index = item.get('outcomeIndex', 0)
+                    winning_outcome = markets[0].get('winningOutcomeIndex', -1)
+                    
+                    if outcome_index == winning_outcome:
+                        profit = size * (1.0 - price)  # Won
+                    else:
+                        profit = -size * price  # Lost
+                    
+                    pnl_str = f"${profit:.0f}"
+                    return f"🟢 {pnl_str}" if profit >= 0 else f"🔴 {pnl_str}"
+        except:
+            pass
     
-    # Try direct PnL fields from trades API
-    realized_pnl = item.get('realizedPnl') or item.get('pnl')
-    if realized_pnl:
-        pnl_str = f"${float(realized_pnl):.0f}"
-        return f"🟢 {pnl_str}" if float(realized_pnl) >= 0 else f"🔴 {pnl_str}"
-    
-    # Fallback: simple buy price → $1/$0 on resolution
-    size = float(str(item.get('size', 0)).replace('$', '').replace(',', ''))
-    price_paid = float(item.get('price', 0) or item.get('curPrice', 0))
-    if size > 0 and price_paid > 0:
-        # UP bet won → $1 - price_paid per share
-        up_bet = "🟢 up" in str(item.get('side', '')).lower()
-        outcome = item.get('outcome', '').lower()
-        if up_bet and 'yes' in outcome:
-            profit = size * (1.0 - price_paid)
-        elif not up_bet and 'no' in outcome:
-            profit = size * (1.0 - price_paid)
-        else:
-            profit = -size * price_paid  # Lost investment
-        
-        pnl_str = f"${profit:.0f}"
-        return f"🟢 {pnl_str}" if profit >= 0 else f"🔴 {pnl_str}"
-    
-    return "➖ Resolved?"
+    return "➖ Pending"  # Unresolved or no data
+
 
 @st.cache_data(ttl=5)
 def track_0x8dxd(minutes_back):  # Receives slider value
