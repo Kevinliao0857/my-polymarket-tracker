@@ -143,7 +143,7 @@ def track_0x8dxd():
         st.info("No crypto activity in last 15 min")
         return
     
-    st.info(f"DEBUG: Fetched {len(all_data)} recent crypto trades for {display_name}")
+    # st.info(f"DEBUG: Fetched {len(all_data)} recent crypto trades for {display_name}")
     
     df_data = []
     min_ts = now_ts
