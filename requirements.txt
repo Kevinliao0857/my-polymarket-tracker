@@ -1,2 +1,5 @@
-streamlit-autorefresh
+streamlit
+pandas
+requests
 websocket-client
+streamlit-autorefresh
