@@ -30,12 +30,23 @@ def rtds_listener():
         def on_message(ws, msg):
             try:
                 data = json.loads(msg)
-                if (data.get('event_type') == 'last_trade_price' and 
-                    data.get('size', 0) > 0):  # Actual trade
-                    data['proxyWallet'] = TRADER  # Fake for compatibility
-                    data['timestamp'] = data.get('timestamp', time.time())
-                    live_trades.append(data)
-            except: pass
+                print(f"🧑‍💻 WS MSG TYPE: {data.get('event_type', 'unknown')}")
+                print(f"🧑‍💻 WS FIELDS: {list(data.keys())}")
+                print(f"🧑‍💻 SIZE: {data.get('size', 'N/A')}, TIMESTAMP: {data.get('timestamp', 'N/A')}")
+                print("---")  # Separator
+
+                # Try broader filter for trades
+                if (data.get('event_type') == 'last_trade_price' or 
+                    data.get('event_type') == 'trade' or
+                    data.get('size', 0) > 0):
+                    data['proxyWallet'] = TRADER  # Inject for compatibility
+                    data['title'] = data.get('question', 'Market Trade')  # Add for display
+                    ts = data.get('timestamp') or time.time()
+                    if ts:
+                        live_trades.append(data)
+                        print(f"✅ ADDED TRADE #{len(live_trades)}")
+            except Exception as e:
+                print(f"Parse error: {e}")
 
         
         def on_open(ws):
