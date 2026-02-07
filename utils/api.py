@@ -269,6 +269,3 @@ def track_0x8dxd(minutes_back: int) -> pd.DataFrame:
     
     df = df.sort_values('age_sec')  # Newest first
     return df
-
-# 🆕 Start WS listener once (daemon thread)
-threading.Thread(target=rtds_listener, daemon=True).start()
