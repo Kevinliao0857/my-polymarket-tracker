@@ -30,11 +30,13 @@ def rtds_listener():
         def on_message(ws, msg):
             try:
                 data = json.loads(msg)
-                if isinstance(data, dict) and data.get('proxyWallet', '').lower() == TRADER:
-                    ts = data.get('timestamp')
-                    if ts:
-                        live_trades.append(data)
+                if (data.get('event_type') == 'last_trade_price' and 
+                    data.get('size', 0) > 0):  # Actual trade
+                    data['proxyWallet'] = TRADER  # Fake for compatibility
+                    data['timestamp'] = data.get('timestamp', time.time())
+                    live_trades.append(data)
             except: pass
+
         
         def on_open(ws):
             if assets:
