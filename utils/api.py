@@ -20,25 +20,40 @@ live_trades: deque = deque(maxlen=2000)
 
 
 def rtds_listener():
-    """🆕 Background WebSocket listener for ~1s live trades."""
-    def on_message(ws, msg):
+    """🆕 Background WebSocket listener for ~1s live trades with reconnect."""
+    reconnect_delay = 1  # Start with 1s
+    
+    while True:  # Outer reconnect loop
+        def on_message(ws, msg):
+            try:
+                trade = json.loads(msg)
+                if isinstance(trade, dict) and trade.get('proxyWallet', '').lower() == TRADER:
+                    ts = trade.get('timestamp')
+                    if ts:
+                        live_trades.append(trade)
+            except: pass
+        
+        def on_open(ws):
+            ws.send(json.dumps({"type": "subscribe", "channel": "trades"}))
+        
+        def on_error(ws, error):
+            nonlocal reconnect_delay
+            print(f"WS Error: {error}, reconnecting in {reconnect_delay}s")  # Optional log
+            time.sleep(reconnect_delay)
+            reconnect_delay = min(reconnect_delay * 2, 30)  # Exponential backoff, max 30s
+        
+        def on_close(ws, close_status_code, close_msg):
+            print("WS Closed, reconnecting...")  # Optional log
+        
+        ws = websocket.WebSocketApp("wss://ws-subscriptions-clob.polymarket.com/ws/market",  # Note: fixed URL?
+                                    on_message=on_message,
+                                    on_open=on_open,
+                                    on_error=on_error,
+                                    on_close=on_close)
         try:
-            trade = json.loads(msg)
-            if isinstance(trade, dict) and trade.get('proxyWallet', '').lower() == TRADER:
-                ts = trade.get('timestamp')
-                if ts:  # Only recent-ish
-                    live_trades.append(trade)
-        except: pass
-    
-    def on_open(ws):
-        # Subscribe to trades channel
-        ws.send(json.dumps({"type": "subscribe", "channel": "trades"}))
-    
-    ws = websocket.WebSocketApp("wss://ws-subscriptions-clob.polymarket.com/ws/market",
-                                on_message=on_message,
-                                on_open=on_open)
-    ws.run_forever()
-
+            ws.run_forever()
+        except Exception:
+            pass  # Loop restarts on any failure
 
 # 🆕 Start WS listener once (daemon thread)
 threading.Thread(target=rtds_listener, daemon=True).start()
