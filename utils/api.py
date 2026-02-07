@@ -33,27 +33,34 @@ def rtds_listener():
             continue
 
         def on_message(ws, msg):
-            # 🆕 Handle server "ping"
             if msg.strip() == "ping":
                 ws.send("pong")
-                print("🏓 PONG to server")
+                print("🏓 PONG")
                 return
             
             try:
                 data = json.loads(msg)
                 event_type = data.get('event_type', 'unknown')
-                print(f"🧑‍💻 EVENT: {event_type} | Asset: {data.get('asset_id', 'N/A')} | Size: {data.get('size', 'N/A')}")
+                asset_id = data.get('asset_id') or data.get('asset') or 'N/A'
+                size = data.get('size') or data.get('price', {}).get('value') or data.get('price') or 'N/A'
+                print(f"🧑‍💻 EVENT: {event_type} | Asset: {asset_id} | Size/Price: {size}")
                 
-                # Filter for trades/prices
-                if event_type in ['trade', 'last_trade_price'] or data.get('size', 0) > 0:
-                    data['proxyWallet'] = TRADER
-                    data['title'] = data.get('question', data.get('market', {}).get('question', 'Trade'))
-                    ts = data.get('timestamp') or time.time()
-                    live_trades.append(data)
-                    print(f"✅ ADDED TRADE #{len(live_trades)}")
+                # 🆕 Fix: Handle nested price + only trades
+                if event_type == 'trade':
+                    trade_data = data  # Full trade object
+                elif event_type == 'last_trade_price':
+                    trade_data = {'price': data.get('price', {}), 'timestamp': data.get('timestamp'), 'asset': asset_id}
+                else:
+                    return  # Skip book/price_change
+                
+                trade_data['proxyWallet'] = TRADER
+                trade_data['title'] = data.get('question', data.get('market', {}).get('question', 'Market Trade'))
+                ts = trade_data.get('timestamp') or time.time()
+                live_trades.append(trade_data)
+                print(f"✅ ADDED #{len(live_trades)}")
             except Exception as e:
                 print(f"❌ Parse: {e}")
-
+        
         def on_open(ws):
             ws.send(json.dumps({"type": "market", "assets_ids": assets}))
             print(f"📡 SUBSCRIBED to {len(assets)} assets")
