@@ -19,8 +19,7 @@ from .filters import is_crypto, get_up_down
 live_trades: deque = deque(maxlen=2000)
 
 def rtds_listener():
-    """🆕 Background WebSocket listener for ~1s live trades with reconnect."""
-    reconnect_delay = 1  # Start with 1s
+    from .api import safe_fetch
     
     while True:  # Outer reconnect loop
         # 🆕 Dynamic assets from trader's recent trades
@@ -77,10 +76,6 @@ def rtds_listener():
             ws.run_forever()
         except Exception:
             pass  # Loop restarts
-
-
-# 🆕 Start WS listener once (daemon thread)
-threading.Thread(target=rtds_listener, daemon=True).start()
 
 
 @st.cache_data(ttl=2)
@@ -273,3 +268,6 @@ def track_0x8dxd(minutes_back: int) -> pd.DataFrame:
     
     df = df.sort_values('age_sec')  # Newest first
     return df
+
+# 🆕 Start WS listener once (daemon thread)
+threading.Thread(target=rtds_listener, daemon=True).start()
