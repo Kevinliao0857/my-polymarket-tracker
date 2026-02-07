@@ -20,7 +20,8 @@ live_trades: deque = deque(maxlen=2000)
 
 def rtds_listener():
     from .api import safe_fetch
-    
+    reconnect_delay = 1 
+
     while True:  # Outer reconnect loop
         # 🆕 Dynamic assets from trader's recent trades
         recent_trades = safe_fetch(f"https://data-api.polymarket.com/trades?user={TRADER}&limit=200")
