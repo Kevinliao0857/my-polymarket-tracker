@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 import time
+import threading  # 🆕 For WS
 
 try:
     from streamlit_autorefresh import st_autorefresh
@@ -11,6 +12,15 @@ except ImportError:
 
 st.set_page_config(layout="wide")
 
+# 🆕 IMPORTS + WS STARTER
+from utils.api import track_0x8dxd, rtds_listener
+from utils.config import EST
+
+if 'ws_thread' not in st.session_state:
+    st.session_state.ws_thread = threading.Thread(target=rtds_listener, daemon=True)
+    st.session_state.ws_thread.start()
+    st.sidebar.success("🚀 WS Live - Check terminal for ASSETS/PINGS!")
+
 if 'refresh_count' not in st.session_state:
     st.session_state.refresh_count = 0
 st.session_state.refresh_count += 1
@@ -19,7 +29,6 @@ st.session_state.refresh_count += 1
 st.markdown(f"# ₿ 0x8dxd Crypto Bot Tracker")
 
 # Live EST clock
-from utils.config import EST
 now_est = datetime.now(EST)
 time_24 = now_est.strftime('%H:%M:%S')
 time_12 = now_est.strftime('%I:%M:%S %p')
@@ -31,7 +40,7 @@ MINUTES_BACK = st.sidebar.slider("⏰ Minutes back", 15, 120, 30, 5)
 now_ts = int(time.time())
 st.sidebar.caption(f"From: {datetime.fromtimestamp(now_ts - MINUTES_BACK*60, EST).strftime('%H:%M %p ET')}")
 
-if st.sidebar.button("🔄 Force Refresh", use_container_width=True):
+if st.sidebar.button("🔄 Force Refresh", type="primary"):
     st.rerun()
 
 if st.sidebar.button("🧪 Test New Status API"):
@@ -39,7 +48,6 @@ if st.sidebar.button("🧪 Test New Status API"):
     st.rerun()
 
 # Load data
-from utils.api import track_0x8dxd
 df = track_0x8dxd(MINUTES_BACK)
 
 if df.empty:
@@ -47,7 +55,6 @@ if df.empty:
 else:
     # 🆕 TEST BUTTON RESULT (if triggered)
     if 'test_api' in st.session_state:
-        # Note: Sample logic moved to track_0x8dxd if needed
         del st.session_state.test_api
     
     newest_sec = df['age_sec'].min()
@@ -76,6 +83,8 @@ else:
     </div>
     """.format(up_bets, len(df)-up_bets, newest_str, span_str), unsafe_allow_html=True)
 
-    st.dataframe(styled_df, use_container_width=True, height=400, hide_index=True,
-                 column_config={"Market": st.column_config.TextColumn(width="medium"),
-                                "Status": st.column_config.TextColumn(width="medium")})
+    st.dataframe(styled_df, height=400, hide_index=True,
+                 column_config={
+                     "Market": st.column_config.TextColumn(width="medium"),
+                     "Status": st.column_config.TextColumn(width="medium")
+                 })
