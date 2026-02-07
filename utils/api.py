@@ -10,21 +10,37 @@ import websocket
 import threading
 from collections import deque
 
+
 from .config import EST, TRADER
 from .filters import is_crypto, get_up_down
 
+
 # 🆕 Global live trades cache (thread-safe deque)
 live_trades: deque = deque(maxlen=2000)
+
 
 def rtds_listener():
     """🆕 Fixed WS listener with pings, server pongs, and real asset IDs."""
     reconnect_delay = 1
     ping_interval = 10  # Seconds
+    ws_base_url = "wss://ws-subscriptions-clob.polymarket.com"
 
     while True:  # Reconnect loop
-        # 🆕 Extract unique asset IDs from recent trades
+        # 🆕 Extract unique asset IDs from recent trades (REST uses 'asset')
         recent_trades = safe_fetch(f"https://data-api.polymarket.com/trades?user={TRADER}&limit=200")
         assets = list(set(item.get('asset') for item in recent_trades if item.get('asset')))[:20]
+        
+        # 🆕 Fallback: Fetch active crypto markets if no trader assets
+        if not assets:
+            print("⚠️ No trader assets—fetching popular crypto...")
+            popular = safe_fetch("https://gamma-api.polymarket.com/markets?active=true&category=crypto&limit=20")
+            assets = []
+            for m in popular:
+                tokens = m.get('tokens', [])
+                if tokens:
+                    assets.append(tokens[0].get('id') or tokens[0].get('token_id'))
+            assets = assets[:20]
+        
         print(f"🚀 ASSETS ({len(assets)}): {assets[:3] if assets else 'NONE'}...")
 
         if not assets:
@@ -34,7 +50,7 @@ def rtds_listener():
 
         def on_message(ws, msg):
             if msg.strip() == "ping":
-                ws.send("pong")
+                ws.send("PING")
                 print("🏓 PONG")
                 return
             
@@ -42,17 +58,16 @@ def rtds_listener():
                 data = json.loads(msg)
                 event_type = data.get('event_type', 'unknown')
                 asset_id = data.get('asset_id') or data.get('asset') or 'N/A'
-                size = data.get('size') or data.get('price', {}).get('value') or data.get('price') or 'N/A'
+                size = (data.get('size') or 
+                        data.get('price', {}).get('value', 0) or 
+                        data.get('price', 0) or 0)
                 print(f"🧑‍💻 EVENT: {event_type} | Asset: {asset_id} | Size/Price: {size}")
                 
-                # 🆕 Fix: Handle nested price + only trades
-                if event_type == 'trade':
-                    trade_data = data  # Full trade object
-                elif event_type == 'last_trade_price':
-                    trade_data = {'price': data.get('price', {}), 'timestamp': data.get('timestamp'), 'asset': asset_id}
-                else:
-                    return  # Skip book/price_change
+                # 🆕 Handle only trades/last_trade_price + robust size
+                if event_type not in ('trade', 'last_trade_price'):
+                    return
                 
+                trade_data = data
                 trade_data['proxyWallet'] = TRADER
                 trade_data['title'] = data.get('question', data.get('market', {}).get('question', 'Market Trade'))
                 ts = trade_data.get('timestamp') or time.time()
@@ -64,7 +79,7 @@ def rtds_listener():
         def on_open(ws):
             ws.send(json.dumps({"type": "market", "assets_ids": assets}))
             print(f"📡 SUBSCRIBED to {len(assets)} assets")
-            # 🆕 Ping thread
+            # 🆕 Ping thread (sends "PING")
             def ping_loop():
                 while ws.sock and ws.sock.connected:
                     try:
@@ -84,18 +99,20 @@ def rtds_listener():
         def on_close(ws, code, reason):
             print(f"🔌 CLOSED: {code} - {reason}")
 
-        ws_url = "wss://ws-subscriptions-clob.polymarket.com/ws/market"
+        ws_url = f"{ws_base_url}/ws/market"
         ws = websocket.WebSocketApp(ws_url, 
                                     on_message=on_message, 
                                     on_open=on_open,
                                     on_error=on_error, 
                                     on_close=on_close)
         try:
-            ws.run_forever(ping_interval=0)
+            ws.run_forever(ping_interval=0, ping_timeout=None)  # 🆕 No auto-ping
         except KeyboardInterrupt:
             break
         except Exception as e:
             print(f"❌ Run error: {e}")
+            time.sleep(reconnect_delay)
+
 
 @st.cache_data(ttl=2)
 def safe_fetch(url: str) -> List[Dict[str, Any]]:
@@ -111,6 +128,7 @@ def safe_fetch(url: str) -> List[Dict[str, Any]]:
         pass
     return []
 
+
 @st.cache_data(ttl=60)
 def get_market_enddate(condition_id: str, slug: str = None) -> str:
     """Get exact end time from Polymarket Gamma API."""
@@ -125,8 +143,9 @@ def get_market_enddate(condition_id: str, slug: str = None) -> str:
         resp = requests.get(url, timeout=5)
         if resp.status_code == 200:
             markets = resp.json()
-            if markets:
-                end_iso = markets[0].get('endDateIso')
+            if markets and isinstance(markets, list) and markets:
+                market = markets[0]
+                end_iso = market.get('endDateIso') or market.get('end_date_iso')
                 if end_iso:
                     end_dt = pd.to_datetime(end_iso).tz_convert(EST)
                     return end_dt.strftime('%I:%M %p ET')
@@ -134,32 +153,33 @@ def get_market_enddate(condition_id: str, slug: str = None) -> str:
         pass
     return None
 
+
 def get_status_hybrid(item: Dict[str, Any], now_ts: int) -> str:
     """🟢 Hybrid: API first → Regex fallback."""
     # 1. Try API exact time
     condition_id = str(item.get('conditionId') or item.get('marketId') or item.get('market', {}).get('conditionId') or '')
     slug = str(item.get('slug') or item.get('market', {}).get('slug') or '')
-    
+  
     end_str = get_market_enddate(condition_id, slug)
     now_est = datetime.fromtimestamp(now_ts, EST)
-    
+  
     if end_str:
         try:
-            end_dt = datetime.strptime(end_str, '%I:%M %p ET').replace(tzinfo=EST)
+            end_dt = pd.to_datetime(end_str).tz_convert(EST)
             if now_est >= end_dt:
                 return "⚫ EXPIRED"
-            return f"🟢 ACTIVE (til {end_str}) 🟢"
+            return f"🟢 ACTIVE (til {end_dt.strftime('%I:%M %p ET')}) 🟢"
         except:
             pass
-    
+  
     # 2. Regex fallback
     title_safe = str(item.get('title') or item.get('question') or '').lower()
     now_decimal = now_est.hour + (now_est.minute / 60.0) + (now_est.second / 3600.0)
-    
+  
     time_pattern = r'(\d{1,2})(?::(\d{2}))?([ap]m|et)'
     matches = re.findall(time_pattern, title_safe)
     title_times = []
-    
+  
     for h_str, m_str, suffix in matches:
         try:
             hour = int(h_str)
@@ -174,28 +194,29 @@ def get_status_hybrid(item: Dict[str, Any], now_ts: int) -> str:
                 title_times.append(decimal_h)
         except:
             continue
-    
+  
     if not title_times: 
         return "🟢 ACTIVE (no timer)"
-    
+  
     max_h = max(title_times)
     if now_decimal >= max_h: 
         return "⚫ EXPIRED"
-    
+  
     disp_h = int(max_h % 12) or 12
     disp_m = f":{int((max_h % 1)*60):02d}" if (max_h % 1) > 0.1 else ""
     ampm = 'PM' if max_h >= 12 else 'AM'
     return f"🟢 ACTIVE (til ~{disp_h}{disp_m} {ampm})"
 
+
 @st.cache_data(ttl=5)
 def track_0x8dxd(minutes_back: int) -> pd.DataFrame:
     now_ts = int(time.time())
     ago_ts = now_ts - (minutes_back * 60)
-    
+  
     # 🆕 PRIORITY 1: Live WS trades (1s fresh)
     recent_live = [t for t in live_trades if (t.get('timestamp') or 0) >= ago_ts]
     ws_count = len(recent_live)
-    
+  
     if ws_count > 0:
         st.sidebar.success(f"🚀 LIVE TRADES: {ws_count} (WS working!)")
     else:
@@ -211,15 +232,14 @@ def track_0x8dxd(minutes_back: int) -> pd.DataFrame:
         all_raw.extend(batch)
         offset += 500
         if len(batch) < 500: break
-    
+  
     # Filter REST for recent + our trader
     rest_recent = []
     for item in all_raw:
         proxy = str(item.get("proxyWallet", "")).lower()
-        user_field = str(item.get("user", "")).lower()
-        if proxy != TRADER.lower() and user_field != TRADER.lower(): continue
+        if proxy != TRADER.lower(): continue
         
-        ts_field = item.get('timestamp') or item.get('updatedAt') or item.get('createdAt')
+        ts_field = item.get('timestamp') or item.get('updatedAt') or item.get('createdAt') or item.get('ts')
         try:
             ts = int(float(ts_field)) if ts_field else now_ts
         except (ValueError, TypeError):
@@ -227,7 +247,7 @@ def track_0x8dxd(minutes_back: int) -> pd.DataFrame:
         
         if ts >= ago_ts:
             rest_recent.append(item)
-    
+  
     # 🆕 Combine: live + recent REST (dedupe by tx hash)
     combined = recent_live + rest_recent
     seen_tx = set()
@@ -238,16 +258,18 @@ def track_0x8dxd(minutes_back: int) -> pd.DataFrame:
             seen_tx.add(tx_hash)
             unique_combined.append(item)
     
-    filtered_data = [item for item in unique_combined if is_crypto(item)]
-    
+    # 🆕 Sort by timestamp DESC, then filter crypto, take 200
+    unique_combined.sort(key=lambda x: x.get('timestamp', 0) or x.get('updatedAt', 0) or 0, reverse=True)
+    filtered_data = [item for item in unique_combined if is_crypto(item)][:200]
+  
     st.sidebar.info(f"📊 REST: {len(all_raw)} total | WS: {ws_count} live")
     st.sidebar.success(f"✅ {len(filtered_data)} crypto trades | {minutes_back}min")
-    
+  
     if not filtered_data:
         return pd.DataFrame()
-    
+  
     df_data = []
-    for item in filtered_data[-200:]:  # Latest 200
+    for item in filtered_data:  # Latest 200 already
         updown = get_up_down(item)
         title = str(item.get('title') or item.get('question') or '-')
         short_title = (title[:85] + '...') if len(title) > 90 else title
@@ -278,9 +300,9 @@ def track_0x8dxd(minutes_back: int) -> pd.DataFrame:
             'Market': short_title, 'UP/DOWN': updown, 'Size': f"${size_val:.0f}",
             'Price': price_val, 'Status': status_str, 'Updated': update_str, 'age_sec': age_sec
         })
-    
+  
     df = pd.DataFrame(df_data)
     if df.empty: return df
-    
+  
     df = df.sort_values('age_sec')  # Newest first
     return df
