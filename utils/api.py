@@ -3,7 +3,9 @@ import pandas as pd
 import threading
 from datetime import datetime
 from typing import Any
-from .config import TRADER
+
+# Explicit sibling imports (no package-level)
+from .config import EST, TRADER
 from .filters import is_crypto, get_up_down
 from .data import safe_fetch
 from .status import get_status_hybrid

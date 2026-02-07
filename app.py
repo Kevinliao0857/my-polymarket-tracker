@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 import time
-import threading  # 🆕 For WS
 
 try:
     from streamlit_autorefresh import st_autorefresh
@@ -12,14 +11,11 @@ except ImportError:
 
 st.set_page_config(layout="wide")
 
-# 🆕 IMPORTS + WS STARTER
+# ✅ FIXED IMPORTS - Only needs track_0x8dxd
 from utils import track_0x8dxd
 from utils.config import EST
 
-if 'ws_thread' not in st.session_state:
-    st.session_state.ws_thread = threading.Thread(target=rtds_listener, daemon=True)
-    st.session_state.ws_thread.start()
-    st.sidebar.success("🚀 WS Live - Check terminal for ASSETS/PINGS!")
+# WS auto-starts INSIDE track_0x8dxd() - NO manual thread needed!
 
 if 'refresh_count' not in st.session_state:
     st.session_state.refresh_count = 0
@@ -47,13 +43,13 @@ if st.sidebar.button("🧪 Test New Status API"):
     st.session_state.test_api = True
     st.rerun()
 
-# Load data
+# Load data - AUTO-STARTS WS!
 df = track_0x8dxd(MINUTES_BACK)
 
 if df.empty:
     st.info("No crypto trades found")
 else:
-    # 🆕 TEST BUTTON RESULT (if triggered)
+    # TEST BUTTON RESULT
     if 'test_api' in st.session_state:
         del st.session_state.test_api
     
