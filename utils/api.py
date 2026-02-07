@@ -26,7 +26,8 @@ def rtds_listener():
         # 🆕 Dynamic assets from trader's recent trades
         recent_trades = safe_fetch(f"https://data-api.polymarket.com/trades?user={TRADER}&limit=200")
         assets = list(set(item.get('asset') for item in recent_trades if item.get('asset')))[:100]
-        
+        print(f"🚀 ASSETS ({len(assets)}): {assets[:2]}...")
+
         def on_message(ws, msg):
             try:
                 data = json.loads(msg)
@@ -55,6 +56,7 @@ def rtds_listener():
                     "type": "market",
                     "assets_ids": assets
                 }))
+                print("📡 SUB MESSAGE SENT")
                 print(f"✅ WS Subscribed to {len(assets)} assets for {TRADER}")
             else:
                 print(f"⚠️ No recent assets for {TRADER}—REST fallback only")
