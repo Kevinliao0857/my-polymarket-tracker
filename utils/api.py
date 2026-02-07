@@ -3,7 +3,8 @@ import pandas as pd
 import threading
 from datetime import datetime
 from typing import Any
-from . import TRADER, is_crypto, get_up_down
+from .config import TRADER
+from .filters import is_crypto, get_up_down
 from .data import safe_fetch
 from .status import get_status_hybrid
 from .websocket import rtds_listener, live_trades

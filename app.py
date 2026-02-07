@@ -13,7 +13,7 @@ except ImportError:
 st.set_page_config(layout="wide")
 
 # 🆕 IMPORTS + WS STARTER
-from utils.api import track_0x8dxd, rtds_listener
+from utils import track_0x8dxd
 from utils.config import EST
 
 if 'ws_thread' not in st.session_state:
