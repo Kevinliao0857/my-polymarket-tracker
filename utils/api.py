@@ -1,40 +1,32 @@
 import streamlit as st
-import requests
 import pandas as pd
-from datetime import datetime
-import time
-import json
-import re
-from typing import List, Dict, Any
-import websocket
 import threading
-from collections import deque
+from datetime import datetime
+from typing import Any
+from . import TRADER, is_crypto, get_up_down
+from .data import safe_fetch
+from .status import get_status_hybrid
+from .websocket import rtds_listener, live_trades
 
-
-from .config import EST, TRADER
-from .filters import is_crypto, get_up_down
-
-
-# 🆕 Global live trades cache (thread-safe deque)
-live_trades: deque = deque(maxlen=2000)
-
-
+if 'ws_started' not in st.session_state:
+    threading.Thread(target=rtds_listener, daemon=True).start()
+    st.session_state.ws_started = True
 
 @st.cache_data(ttl=5)
 def track_0x8dxd(minutes_back: int) -> pd.DataFrame:
     now_ts = int(time.time())
     ago_ts = now_ts - (minutes_back * 60)
-  
-    # 🆕 PRIORITY 1: Live WS trades (1s fresh)
+    
+    # Live WS priority (unchanged logic)
     recent_live = [t for t in live_trades if (t.get('timestamp') or 0) >= ago_ts]
     ws_count = len(recent_live)
-  
+    
     if ws_count > 0:
         st.sidebar.success(f"🚀 LIVE TRADES: {ws_count} (WS working!)")
     else:
         st.sidebar.warning("⚠️ No live trades yet—WS warming up...")
 
-    # PRIORITY 2: REST fallback (historical)
+    # REST fallback (unchanged, but use safe_fetch)
     all_raw = []
     offset = 0
     while len(all_raw) < 2000:
@@ -44,8 +36,8 @@ def track_0x8dxd(minutes_back: int) -> pd.DataFrame:
         all_raw.extend(batch)
         offset += 500
         if len(batch) < 500: break
-  
-    # Filter REST for recent + our trader
+
+    # Filter REST (unchanged)
     rest_recent = []
     for item in all_raw:
         proxy = str(item.get("proxyWallet", "")).lower()
@@ -59,8 +51,8 @@ def track_0x8dxd(minutes_back: int) -> pd.DataFrame:
         
         if ts >= ago_ts:
             rest_recent.append(item)
-  
-    # 🆕 Combine: live + recent REST (dedupe by tx hash)
+
+    # Combine + dedupe + filter (unchanged)
     combined = recent_live + rest_recent
     seen_tx = set()
     unique_combined = []
@@ -70,18 +62,18 @@ def track_0x8dxd(minutes_back: int) -> pd.DataFrame:
             seen_tx.add(tx_hash)
             unique_combined.append(item)
     
-    # 🆕 Sort by timestamp DESC, then filter crypto, take 200
     unique_combined.sort(key=lambda x: x.get('timestamp', 0) or x.get('updatedAt', 0) or 0, reverse=True)
     filtered_data = [item for item in unique_combined if is_crypto(item)][:200]
-  
+    
     st.sidebar.info(f"📊 REST: {len(all_raw)} total | WS: {ws_count} live")
     st.sidebar.success(f"✅ {len(filtered_data)} crypto trades | {minutes_back}min")
-  
+    
     if not filtered_data:
         return pd.DataFrame()
-  
+    
+    # Build DF (unchanged, uses get_up_down, get_status_hybrid)
     df_data = []
-    for item in filtered_data:  # Latest 200 already
+    for item in filtered_data:
         updown = get_up_down(item)
         title = str(item.get('title') or item.get('question') or '-')
         short_title = (title[:85] + '...') if len(title) > 90 else title
@@ -112,9 +104,9 @@ def track_0x8dxd(minutes_back: int) -> pd.DataFrame:
             'Market': short_title, 'UP/DOWN': updown, 'Size': f"${size_val:.0f}",
             'Price': price_val, 'Status': status_str, 'Updated': update_str, 'age_sec': age_sec
         })
-  
+    
     df = pd.DataFrame(df_data)
     if df.empty: return df
-  
+    
     df = df.sort_values('age_sec')  # Newest first
     return df
