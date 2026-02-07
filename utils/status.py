@@ -1,6 +1,7 @@
 import re
 import pandas as pd
 from datetime import datetime
+from typing import Dict, Any
 from .data import get_market_enddate
 from .config import EST
 

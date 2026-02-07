@@ -2,6 +2,7 @@ import websocket
 import threading
 import time
 import json
+from typing import List, Dict, Any
 from collections import deque
 from .data import safe_fetch
 from .config import TRADER
