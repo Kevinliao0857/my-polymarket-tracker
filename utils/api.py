@@ -6,80 +6,89 @@ import time
 import json
 import re
 from typing import List, Dict, Any
-import websocket  # 🆕 For RTDS WebSocket
+import websocket
 import threading
 from collections import deque
 
-
 from .config import EST, TRADER
 from .filters import is_crypto, get_up_down
-
 
 # 🆕 Global live trades cache (thread-safe deque)
 live_trades: deque = deque(maxlen=2000)
 
 def rtds_listener():
-    from .api import safe_fetch
-    reconnect_delay = 1 
+    """🆕 Fixed WS listener with pings, server pongs, and real asset IDs."""
+    reconnect_delay = 1
+    ping_interval = 10  # Seconds
 
-    while True:  # Outer reconnect loop
-        # 🆕 Dynamic assets from trader's recent trades
+    while True:  # Reconnect loop
+        # 🆕 Extract unique asset IDs from recent trades
         recent_trades = safe_fetch(f"https://data-api.polymarket.com/trades?user={TRADER}&limit=200")
-        assets = list(set(item.get('asset') for item in recent_trades if item.get('asset')))[:100]
-        print(f"🚀 ASSETS ({len(assets)}): {assets[:2]}...")
+        assets = list(set(item.get('asset') for item in recent_trades if item.get('asset')))[:20]
+        print(f"🚀 ASSETS ({len(assets)}): {assets[:3] if assets else 'NONE'}...")
+
+        if not assets:
+            print("⚠️ No assets—retry in 30s")
+            time.sleep(30)
+            continue
 
         def on_message(ws, msg):
+            # 🆕 Handle server "ping"
+            if msg.strip() == "ping":
+                ws.send("pong")
+                print("🏓 PONG to server")
+                return
+            
             try:
                 data = json.loads(msg)
-                print(f"🧑‍💻 WS MSG TYPE: {data.get('event_type', 'unknown')}")
-                print(f"🧑‍💻 WS FIELDS: {list(data.keys())}")
-                print(f"🧑‍💻 SIZE: {data.get('size', 'N/A')}, TIMESTAMP: {data.get('timestamp', 'N/A')}")
-                print("---")  # Separator
-
-                # Try broader filter for trades
-                if (data.get('event_type') == 'last_trade_price' or 
-                    data.get('event_type') == 'trade' or
-                    data.get('size', 0) > 0):
-                    data['proxyWallet'] = TRADER  # Inject for compatibility
-                    data['title'] = data.get('question', 'Market Trade')  # Add for display
+                event_type = data.get('event_type', 'unknown')
+                print(f"🧑‍💻 EVENT: {event_type} | Asset: {data.get('asset_id', 'N/A')} | Size: {data.get('size', 'N/A')}")
+                
+                # Filter for trades/prices
+                if event_type in ['trade', 'last_trade_price'] or data.get('size', 0) > 0:
+                    data['proxyWallet'] = TRADER
+                    data['title'] = data.get('question', data.get('market', {}).get('question', 'Trade'))
                     ts = data.get('timestamp') or time.time()
-                    if ts:
-                        live_trades.append(data)
-                        print(f"✅ ADDED TRADE #{len(live_trades)}")
+                    live_trades.append(data)
+                    print(f"✅ ADDED TRADE #{len(live_trades)}")
             except Exception as e:
-                print(f"Parse error: {e}")
+                print(f"❌ Parse: {e}")
 
-        
         def on_open(ws):
-            if assets:
-                ws.send(json.dumps({
-                    "type": "market",
-                    "assets_ids": assets
-                }))
-                print("📡 SUB MESSAGE SENT")
-                print(f"✅ WS Subscribed to {len(assets)} assets for {TRADER}")
-            else:
-                print(f"⚠️ No recent assets for {TRADER}—REST fallback only")
-        
+            ws.send(json.dumps({"type": "market", "assets_ids": assets}))
+            print(f"📡 SUBSCRIBED to {len(assets)} assets")
+            # 🆕 Ping thread
+            def ping_loop():
+                while ws.sock and ws.sock.connected:
+                    try:
+                        ws.send("PING")
+                        print("🏓 PING")
+                    except:
+                        break
+                    time.sleep(ping_interval)
+            threading.Thread(target=ping_loop, daemon=True).start()
+
         def on_error(ws, error):
             nonlocal reconnect_delay
-            print(f"WS Error: {error}, reconnecting in {reconnect_delay}s")
+            print(f"❌ ERROR: {error} (retry in {reconnect_delay}s)")
             time.sleep(reconnect_delay)
-            reconnect_delay = min(reconnect_delay * 2, 30)
-        
-        def on_close(ws, close_status_code, close_msg):
-            print("WS Closed, reconnecting...")
-        
-        ws = websocket.WebSocketApp("wss://ws-subscriptions-clob.polymarket.com/ws/market",
-                                    on_message=on_message,
+            reconnect_delay = min(reconnect_delay * 2, 60)
+
+        def on_close(ws, code, reason):
+            print(f"🔌 CLOSED: {code} - {reason}")
+
+        ws_url = "wss://ws-subscriptions-clob.polymarket.com/ws/market"
+        ws = websocket.WebSocketApp(ws_url, 
+                                    on_message=on_message, 
                                     on_open=on_open,
-                                    on_error=on_error,
+                                    on_error=on_error, 
                                     on_close=on_close)
         try:
-            ws.run_forever()
-        except Exception:
-            pass  # Loop restarts
-
+            ws.run_forever(ping_interval=0)
+        except KeyboardInterrupt:
+            break
+        except Exception as e:
+            print(f"❌ Run error: {e}")
 
 @st.cache_data(ttl=2)
 def safe_fetch(url: str) -> List[Dict[str, Any]]:
@@ -94,7 +103,6 @@ def safe_fetch(url: str) -> List[Dict[str, Any]]:
     except Exception:
         pass
     return []
-
 
 @st.cache_data(ttl=60)
 def get_market_enddate(condition_id: str, slug: str = None) -> str:
@@ -118,7 +126,6 @@ def get_market_enddate(condition_id: str, slug: str = None) -> str:
     except:
         pass
     return None
-
 
 def get_status_hybrid(item: Dict[str, Any], now_ts: int) -> str:
     """🟢 Hybrid: API first → Regex fallback."""
@@ -173,7 +180,6 @@ def get_status_hybrid(item: Dict[str, Any], now_ts: int) -> str:
     ampm = 'PM' if max_h >= 12 else 'AM'
     return f"🟢 ACTIVE (til ~{disp_h}{disp_m} {ampm})"
 
-
 @st.cache_data(ttl=5)
 def track_0x8dxd(minutes_back: int) -> pd.DataFrame:
     now_ts = int(time.time())
@@ -204,7 +210,7 @@ def track_0x8dxd(minutes_back: int) -> pd.DataFrame:
     for item in all_raw:
         proxy = str(item.get("proxyWallet", "")).lower()
         user_field = str(item.get("user", "")).lower()
-        if proxy != TRADER and user_field != TRADER: continue
+        if proxy != TRADER.lower() and user_field != TRADER.lower(): continue
         
         ts_field = item.get('timestamp') or item.get('updatedAt') or item.get('createdAt')
         try:
