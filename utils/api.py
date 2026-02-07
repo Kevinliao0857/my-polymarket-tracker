@@ -18,34 +18,44 @@ from .filters import is_crypto, get_up_down
 # 🆕 Global live trades cache (thread-safe deque)
 live_trades: deque = deque(maxlen=2000)
 
-
 def rtds_listener():
     """🆕 Background WebSocket listener for ~1s live trades with reconnect."""
     reconnect_delay = 1  # Start with 1s
     
     while True:  # Outer reconnect loop
+        # 🆕 Dynamic assets from trader's recent trades
+        recent_trades = safe_fetch(f"https://data-api.polymarket.com/trades?user={TRADER}&limit=200")
+        assets = list(set(item.get('asset') for item in recent_trades if item.get('asset')))[:100]
+        
         def on_message(ws, msg):
             try:
-                trade = json.loads(msg)
-                if isinstance(trade, dict) and trade.get('proxyWallet', '').lower() == TRADER:
-                    ts = trade.get('timestamp')
+                data = json.loads(msg)
+                if isinstance(data, dict) and data.get('proxyWallet', '').lower() == TRADER:
+                    ts = data.get('timestamp')
                     if ts:
-                        live_trades.append(trade)
+                        live_trades.append(data)
             except: pass
         
         def on_open(ws):
-            ws.send(json.dumps({"type": "subscribe", "channel": "trades"}))
+            if assets:
+                ws.send(json.dumps({
+                    "type": "market",
+                    "assets_ids": assets
+                }))
+                print(f"✅ WS Subscribed to {len(assets)} assets for {TRADER}")
+            else:
+                print(f"⚠️ No recent assets for {TRADER}—REST fallback only")
         
         def on_error(ws, error):
             nonlocal reconnect_delay
-            print(f"WS Error: {error}, reconnecting in {reconnect_delay}s")  # Optional log
+            print(f"WS Error: {error}, reconnecting in {reconnect_delay}s")
             time.sleep(reconnect_delay)
-            reconnect_delay = min(reconnect_delay * 2, 30)  # Exponential backoff, max 30s
+            reconnect_delay = min(reconnect_delay * 2, 30)
         
         def on_close(ws, close_status_code, close_msg):
-            print("WS Closed, reconnecting...")  # Optional log
+            print("WS Closed, reconnecting...")
         
-        ws = websocket.WebSocketApp("wss://ws-subscriptions-clob.polymarket.com/ws/market",  # Note: fixed URL?
+        ws = websocket.WebSocketApp("wss://ws-subscriptions-clob.polymarket.com/ws/market",
                                     on_message=on_message,
                                     on_open=on_open,
                                     on_error=on_error,
@@ -53,7 +63,8 @@ def rtds_listener():
         try:
             ws.run_forever()
         except Exception:
-            pass  # Loop restarts on any failure
+            pass  # Loop restarts
+
 
 # 🆕 Start WS listener once (daemon thread)
 threading.Thread(target=rtds_listener, daemon=True).start()
