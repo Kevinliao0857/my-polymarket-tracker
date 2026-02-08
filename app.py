@@ -33,6 +33,7 @@ st.caption(f"🕐 Current EST: {now_est.strftime('%Y-%m-%d')} {time_24} ({time_1
 
 # 👇 ADD P&L TRACKER
 pnl_data = get_trader_pnl(TRADER)
+closed_pnl = get_closed_trades_pnl(TRADER)
 
 col1, col2, col3 = st.columns(3)
 with col1:
