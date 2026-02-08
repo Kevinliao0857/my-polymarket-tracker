@@ -14,10 +14,7 @@ st.set_page_config(layout="wide")
 # ✅ FIXED IMPORTS - Everything you need
 from utils import track_0x8dxd
 from utils.config import EST, TRADER
-from utils.api import get_profile_name  # 👤 For trader profile
-from utils.api import get_profile_name, get_trader_pnl
 from utils.api import get_profile_name, get_trader_pnl, get_closed_trades_pnl
-
 
 # WS auto-starts INSIDE track_0x8dxd() - NO manual thread needed!
 
