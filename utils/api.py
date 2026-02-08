@@ -167,3 +167,22 @@ def get_trader_pnl(address: str) -> dict:
     except:
         pass
     return {'total_pnl': 0, 'total_size': 0, 'crypto_count': 0, 'all_positions': 0}
+
+@st.cache_data(ttl=60)
+def get_closed_trades_pnl(address: str) -> dict:
+    """Sum P&L from closed SETTLED trades"""
+    try:
+        trades = requests.get(
+            f"https://data-api.polymarket.com/trades?user={address}&limit=1000"
+        ).json()
+        total_profit = 0
+        crypto_count = 0
+        for trade in trades:
+            if is_crypto(trade) and trade.get('status') == 'settled':
+                pnl = trade.get('pnl', 0)
+                total_profit += pnl
+                crypto_count += 1
+        return {'total': total_profit, 'count': crypto_count}
+    except:
+        pass
+    return {'total': 0, 'count': 0}
