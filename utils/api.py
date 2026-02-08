@@ -120,3 +120,16 @@ def track_0x8dxd(minutes_back: int) -> pd.DataFrame:
     
     df = df.sort_values('age_sec')  # Newest first
     return df
+
+@st.cache_data(ttl=300)
+def get_profile_name(address: str) -> str:
+    """Get trader profile name from Gamma API"""
+    try:
+        url = f"https://gamma-api.polymarket.com/public-profile?address={address}"
+        response = requests.get(url, timeout=10)
+        if response.status_code == 200:
+            profile = response.json()
+            return profile.get("name") or profile.get("pseudonym") or f"{address[:10]}..."
+    except:
+        pass
+    return f"{address[:10]}..."
