@@ -71,7 +71,8 @@ def track_0x8dxd(minutes_back: int) -> pd.DataFrame:
             unique_combined.append(item)
     
     unique_combined.sort(key=lambda x: x.get('timestamp', 0) or x.get('updatedAt', 0) or 0, reverse=True)
-    filtered_data = [item for item in unique_combined if is_crypto(item)][:200]
+    max_items = max(200, minutes_back * 15)
+    filtered_data = [item for item in unique_combined if is_crypto(item)][:max_items]
     
     rest_count = len(latest_bets)
     st.sidebar.info(f"📊 REST: {rest_count} total | WS: {ws_count} live")
