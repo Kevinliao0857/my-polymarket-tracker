@@ -14,7 +14,7 @@ st.set_page_config(layout="wide")
 # ✅ FIXED IMPORTS - Everything you need
 from utils import track_0x8dxd
 from utils.config import EST, TRADER
-from utils.api import get_profile_name, get_trader_pnl, get_closed_trades_pnl
+from utils.api import get_profile_name, get_trader_pnl # , get_closed_trades_pnl
 
 # WS auto-starts INSIDE track_0x8dxd() - NO manual thread needed!
 
@@ -49,13 +49,13 @@ with col3:
     st.metric("Total Size", f"${pnl_data['total_size']:.0f}")
 
 # CLOSED P&L TRACKER
-closed_pnl = get_closed_trades_pnl(TRADER)
-col4, col5 = st.columns(2)
-with col4:
-    pnl_color = "🟢" if closed_pnl['total'] >= 0 else "🔴"
-    st.metric("Closed P&L", f"{pnl_color}${abs(closed_pnl['total']):,.0f}")
-with col5:
-    st.metric("Settled Trades", closed_pnl['crypto_count'])
+# closed_pnl = get_closed_trades_pnl(TRADER)
+# col4, col5 = st.columns(2)
+# with col4:
+#     pnl_color = "🟢" if closed_pnl['total'] >= 0 else "🔴"
+#     st.metric("Closed P&L", f"{pnl_color}${abs(closed_pnl['total']):,.0f}")
+# with col5:
+#     st.metric("Settled Trades", closed_pnl['crypto_count'])
 
 # SIDEBAR ⚙️
 st.sidebar.title("⚙️ Settings")
