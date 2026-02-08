@@ -15,6 +15,7 @@ st.set_page_config(layout="wide")
 from utils import track_0x8dxd
 from utils.config import EST, TRADER
 from utils.api import get_profile_name  # 👤 For trader profile
+from utils.api import get_profile_name, get_trader_pnl
 
 # WS auto-starts INSIDE track_0x8dxd() - NO manual thread needed!
 
@@ -30,6 +31,22 @@ now_est = datetime.now(EST)
 time_24 = now_est.strftime('%H:%M:%S')
 time_12 = now_est.strftime('%I:%M:%S %p')
 st.caption(f"🕐 Current EST: {now_est.strftime('%Y-%m-%d')} {time_24} ({time_12}) ET | Auto 5s ✓ #{st.session_state.refresh_count}🔄")
+
+# 👇 ADD P&L TRACKER
+pnl_data = get_trader_pnl(TRADER)
+
+col1, col2, col3 = st.columns(3)
+with col1:
+    pnl_color = "🟢" if pnl_data['total_pnl'] >= 0 else "🔴"
+    st.metric(
+        "Crypto P&L", 
+        f"{pnl_color}${abs(pnl_data['total_pnl']):,.0f}", 
+        delta=pnl_data['total_pnl']
+    )
+with col2:
+    st.metric("Crypto Positions", pnl_data['crypto_count'])
+with col3:
+    st.metric("Total Size", f"${pnl_data['total_size']:.0f}")
 
 # SIDEBAR ⚙️
 st.sidebar.title("⚙️ Settings")
