@@ -1,9 +1,10 @@
 import streamlit as st
 import pandas as pd
+import requests
 import threading
 import time
 from datetime import datetime
-from typing import Any
+from typing import Any, List
 
 from .config import EST, TRADER
 from .filters import is_crypto, get_up_down
@@ -11,17 +12,33 @@ from .data import safe_fetch
 from .status import get_status_hybrid
 from .websocket import rtds_listener, live_trades
 
-
+# WS startup (unchanged)
 if 'ws_started' not in st.session_state:
     threading.Thread(target=rtds_listener, daemon=True).start()
     st.session_state.ws_started = True
 
-@st.cache_data(ttl=5)
+@st.cache_data(ttl=30)
+def get_latest_bets(address: str, limit: int = 200) -> List[dict]:
+    """Get trader's latest BUY trades from /activity endpoint"""
+    try:
+        url = f"https://data-api.polymarket.com/activity?user={address}&limit={limit}"
+        response = requests.get(url, timeout=10)
+        if response.status_code == 200:
+            activities = response.json()
+            # Filter TRADE + BUY only (copy-trading focus)
+            buy_trades = [a for a in activities 
+                         if a.get("type") == "TRADE" and a.get("side") == "BUY"]
+            return buy_trades
+    except:
+        pass
+    return []
+
+@st.cache_data(ttl=10)  # Live data - short cache
 def track_0x8dxd(minutes_back: int) -> pd.DataFrame:
     now_ts = int(time.time())
     ago_ts = now_ts - (minutes_back * 60)
     
-    # Live WS priority (unchanged logic)
+    # 1. Live WS (unchanged)
     recent_live = [t for t in live_trades if (t.get('timestamp') or 0) >= ago_ts]
     ws_count = len(recent_live)
     
@@ -29,25 +46,12 @@ def track_0x8dxd(minutes_back: int) -> pd.DataFrame:
         st.sidebar.success(f"🚀 LIVE TRADES: {ws_count} (WS working!)")
     else:
         st.sidebar.warning("⚠️ No live trades yet—WS warming up...")
-
-    # REST fallback (unchanged, but use safe_fetch)
-    all_raw = []
-    offset = 0
-    while len(all_raw) < 2000:
-        url = f"https://data-api.polymarket.com/trades?user={TRADER}&limit=500&offset={offset}"
-        batch = safe_fetch(url)
-        if not batch: break
-        all_raw.extend(batch)
-        offset += 500
-        if len(batch) < 500: break
-
-    # Filter REST (unchanged)
+    
+    # 2. NEW: Activity endpoint (much better than /trades)
+    latest_bets = get_latest_bets(TRADER, limit=500)  # Single call, no pagination needed
     rest_recent = []
-    for item in all_raw:
-        proxy = str(item.get("proxyWallet", "")).lower()
-        if proxy != TRADER.lower(): continue
-        
-        ts_field = item.get('timestamp') or item.get('updatedAt') or item.get('createdAt') or item.get('ts')
+    for item in latest_bets:
+        ts_field = item.get('timestamp') or item.get('updatedAt') or item.get('createdAt')
         try:
             ts = int(float(ts_field)) if ts_field else now_ts
         except (ValueError, TypeError):
@@ -55,8 +59,8 @@ def track_0x8dxd(minutes_back: int) -> pd.DataFrame:
         
         if ts >= ago_ts:
             rest_recent.append(item)
-
-    # Combine + dedupe + filter (unchanged)
+    
+    # 3. Combine + dedupe (unchanged)
     combined = recent_live + rest_recent
     seen_tx = set()
     unique_combined = []
@@ -69,13 +73,14 @@ def track_0x8dxd(minutes_back: int) -> pd.DataFrame:
     unique_combined.sort(key=lambda x: x.get('timestamp', 0) or x.get('updatedAt', 0) or 0, reverse=True)
     filtered_data = [item for item in unique_combined if is_crypto(item)][:200]
     
-    st.sidebar.info(f"📊 REST: {len(all_raw)} total | WS: {ws_count} live")
+    rest_count = len(latest_bets)
+    st.sidebar.info(f"📊 REST: {rest_count} total | WS: {ws_count} live")
     st.sidebar.success(f"✅ {len(filtered_data)} crypto trades | {minutes_back}min")
     
     if not filtered_data:
         return pd.DataFrame()
     
-    # Build DF (unchanged, uses get_up_down, get_status_hybrid)
+    # 4. Build DF (unchanged - your logic works great)
     df_data = []
     for item in filtered_data:
         updown = get_up_down(item)
@@ -110,7 +115,8 @@ def track_0x8dxd(minutes_back: int) -> pd.DataFrame:
         })
     
     df = pd.DataFrame(df_data)
-    if df.empty: return df
+    if df.empty: 
+        return df
     
     df = df.sort_values('age_sec')  # Newest first
     return df

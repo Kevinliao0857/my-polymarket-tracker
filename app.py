@@ -43,6 +43,11 @@ if st.sidebar.button("🧪 Test New Status API"):
     st.session_state.test_api = True
     st.rerun()
 
+# Add this after your existing sidebar content
+profile_name = get_profile_name(TRADER)
+st.sidebar.markdown(f"**👤 Tracking:** {profile_name}")
+
+
 # Load data - AUTO-STARTS WS!
 df = track_0x8dxd(MINUTES_BACK)
 
