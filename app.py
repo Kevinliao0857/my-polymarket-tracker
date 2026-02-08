@@ -11,9 +11,10 @@ except ImportError:
 
 st.set_page_config(layout="wide")
 
-# ✅ FIXED IMPORTS - Only needs track_0x8dxd
+# ✅ FIXED IMPORTS - Everything you need
 from utils import track_0x8dxd
-from utils.config import EST
+from utils.config import EST, TRADER
+from utils.api import get_profile_name  # 👤 For trader profile
 
 # WS auto-starts INSIDE track_0x8dxd() - NO manual thread needed!
 
@@ -30,8 +31,16 @@ time_24 = now_est.strftime('%H:%M:%S')
 time_12 = now_est.strftime('%I:%M:%S %p')
 st.caption(f"🕐 Current EST: {now_est.strftime('%Y-%m-%d')} {time_24} ({time_12}) ET | Auto 5s ✓ #{st.session_state.refresh_count}🔄")
 
-# SIDEBAR
+# SIDEBAR ⚙️
 st.sidebar.title("⚙️ Settings")
+
+# 👤 TRADER PROFILE - Added here
+try:
+    profile_name = get_profile_name(TRADER)
+    st.sidebar.markdown(f"**👤 Tracking:** `{profile_name}`")
+except:
+    st.sidebar.markdown(f"**👤 Tracking:** `{TRADER[:10]}...`")
+
 MINUTES_BACK = st.sidebar.slider("⏰ Minutes back", 15, 120, 30, 5)
 now_ts = int(time.time())
 st.sidebar.caption(f"From: {datetime.fromtimestamp(now_ts - MINUTES_BACK*60, EST).strftime('%H:%M %p ET')}")
@@ -43,12 +52,7 @@ if st.sidebar.button("🧪 Test New Status API"):
     st.session_state.test_api = True
     st.rerun()
 
-# Add this after your existing sidebar content
-profile_name = get_profile_name(TRADER)
-st.sidebar.markdown(f"**👤 Tracking:** {profile_name}")
-
-
-# Load data - AUTO-STARTS WS!
+# Load data - AUTO-STARTS WS! 🚀
 df = track_0x8dxd(MINUTES_BACK)
 
 if df.empty:
