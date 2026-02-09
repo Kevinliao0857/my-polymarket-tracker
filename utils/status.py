@@ -6,12 +6,13 @@ from .data import get_market_enddate
 from .config import EST
 
 def get_status_hybrid(item: Dict[str, Any], now_ts: int) -> str:
-    """🟢 Hybrid: API first → Smart regex fallback"""
+    """🟢 Hybrid: API → Range parsing → Single time → Duration fallback"""
     # 1. API first (unchanged)
     condition_id = str(item.get('conditionId') or item.get('marketId') or '')
     slug = str(item.get('slug') or '')
     end_str = get_market_enddate(condition_id, slug)
     now_est = datetime.fromtimestamp(now_ts, EST)
+    now_decimal = now_est.hour + (now_est.minute / 60.0)
     
     if end_str:
         try:
@@ -22,54 +23,62 @@ def get_status_hybrid(item: Dict[str, Any], now_ts: int) -> str:
         except:
             pass
     
-    # 2. Smart Regex - Enhanced for 1h/30m durations
-    title_safe = str(item.get('title') or item.get('question') or '').lower()
-    now_decimal = now_est.hour + (now_est.minute / 60.0) + (now_est.second / 3600.0)
+    title = str(item.get('title') or item.get('question') or '').lower()
     
-    # Remove explicit duration patterns BEFORE time parsing
-    title_clean = re.sub(r'\b\d+[hms]?\b', '', title_safe)
-    time_pattern = r'(\d{1,2})(?::(\d{2}))?([ap]m|et)'
-    matches = re.findall(time_pattern, title_clean)
+    # 2. 👇 RANGE PARSING FIRST: "6:00PM-6:15PM" or "6PM-7PM"
+    range_match = re.search(r'(\d{1,2}:?\d{2}?[ap]m)\s*-\s*(\d{1,2}:?\d{2}?[ap]m)', title)
+    if range_match:
+        start_str, end_str = range_match.groups()
+        start_h = parse_time_to_decimal(start_str)
+        end_h = parse_time_to_decimal(end_str)
+        if start_h is not None and end_h is not None:
+            if now_decimal >= start_h and now_decimal < end_h:
+                return f"🟢 ACTIVE (til ~{format_display_time(end_h)})"
+            return "⚫ EXPIRED"
     
-    title_times = []
-    for h_str, m_str, suffix in matches:
-        try:
-            hour = int(h_str)
-            minute = int(m_str) if m_str else 0
-            suffix_lower = str(suffix).lower()
-            if 'pm' in suffix_lower: 
-                hour = (hour % 12) + 12
-            elif 'am' in suffix_lower: 
-                hour = hour % 12
-            if 0 <= hour <= 23 and 0 <= minute < 60:
-                decimal_h = hour + (minute / 60.0)
-                title_times.append(decimal_h)
-        except:
-            continue
+    # 3. Single time → implicit 1h window: "6PM ET" = 6-7PM
+    time_match = re.search(r'(\d{1,2}:?\d{2}?[ap]m)', title)
+    if time_match:
+        start_h = parse_time_to_decimal(time_match.group(1))
+        if start_h is not None:
+            end_h = start_h + 1.0  # 1 hour window
+            if now_decimal >= start_h and now_decimal < end_h:
+                return f"🟢 ACTIVE (til ~{format_display_time(end_h)})"
+            return "⚫ EXPIRED"
     
-    # 👇 NEW: Handle duration-only titles like "1h", "30m"
-    if title_times:
-        max_h = max(title_times)
-    else:
-        # Detect duration in original title_safe
-        dur_match = re.search(r'(\d+)\s*(h|hr|hrs|m|min)', title_safe)
-        if dur_match:
-            val = int(dur_match.group(1))
-            unit = dur_match.group(2).lower()
-            if unit.startswith('h'):
-                max_h = now_decimal + val  # e.g., "1h" → now + 1 hour
-            elif unit.startswith('m'):
-                max_h = now_decimal + (val / 60.0)  # e.g., "30m" → now + 30 min
-            else:
-                return "🟢 ACTIVE (no timer)"
-        else:
-            return "🟢 ACTIVE (no timer)"
-    
-    if now_decimal >= max_h: 
+    # 4. Duration fallback (1h, 30m)
+    dur_match = re.search(r'(\d+)\s*(h|hr|m|min)', title)
+    if dur_match:
+        val = int(dur_match.group(1))
+        unit = dur_match.group(2).lower()
+        expiry_h = now_decimal + (val if unit.startswith('h') else val/60.0)
+        if now_decimal < expiry_h:
+            return f"🟢 ACTIVE (til ~{format_display_time(expiry_h)})"
         return "⚫ EXPIRED"
     
-    # Format display time from expiry horizon
-    disp_h = int(max_h % 12) or 12
-    disp_m = f":{int((max_h % 1)*60):02d}" if (max_h % 1) > 0.1 else ""
-    ampm = 'PM' if max_h >= 12 else 'AM'
-    return f"🟢 ACTIVE (til ~{disp_h}{disp_m} {ampm})"
+    return "🟢 ACTIVE (no timer)"
+
+def parse_time_to_decimal(time_str: str) -> float | None:
+    """Convert '6PM' or '6:15PM' → decimal hour (18.25)"""
+    time_str = time_str.lower().replace('et', '')
+    match = re.match(r'(\d{1,2})(?::(\d{2}))?([ap]m)', time_str)
+    if not match:
+        return None
+    
+    h_str, m_str, ampm = match.groups()
+    hour = int(h_str)
+    minute = int(m_str) if m_str else 0
+    
+    if 'pm' in ampm and hour != 12:
+        hour += 12
+    elif 'am' in ampm and hour == 12:
+        hour = 0
+    
+    return hour + (minute / 60.0)
+
+def format_display_time(decimal_h: float) -> str:
+    """16.25 → '4:15 PM'"""
+    hour = int(decimal_h % 12) or 12
+    minute = int((decimal_h % 1) * 60)
+    ampm = 'PM' if decimal_h >= 12 else 'AM'
+    return f"{hour}:{minute:02d} {ampm}" if minute else f"{hour} {ampm}"
