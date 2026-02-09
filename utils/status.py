@@ -56,7 +56,12 @@ def get_status_hybrid(item: Dict[str, Any], now_ts: int) -> str:
             return f"🟢 ACTIVE (til ~{format_display_time(expiry_h)})"
         return "⚫ EXPIRED"
     
-    return "🟢 ACTIVE (no timer)"
+    # Next hour display for hourly bets
+    next_hour = int(now_decimal + 1)
+    disp_h = int(next_hour % 12) or 12
+    ampm = 'PM' if next_hour >= 12 else 'AM'
+    return f"🟢 ACTIVE (til ~{disp_h} {ampm})"
+
 
 def parse_time_to_decimal(time_str: str) -> float | None:
     """Convert '6PM' or '6:15PM' → decimal hour (18.25)"""
