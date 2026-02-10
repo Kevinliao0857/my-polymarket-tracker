@@ -111,7 +111,7 @@ def track_0x8dxd(minutes_back: int) -> pd.DataFrame:
         age_sec = now_ts - ts
         
         df_data.append({
-            'Market': short_title, 'UP/DOWN': updown, 'Size': f"{size_val:.2f}",
+            'Market': short_title, 'UP/DOWN': updown, 'Shares': f"{size_val:.2f}",
             'Price': price_val, 'Status': status_str, 'Updated': update_str, 'age_sec': age_sec
         })
     

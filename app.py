@@ -105,7 +105,7 @@ else:
             return ['background-color: rgba(0, 255, 0, 0.15)'] * 6
         return [''] * 6
     
-    visible_cols = ['Market', 'UP/DOWN', 'Size', 'Price', 'Status', 'Updated']
+    visible_cols = ['Market', 'UP/DOWN', 'Shares', 'Price', 'Status', 'Updated']
     styled_df = df[visible_cols].style.apply(highlight_recent, axis=1)
     
     st.markdown("""
@@ -120,6 +120,7 @@ else:
     st.dataframe(styled_df, height=400, hide_index=True,
                  column_config={
                      "Market": st.column_config.TextColumn(width="medium"),
+                     "Shares": st.column_config.TextColumn(width="medium"),
                      "Status": st.column_config.TextColumn(width="medium")
                  })
 
