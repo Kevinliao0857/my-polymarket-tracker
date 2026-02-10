@@ -130,6 +130,6 @@ allocation_ratio = st.sidebar.number_input("⚖️ Allocation Ratio", value=200,
 allocation_pct = 1.0 / allocation_ratio
 
 if st.sidebar.button("🚀 Run Dry Run", type="primary"):
-    active_trades = [...]  # Your existing trades list
-    now_ts = int(time.time())
-    simulate_copy_trades(active_trades, dry_run_bankroll, allocation_pct, now_ts)
+    import time
+    now_ts = int(time.time())  # Unused but keeps signature
+    simulate_copy_trades(df, dry_run_bankroll, allocation_pct, now_ts)
