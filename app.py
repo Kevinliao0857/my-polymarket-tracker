@@ -1,7 +1,8 @@
+import time
 import streamlit as st
 import pandas as pd
 from datetime import datetime
-import time
+
 
 try:
     from streamlit_autorefresh import st_autorefresh
@@ -130,4 +131,9 @@ allocation_pct = 1.0 / allocation_ratio
 
 if st.sidebar.button("🚀 Run Dry Run", type="primary"):
     active_trades = [...]  # Your existing trades list
-    simulate_copy_trades(active_trades, dry_run_bankroll, allocation_pct)
+    now_ts = int(time.time())
+    simulate_copy_trades(active_trades, dry_run_bankroll, allocation_pct, now_ts)
+
+if st.sidebar.button("🔍 Debug Trades"):
+    st.write(f"Available trades: {len(your_trades_variable_name)}")
+    st.json(your_trades_variable_name[0])  # Shows structure
