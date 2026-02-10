@@ -133,7 +133,3 @@ if st.sidebar.button("🚀 Run Dry Run", type="primary"):
     active_trades = [...]  # Your existing trades list
     now_ts = int(time.time())
     simulate_copy_trades(active_trades, dry_run_bankroll, allocation_pct, now_ts)
-
-if st.sidebar.button("🔍 Debug Trades"):
-    st.write(f"Available trades: {len(your_trades_variable_name)}")
-    st.json(your_trades_variable_name[0])  # Shows structure
