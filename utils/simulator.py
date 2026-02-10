@@ -39,26 +39,28 @@ def simulate_copy_trades(df, your_bankroll, ratio=200):
     total_trader = 0
     total_your = 0
     valid_trades = 0
-
+    
     for trade in active_trades:
         trader_size = parse_usd(trade.get('Amount'))
-        if trader_size > 0:
-            price_raw = trade.get('Price')
-            price = parse_usd(price_raw) if price_raw else 0.50
-            price = max(min(price, 0.99), 0.01)
-
-            # PRE‑COMPUTE LOOP
-            your_usdc = trader_size / ratio
-            your_shares = max(your_usdc / price, 5) if ratio > 0 else 0
-
-            if ratio > 0 and your_usdc > 0:  # 👈 Check BEFORE min_order
-                min_order = 5 * price
-                your_usdc = max(your_usdc, min_order)
-
-                total_trader += trader_size
-                total_your += your_usdc
-                valid_trades += 1
-
+        if trader_size <= 0:
+            continue
+        
+        price_raw = trade.get('Price')
+        price = parse_usd(price_raw) if price_raw else 0.50
+        price = max(min(price, 0.99), 0.01)
+    
+        ratiod_usdc = trader_size / ratio
+        min_order = 5 * price
+    
+        # 👈 SAME SKIP LOGIC AS TABLE
+        if ratio > 0 and ratiod_usdc >= min_order:
+            your_usdc = max(ratiod_usdc, min_order)
+            your_shares = max(your_usdc / price, 5)
+    
+            total_trader += trader_size
+            total_your += your_usdc
+            valid_trades += 1
+    
     # 👇 NOW EXPANDER WITH CORRECT COUNT
     with st.expander(f"🚀 Copy Trading 1:{ratio} ({valid_trades}/{len(active_trades)} valid)", expanded=True):
         st.markdown(f"### 🚀 Copy Trading 1:{ratio}")
