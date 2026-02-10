@@ -1,74 +1,54 @@
-# utils/simulator.py - INDUSTRIAL STRENGTH
+# utils/simulator.py - TRUE 1:200 POSITION MATCHING
 import streamlit as st
 import pandas as pd
-import numpy as np
 
-def simulate_copy_trades(df_or_list, bankroll, alloc_pct, now_ts=None):
-    """Works with ANY data structure - zero crashes"""
+def simulate_copy_trades(df, your_bankroll, ratio=200, now_ts=None):
+    """Matches trader's EXACT position sizes at 1:200 ratio"""
     
-    # Handle DataFrame → list of dicts
-    if isinstance(df_or_list, pd.DataFrame):
-        trades = df_or_list.to_dict('records')
-    else:
-        trades = df_or_list
+    # Convert df → trades
+    trades = df.to_dict('records') if isinstance(df, pd.DataFrame) else df
+    active_trades = [t for t in trades if any(word in str(t.get('Market','')).lower() 
+                                              for word in ['pm','am','et','h','m'])]
     
-    # Super safe active filter
-    active_trades = []
-    for trade in trades:
-        try:
-            # Get title safely
-            title = (trade.get('Market') or 
-                    trade.get('question') or 
-                    trade.get('title') or 'N/A')
-            title = str(title).lower()
-            
-            # Active if mentions time
-            if any(word in title for word in ['pm', 'am', 'et', 'h', 'm']):
-                active_trades.append(trade)
-        except:
-            continue
-    
-    st.markdown("### 🚀 Dry Run: Copy Trading Sim")
+    st.markdown("### 🚀 1:200 Copy Trading")
     
     if not active_trades:
-        st.info("✅ No active trades detected")
+        st.info("No active trades")
         return
     
-    # Safe calculations
-    total_alloc = 0.0
-    col1, col2, col3 = st.columns(3)
-    with col1: st.metric("💵 Bankroll", f"${bankroll:,.0f}")
-    with col2: st.metric("🎯 Trades", f"{len(active_trades)}")
-    with col3: st.metric("💰 Per Trade", f"${bankroll*alloc_pct:.0f}")
+    total_trader_size = 0
+    total_your_size = 0
     
-    st.markdown("| Trade | Side | Price | Shares | **USDC** |")
-    st.markdown("|-------|------|-------|--------|----------|")
+    col1, col2, col3, col4 = st.columns(4)
+    with col1: st.metric("👤 Trader Size", f"${total_trader_size:.0f}")
+    with col2: st.metric("🧑‍💻 Your Size (1:{})".format(ratio), f"${total_your_size:.0f}")
+    with col3: st.metric("💰 Your Bankroll", f"${your_bankroll:.0f}")
+    with col4: st.metric("📊 Active", len(active_trades))
+    
+    st.markdown("| Market | Trader Size | Price | Your Shares | **Your USDC** |")
+    st.markdown("|--------|-------------|-------|-------------|---------------|")
     
     for trade in active_trades:
-        try:
-            # ULTRA SAFE price extraction
-            price_raw = (trade.get('Price') or 
-                        trade.get('yesPrice') or 
-                        trade.get('price') or 0.50)
-            
-            # Convert ANYTHING to float safely
-            price = float(price_raw) if str(price_raw).replace('.','').replace('-','').isdigit() else 0.50
-            price = max(min(price, 0.99), 0.01)  # Clamp 1-99¢
-            
-            # Safe math
-            usdc_amount = float(bankroll) * float(alloc_pct) / price
-            shares = usdc_amount / price
-            total_alloc += usdc_amount
-            
-            # Safe title/side
-            title = str(trade.get('Market') or 'Trade')[:40]
-            side = "🟢 UP" if 'up' in title.lower() else "🔴 DOWN"
-            
-            st.markdown(f"| `{title}` | {side} | **${price:.3f}** | {shares:.0f} | **${usdc_amount:.0f}** |")
-            
-        except Exception:
-            st.markdown(f"| **SKIPPED** | - | - | - | - |")
-            continue
+        trader_size_raw = trade.get('Size') or 0
+        price_raw = trade.get('Price') or 0.50
+        
+        # Safe parsing
+        trader_size = float(trader_size_raw) if str(trader_size_raw).replace('.','').replace(',','').replace('$','').isdigit() else 0
+        price = float(price_raw) if str(price_raw).replace('.','').isdigit() else 0.50
+        price = max(min(price, 0.99), 0.01)
+        
+        # 👇 TRUE 1:200: Your size = trader_size / 200
+        your_size_usdc = trader_size / ratio
+        your_shares = your_size_usdc / price
+        
+        total_trader_size += trader_size
+        total_your_size += your_size_usdc
+        
+        title = str(trade.get('Market') or 'N/A')[:40]
+        side = "🟢 UP" if 'up' in title.lower() else "🔴 DOWN"
+        
+        st.markdown(f"| `{title}` | **${trader_size:.0f}** | **${price:.3f}** | {your_shares:.0f} | **${your_size_usdc:.0f}** |")
     
+    remaining = your_bankroll - total_your_size
     st.balloons()
-    st.success(f"**Deployed: ${total_alloc:.0f} USDC** | **Remaining: ${bankroll-total_alloc:.0f}**")
+    st.success(f"**Trader: ${total_trader_size:.0f}** → **You: ${total_your_size:.0f} (1:{ratio})** | Remaining: **${remaining:.0f}**")
