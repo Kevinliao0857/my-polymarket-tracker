@@ -100,15 +100,16 @@ def simulate_copy_trades(df, your_bankroll, ratio=200):
 
 def simulate_historical_pnl(closed_pnl, ratio=200):
     if closed_pnl['crypto_count'] == 0:
-        st.info("📭 No closed trades yet")
+        st.info("📭 No closed trades")
         return
     
-    your_historical = closed_pnl['total'] / ratio
+    your_pnl = closed_pnl['total'] / ratio
     col1, col2 = st.columns(2)
-    with col1:
-        st.metric("Their Historical", f"${closed_pnl['total']:.0f}")
-    with col2:
-        pnl_color = "🟢" if your_historical >= 0 else "🔴"
-        st.metric("🧑 Your 1:{ratio}", f"{pnl_color}${abs(your_historical):,.0f}")
+    with col1: st.metric("Their Closed", f"${closed_pnl['total']:.0f}")
+    with col2: 
+        color = "🟢" if your_pnl >= 0 else "🔴"
+        st.metric("🧑 Your 1:{ratio}", f"{color}${abs(your_pnl):,.0f}")
     
-    st.balloons() if your_historical > 0 else st.error("❌ Would lose money")
+    st.success(f"**Backtest: ${your_pnl:.0f}** (copied their {closed_pnl['crypto_count']} trades)")
+
+
