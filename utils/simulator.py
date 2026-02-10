@@ -59,7 +59,7 @@ def simulate_copy_trades(df, your_bankroll, ratio=200):
         st.markdown(f"### 🚀 Copy Trading 1:{ratio}")
         
         col1, col2, col3, col4 = st.columns(4)
-        with col1: st.metric("👤 Trader Total", f"${total_trader:.0f}")
+        with col1: st.metric("👤 Trader Total", f"${total_trader:.2f}")
         with col2: st.metric("🧑 Your Total", f"${total_your:.2f}")
         with col3: st.metric("✅ Valid Bets", valid_trades)
         with col4: st.metric("💰 Bankroll", f"${your_bankroll:.0f}")
@@ -89,7 +89,7 @@ def simulate_copy_trades(df, your_bankroll, ratio=200):
                 min_order = 5 * price
                 your_usdc = max(your_usdc, min_order)
                 
-                table_rows.append(f"| `{title}` | **${trader_size:.0f}** | **${price:.3f}** | {your_shares:.0f} | **${your_usdc:.2f}** |")
+                table_rows.append(f"| `{title}` | **${trader_size:.2f}** | **${price:.3f}** | {your_shares:.0f} | **${your_usdc:.2f}** |")
             else:
                 table_rows.append(f"| `{trade.get('Market', 'N/A')[:40]}` | **$0** | **{price_raw}** | **INVALID** | **SKIPPED** |")
         
