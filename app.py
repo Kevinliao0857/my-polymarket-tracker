@@ -123,13 +123,25 @@ else:
                      "Status": st.column_config.TextColumn(width="medium")
                  })
 
-# DRY RUN SIMULATOR
+# DRY RUN SIMULATOR - FIXED
+if "show_dry_run" not in st.session_state:
+    st.session_state.show_dry_run = False
+
 st.sidebar.markdown("### 🤖 Dry Run Simulator")
 dry_run_bankroll = st.sidebar.number_input("💰 Bankroll", value=1000.0, step=100.0)
 allocation_ratio = st.sidebar.number_input("⚖️ Allocation Ratio", value=200, step=10)
 allocation_pct = 1.0 / allocation_ratio
 
 if st.sidebar.button("🚀 Run Dry Run", type="primary"):
-    import time
-    now_ts = int(time.time())  # Unused but keeps signature
+    st.session_state.show_dry_run = True
+
+# 👇 SHOW RESULTS PERSISTENTLY (MAIN AREA)
+if st.session_state.show_dry_run:
+    st.markdown("---")
+    now_ts = int(time.time())
     simulate_copy_trades(df, dry_run_bankroll, allocation_pct, now_ts)
+    
+    # Hide button
+    if st.sidebar.button("❌ Hide Dry Run"):
+        st.session_state.show_dry_run = False
+        st.rerun()
