@@ -39,7 +39,7 @@ def simulate_copy_trades(df, your_bankroll, ratio=200):
     valid_trades = 0
     
     for trade in active_trades:
-        trader_size = parse_usd(trade.get('Size'))
+        trader_size = parse_usd(trade.get('Amount'))
         if trader_size > 0:
             price_raw = trade.get('Price')
             price = parse_usd(price_raw) if price_raw else 0.50
@@ -71,12 +71,12 @@ def simulate_copy_trades(df, your_bankroll, ratio=200):
             st.warning(f"⚠️ **Slightly over bankroll by ${total_your - your_bankroll:.0f}.**")
 
         # 👇 REBUILD TABLE (detailed version)
-        table_rows = ["| Market | Trader Size | Price | Your Shares | **Your USDC** |"]
-        table_rows.append("|--------|-------------|-------|-------------|---------------|")
+        table_rows = ["| Market | **Trader Amount** | Price | Your Shares | **Your USDC** |"]
+        table_rows.append("|--------|------------------|-------|-------------|---------------|")
         
         last_price = 0.50  # For warning
         for trade in active_trades:
-            trader_size = parse_usd(trade.get('Size'))
+            trader_size = parse_usd(trade.get('Amount'))
             price_raw = trade.get('Price')
             price = parse_usd(price_raw) if price_raw else 0.50
             last_price = price
