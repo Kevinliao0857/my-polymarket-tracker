@@ -71,9 +71,9 @@ def simulate_copy_trades(df, your_bankroll, ratio=200):
             st.warning(f"⚠️ **Slightly over bankroll by ${total_your - your_bankroll:.0f}.**")
 
         # 👇 REBUILD TABLE (detailed version)
-        table_rows = ["| Market | **Trader Amount** | Price | Your Shares | **Your USDC** |"]
-        table_rows.append("|--------|------------------|-------|-------------|---------------|")
-        
+        table_rows = ["| Market | Trader Amount | Price | Ratio'd | Your Shares | **Your USDC** |"]
+        table_rows.append("|--------|---------------|-------|---------|-------------|---------------|")
+
         last_price = 0.50  # For warning
         for trade in active_trades:
             trader_size = parse_usd(trade.get('Amount'))
@@ -83,15 +83,17 @@ def simulate_copy_trades(df, your_bankroll, ratio=200):
             price = max(min(price, 0.99), 0.01)
             
             if trader_size > 0:
-                title = str(trade.get('Market') or 'N/A')[:40]
-                your_usdc = trader_size / ratio
+                title = str(trade.get('Market') or 'N/A')[:35]  # Shorten for new col
+                
+                ratiod_usdc = trader_size / ratio  # 👈 NEW!
+                your_usdc = ratiod_usdc
                 your_shares = max(your_usdc / price, 5)
                 min_order = 5 * price
                 your_usdc = max(your_usdc, min_order)
                 
-                table_rows.append(f"| `{title}` | **${trader_size:.2f}** | **${price:.3f}** | {your_shares:.0f} | **${your_usdc:.2f}** |")
+                table_rows.append(f"| `{title}` | **${trader_size:.2f}** | **${price:.3f}** | **${ratiod_usdc:.2f}** | {your_shares:.0f} | **${your_usdc:.2f}** |")
             else:
-                table_rows.append(f"| `{trade.get('Market', 'N/A')[:40]}` | **$0** | **{price_raw}** | **INVALID** | **SKIPPED** |")
+                table_rows.append(f"| `{trade.get('Market', 'N/A')[:35]}` | **$0** | **{price_raw}** | **$0** | **INVALID** | **SKIPPED** |")
         
         st.markdown("\n".join(table_rows))
         
