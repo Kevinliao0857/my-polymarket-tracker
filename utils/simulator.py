@@ -101,8 +101,9 @@ def simulate_copy_trades(df, your_bankroll, ratio=200):
                 # SKIP tiny ratio'd amounts (i.e., $0.00 after rounding)
                 if ratio <= 0 or ratiod_usdc < min_order:
                     table_rows.append(
-                        f"| `{title}` | **${trader_size:.2f}** | **${price:.3f}** | **${ratiod_usdc:.4f}** | **<min** | **SKIPPED** |"
+                        f"| `{title}` | **${trader_size:.2f}** | **${price:.3f}** | **${ratiod_usdc:.2f}** | **0** | **SKIPPED** |"
                     )
+
                 else:
                     your_usdc = max(ratiod_usdc, min_order)
                     your_shares = max(your_usdc / price, min_shares)
