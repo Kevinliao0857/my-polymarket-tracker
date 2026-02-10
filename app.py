@@ -119,11 +119,11 @@ else:
 
     st.dataframe(styled_df, height=400, hide_index=True,
                  column_config={
-                     "Market": st.column_config.TextColumn(width="medium"),
-                     "Shares": st.column_config.TextColumn(width="medium"),
-                     "Price": st.column_config.TextColumn(width="small"), 
-                     "Amount": st.column_config.TextColumn(width="small"),
-                     "Status": st.column_config.TextColumn(width="medium")
+                    "Market": st.column_config.TextColumn(width="medium"),
+                    "Shares": st.column_config.NumberColumn(format="%.1f", width="small"),
+                    "Price": st.column_config.TextColumn(width="small"), 
+                    "Amount": st.column_config.NumberColumn(format="$%.2f", width="small"), 
+                    "Status": st.column_config.TextColumn(width="medium")
                  })
 
 # DRY RUN SIMULATOR - TRUE 1:200
