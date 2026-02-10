@@ -11,6 +11,8 @@ from .filters import is_crypto, get_up_down
 from .data import safe_fetch
 from .status import get_status_hybrid
 from .websocket import rtds_listener, live_trades
+from .simulator import parse_usd  # 👈 Reuse your function!
+
 
 # WS startup (unchanged)
 if 'ws_started' not in st.session_state:
@@ -100,6 +102,9 @@ def track_0x8dxd(minutes_back: int) -> pd.DataFrame:
         else:
             price_val = str(price_raw)
         
+        price_num = parse_usd(price_raw) or 0.50
+        amount = size_val * price_num
+
         ts_field = item.get('timestamp') or item.get('updatedAt') or item.get('createdAt') or now_ts
         try:
             ts = int(float(ts_field))
@@ -112,7 +117,7 @@ def track_0x8dxd(minutes_back: int) -> pd.DataFrame:
         
         df_data.append({
             'Market': short_title, 'UP/DOWN': updown, 'Shares': f"{size_val:.2f}",
-            'Price': price_val, 'Status': status_str, 'Updated': update_str, 'age_sec': age_sec
+            'Price': price_val, 'Amount': f"${amount:.0f}", 'Status': status_str, 'Updated': update_str, 'age_sec': age_sec
         })
     
     df = pd.DataFrame(df_data)
