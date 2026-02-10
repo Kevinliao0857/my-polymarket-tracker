@@ -102,8 +102,8 @@ else:
     recent_mask = df['age_sec'] <= 30
     def highlight_recent(row):
         if recent_mask.iloc[row.name]:
-            return ['background-color: rgba(0, 255, 0, 0.15)'] * 6
-        return [''] * 6
+            return ['background-color: rgba(0, 255, 0, 0.15)'] * 7  # 👈 6→7
+        return [''] * 7
     
     visible_cols = ['Market', 'UP/DOWN', 'Shares', 'Price', 'Amount', 'Status', 'Updated']
     styled_df = df[visible_cols].style.apply(highlight_recent, axis=1)
