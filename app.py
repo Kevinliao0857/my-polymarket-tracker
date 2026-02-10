@@ -15,6 +15,8 @@ st.set_page_config(layout="wide")
 from utils import track_0x8dxd
 from utils.config import EST, TRADER
 from utils.api import get_profile_name, get_trader_pnl # , get_closed_trades_pnl
+from utils.simulator import simulate_copy_trades #dry run simulation
+
 
 # WS auto-starts INSIDE track_0x8dxd() - NO manual thread needed!
 
@@ -119,3 +121,13 @@ else:
                      "Market": st.column_config.TextColumn(width="medium"),
                      "Status": st.column_config.TextColumn(width="medium")
                  })
+
+# DRY RUN SIMULATOR
+st.sidebar.markdown("### 🤖 Dry Run Simulator")
+dry_run_bankroll = st.sidebar.number_input("💰 Bankroll", value=1000.0, step=100.0)
+allocation_ratio = st.sidebar.number_input("⚖️ Allocation Ratio", value=200, step=10)
+allocation_pct = 1.0 / allocation_ratio
+
+if st.sidebar.button("🚀 Run Dry Run", type="primary"):
+    active_trades = [...]  # Your existing trades list
+    simulate_copy_trades(active_trades, dry_run_bankroll, allocation_pct)
