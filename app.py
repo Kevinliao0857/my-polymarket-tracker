@@ -128,8 +128,8 @@ if "show_dry_run" not in st.session_state:
     st.session_state.show_dry_run = False
 
 st.sidebar.markdown("### 🤖 Copy Trader 1:200")
-copy_ratio = st.sidebar.number_input("⚖️ Copy Ratio", value=200, step=50, min_value=10)
 your_bankroll = st.sidebar.number_input("💰 Your Bankroll", value=1000.0, step=100.0)
+copy_ratio = st.sidebar.number_input("⚖️ Copy Ratio", value=200, step=50, min_value=10)
 
 if st.sidebar.button("🚀 Simulate Copy", type="primary"):
     st.session_state.show_dry_run = True
