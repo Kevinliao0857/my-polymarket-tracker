@@ -64,6 +64,12 @@ def simulate_copy_trades(df, your_bankroll, ratio=200):
         with col3: st.metric("✅ Valid Bets", valid_trades)
         with col4: st.metric("💰 Bankroll", f"${your_bankroll:.0f}")
         
+    # Bank roll check
+        if total_your > your_bankroll * 1.1:  # 10% buffer
+            st.error(f"⚠️ **Exceeds bankroll by ${total_your - your_bankroll:.0f}!** Reduce ratio or bankroll.")
+        elif total_your > your_bankroll:
+            st.warning(f"⚠️ **Slightly over bankroll by ${total_your - your_bankroll:.0f}.**")
+
         # 👇 REBUILD TABLE (detailed version)
         table_rows = ["| Market | Trader Size | Price | Your Shares | **Your USDC** |"]
         table_rows.append("|--------|-------------|-------|-------------|---------------|")
