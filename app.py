@@ -16,7 +16,7 @@ st.set_page_config(layout="wide")
 from utils import track_0x8dxd
 from utils.config import EST, TRADER
 from utils.api import get_profile_name, get_trader_pnl # , get_closed_trades_pnl
-from utils.simulator import simulate_copy_trades #dry run simulation
+from utils.simulator import simulate_copy_trades, simulate_historical_pnl #dry run simulation
 
 
 # WS auto-starts INSIDE track_0x8dxd() - NO manual thread needed!
@@ -36,7 +36,7 @@ st.caption(f"🕐 Current EST: {now_est.strftime('%Y-%m-%d')} {time_24} ({time_1
 
 # 👇 ADD P&L TRACKER
 pnl_data = get_trader_pnl(TRADER)
-# closed_pnl = get_closed_trades_pnl(TRADER)
+closed_pnl = get_closed_trades_pnl(TRADER)
 
 col1, col2, col3 = st.columns(3)
 with col1:
@@ -52,13 +52,13 @@ with col3:
     st.metric("Total Size", f"${pnl_data['total_size']:.0f}")
 
 # CLOSED P&L TRACKER
-# closed_pnl = get_closed_trades_pnl(TRADER)
-# col4, col5 = st.columns(2)
-# with col4:
-#     pnl_color = "🟢" if closed_pnl['total'] >= 0 else "🔴"
-#     st.metric("Closed P&L", f"{pnl_color}${abs(closed_pnl['total']):,.0f}")
-# with col5:
-#     st.metric("Settled Trades", closed_pnl['crypto_count'])
+closed_pnl = get_closed_trades_pnl(TRADER)
+col4, col5 = st.columns(2)
+with col4:
+    pnl_color = "🟢" if closed_pnl['total'] >= 0 else "🔴"
+    st.metric("Closed P&L", f"{pnl_color}${abs(closed_pnl['total']):,.0f}")
+with col5:
+    st.metric("Settled Trades", closed_pnl['crypto_count'])
 
 # SIDEBAR ⚙️
 st.sidebar.title("⚙️ Settings")
@@ -153,4 +153,8 @@ if st.session_state.show_dry_run and not df.empty:
     if st.button("❌ Hide Dry Run"):  # Main area button
         st.session_state.show_dry_run = False
         st.rerun()
+
+if st.session_state.show_dry_run and closed_pnl['crypto_count'] > 0:
+    with st.expander("📈 Historical Backtest (1:200)"):
+        simulate_historical_pnl(closed_pnl, copy_ratio)
 
