@@ -132,7 +132,7 @@ if "show_dry_run" not in st.session_state:
 
 st.sidebar.markdown("### 🤖 Copy Trader 1:200")
 your_bankroll = st.sidebar.number_input("💰 Your Bankroll", value=1000.0, step=100.0)
-copy_ratio = st.sidebar.number_input("⚖️ Copy Ratio", value=200, step=50, min_value=10)
+copy_ratio = st.sidebar.number_input("⚖️ Copy Ratio", value=200, step=50, min_value=0)  # 👈 min_value=0
 
 # 👇 Watcher IMMEDIATELY after (looks "inside" the section)
 if 'last_bankroll' not in st.session_state:

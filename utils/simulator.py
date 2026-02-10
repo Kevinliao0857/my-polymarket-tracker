@@ -46,13 +46,18 @@ def simulate_copy_trades(df, your_bankroll, ratio=200):
             price = max(min(price, 0.99), 0.01)
             
             your_usdc = trader_size / ratio
-            your_shares = max(your_usdc / price, 5)
-            min_order = 5 * price
-            your_usdc = max(your_usdc, min_order)
+            your_shares = max(your_usdc / price, 5) if ratio > 0 else 0
             
-            total_trader += trader_size
-            total_your += your_usdc
-            valid_trades += 1
+            if ratio > 0:  # 👈 Only enforce min_order
+                min_order = 5 * price
+                your_usdc = max(your_usdc, min_order)
+            
+            # 👈 ADD totals ONLY if valid trade
+            if trader_size > 0 and ratio > 0 and your_usdc > 0:
+                total_trader += trader_size
+                total_your += your_usdc
+                valid_trades += 1
+
     
     # 👇 NOW EXPANDER WITH CORRECT COUNT
     with st.expander(f"🚀 Copy Trading 1:{ratio} ({valid_trades}/{len(active_trades)} valid)", expanded=True):
@@ -81,16 +86,16 @@ def simulate_copy_trades(df, your_bankroll, ratio=200):
             price = parse_usd(price_raw) if price_raw else 0.50
             last_price = price
             price = max(min(price, 0.99), 0.01)
-            
+
             if trader_size > 0:
                 title = str(trade.get('Market') or 'N/A')[:35]  # Shorten for new col
-                
+
                 ratiod_usdc = trader_size / ratio  # 👈 NEW!
                 your_usdc = ratiod_usdc
                 your_shares = max(your_usdc / price, 5)
                 min_order = 5 * price
                 your_usdc = max(your_usdc, min_order)
-                
+
                 table_rows.append(f"| `{title}` | **${trader_size:.2f}** | **${price:.3f}** | **${ratiod_usdc:.2f}** | {your_shares:.0f} | **${your_usdc:.2f}** |")
             else:
                 table_rows.append(f"| `{trade.get('Market', 'N/A')[:35]}` | **$0** | **{price_raw}** | **$0** | **INVALID** | **SKIPPED** |")
