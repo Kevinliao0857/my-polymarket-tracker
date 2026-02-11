@@ -16,10 +16,7 @@ st.set_page_config(layout="wide")
 from utils import track_0x8dxd
 from utils.config import EST, TRADER
 from utils.api import get_profile_name, get_trader_pnl, get_closed_trades_pnl
-from utils.simulator import simulate_copy_trades, simulate_historical_pnl, simulate_hedge, simulate_combined  # 👈 Add simulate_combined
-
-
-
+from utils.simulator import simulate_combined, simulate_historical_pnl, simulate_hedge
 
 # WS auto-starts INSIDE track_0x8dxd() - NO manual thread needed!
 
