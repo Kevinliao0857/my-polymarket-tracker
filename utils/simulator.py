@@ -22,7 +22,7 @@ def parse_usd(value):
     return 0.0
 
 def simulate_combined(df, your_bankroll, wallet_address, ratio=200, hedge_minutes=15, hedge_ratio=200):
-    """🚀 BLIND COPY + 🔄 HEDGE - FIXED table parsing + top 5 scrollable"""
+    """🚀 BLIND COPY + 🔄 HEDGE - TRUE SCROLLING + SHOWS FULL DATA"""
     
     total_your = 0.0
     net_up = 0.0
@@ -36,7 +36,7 @@ def simulate_combined(df, your_bankroll, wallet_address, ratio=200, hedge_minute
     
     if active_trades:
         valid = 0
-        blind_data = []  # ✅ Build DataFrame data directly - no markdown parsing!
+        blind_data = []
         
         for trade in active_trades:
             trader_size = parse_usd(trade.get('Amount'))
@@ -77,18 +77,22 @@ def simulate_combined(df, your_bankroll, wallet_address, ratio=200, hedge_minute
         with col2: st.metric("Your Copy", f"${total_your:.2f}")
         with col3: st.metric("Valid", valid)
         
-        # ✅ FIXED: Direct DataFrame + top 5 + scrollable
+        # ✅ FIXED SCROLL: height=300 shows ~4 rows → forces scrollbar if >4
         blind_df = pd.DataFrame(blind_data)
-        st.dataframe(blind_df.head(5), height=250, hide_index=True, use_container_width=True)
+        st.dataframe(
+            blind_df,  # FULL data - no .head()
+            height=300,  # Fixed height → always scrollable if data exists
+            hide_index=True, 
+            use_container_width=True
+        )
         
-        if len(blind_df) > 5:
-            st.caption(f"📜 Showing top 5 of {len(blind_df)} trades (scroll ↕️)")
+        st.caption(f"📜 {len(blind_df)} total trades - scroll ↕️ to view")
     else:
         st.info("📭 No qualifying trades")
     
     st.markdown("---")
     
-    # Hedge analyzer - unchanged (already safe)
+    # Hedge analyzer - SAME SCROLL FIX
     st.markdown("### 🔄 Net Hedge Exposure")
     url = f"https://data-api.polymarket.com/positions?user={wallet_address}&limit=500"
     try:
@@ -132,10 +136,16 @@ def simulate_combined(df, your_bankroll, wallet_address, ratio=200, hedge_minute
                     })
             
             if hedge_data:
-                st.dataframe(pd.DataFrame(hedge_data).head(5), height=250, hide_index=True, use_container_width=True)
+                # ✅ FULL data + fixed scroll height
+                hedge_df = pd.DataFrame(hedge_data)
+                st.dataframe(
+                    hedge_df,  # FULL data
+                    height=300,  # Fixed → scroll if needed
+                    hide_index=True,
+                    use_container_width=True
+                )
                 
-                if len(hedge_data) > 5:
-                    st.caption(f"📜 Showing top 5 of {len(hedge_data)} hedges (scroll ↕️)")
+                st.caption(f"📜 {len(hedge_df)} total hedges - scroll ↕️ to view")
                 
                 col1, col2 = st.columns(2)
                 with col1: st.metric("📈 Net UP", f"${net_up:.2f}")
@@ -151,6 +161,7 @@ def simulate_combined(df, your_bankroll, wallet_address, ratio=200, hedge_minute
     combined = total_your + net_up + net_down
     if combined > your_bankroll:
         st.warning(f"⚠️ Combined: ${combined:.2f} > bankroll ${your_bankroll:.0f}")
+
 
 def simulate_historical_pnl(closed_pnl, ratio=200):
     """Backtest P&L"""
