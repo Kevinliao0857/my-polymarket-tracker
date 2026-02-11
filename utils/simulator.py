@@ -21,26 +21,22 @@ def parse_usd(value):
         return num
     return 0.0
 
-
 def simulate_combined(df, your_bankroll, wallet_address, ratio=200, hedge_minutes=15, hedge_ratio=200):
-    """🚀 BLIND COPY + 🔄 HEDGE in one unified view - TOP 5 + SCROLLABLE"""
+    """🚀 BLIND COPY + 🔄 HEDGE - FIXED table parsing + top 5 scrollable"""
     
-    # ✅ Initialize vars
     total_your = 0.0
     net_up = 0.0
     net_down = 0.0
     
     st.markdown("### 🚀 Blind Copy (Time-based Bets)")
     
-    # Blind copy section
     active_trades = [t for t in df.to_dict('records') 
                      if any(w in str(t.get('Market', '')).lower() 
                             for w in ['6pm','7pm','8pm','9pm','10pm','pm','am','et','h '])]
     
     if active_trades:
         valid = 0
-        table_rows = ["| Market | Trader $ | Price | Ratio'd | Shares | Your $ |"]
-        table_rows.append("|--------|----------|-------|---------|--------|---------|")
+        blind_data = []  # ✅ Build DataFrame data directly - no markdown parsing!
         
         for trade in active_trades:
             trader_size = parse_usd(trade.get('Amount'))
@@ -51,40 +47,48 @@ def simulate_combined(df, your_bankroll, wallet_address, ratio=200, hedge_minute
             min_order = 5 * price
             
             title = str(trade.get('Market', 'N/A'))[:35]
+            
             if ratiod >= min_order:
                 your_usd = max(ratiod, min_order)
                 shares = int(your_usd / price)
                 total_your += your_usd
                 valid += 1
-                table_rows.append(f"| `{title}` | **${trader_size:.2f}** | **${price:.3f}** | **${ratiod:.2f}** | {shares} | **${your_usd:.2f}** |")
+                blind_data.append({
+                    'Market': title,
+                    'Trader $': f"${trader_size:.2f}",
+                    'Price': f"${price:.3f}",
+                    "Ratio'd": f"${ratiod:.2f}",
+                    'Shares': shares,
+                    'Your $': f"${your_usd:.2f}"
+                })
             else:
-                table_rows.append(f"| `{title}` | **${trader_size:.2f}** | **${price:.3f}** | **${ratiod:.2f}** | **0** | **SKIPPED** |")
+                blind_data.append({
+                    'Market': title,
+                    'Trader $': f"${trader_size:.2f}",
+                    'Price': f"${price:.3f}",
+                    "Ratio'd": f"${ratiod:.2f}",
+                    'Shares': 0,
+                    'Your $': 'SKIPPED'
+                })
         
         col1, col2, col3 = st.columns(3)
-        with col1: st.metric("Trader Total", f"${sum(parse_usd(t.get('Amount', 0)) for t in active_trades):.0f}")
+        trader_total = sum(parse_usd(t.get('Amount', 0)) for t in active_trades)
+        with col1: st.metric("Trader Total", f"${trader_total:.0f}")
         with col2: st.metric("Your Copy", f"${total_your:.2f}")
         with col3: st.metric("Valid", valid)
         
-        # ✅ FIXED: Markdown table → DataFrame + height=250 for scroll
-        blind_df = pd.DataFrame([{
-            'Market': row.split(' | ')[1].replace('`', ''),
-            'Trader $': row.split(' | ')[2],
-            'Price': row.split(' | ')[3],
-            'Ratio\'d': row.split(' | ')[4],
-            'Shares': row.split(' | ')[5],
-            'Your $': row.split(' | ')[6]
-        } for row in table_rows[2:]])  # Skip header
-        
-        st.dataframe(blind_df.head(5), height=250, hide_index=True)  # Top 5 + scroll
+        # ✅ FIXED: Direct DataFrame + top 5 + scrollable
+        blind_df = pd.DataFrame(blind_data)
+        st.dataframe(blind_df.head(5), height=250, hide_index=True, use_container_width=True)
         
         if len(blind_df) > 5:
-            st.caption(f"📜 Showing top 5 of {len(blind_df)} trades (scroll to see all)")
+            st.caption(f"📜 Showing top 5 of {len(blind_df)} trades (scroll ↕️)")
     else:
         st.info("📭 No qualifying trades")
     
     st.markdown("---")
     
-    # Hedge analyzer - TOP 5 + SCROLLABLE
+    # Hedge analyzer - unchanged (already safe)
     st.markdown("### 🔄 Net Hedge Exposure")
     url = f"https://data-api.polymarket.com/positions?user={wallet_address}&limit=500"
     try:
@@ -128,11 +132,10 @@ def simulate_combined(df, your_bankroll, wallet_address, ratio=200, hedge_minute
                     })
             
             if hedge_data:
-                # ✅ FIXED: Top 5 + scrollable height
-                st.dataframe(pd.DataFrame(hedge_data).head(5), height=250, hide_index=True)
+                st.dataframe(pd.DataFrame(hedge_data).head(5), height=250, hide_index=True, use_container_width=True)
                 
                 if len(hedge_data) > 5:
-                    st.caption(f"📜 Showing top 5 of {len(hedge_data)} hedges (scroll to see all)")
+                    st.caption(f"📜 Showing top 5 of {len(hedge_data)} hedges (scroll ↕️)")
                 
                 col1, col2 = st.columns(2)
                 with col1: st.metric("📈 Net UP", f"${net_up:.2f}")
@@ -148,7 +151,6 @@ def simulate_combined(df, your_bankroll, wallet_address, ratio=200, hedge_minute
     combined = total_your + net_up + net_down
     if combined > your_bankroll:
         st.warning(f"⚠️ Combined: ${combined:.2f} > bankroll ${your_bankroll:.0f}")
-
 
 def simulate_historical_pnl(closed_pnl, ratio=200):
     """Backtest P&L"""
