@@ -22,10 +22,11 @@ def parse_usd(value):
     return 0.0
 
 def simulate_combined(df, your_bankroll, wallet_address, ratio=200, hedge_minutes=15):
-    """🚀 BLIND COPY + 🔄 HEDGE ANALYZER in one view"""
+    """🚀 BLIND COPY + 🔄 HEDGE in one unified view"""
     
-    # ===== BLIND COPY (your original, fixed) =====
-    st.markdown("### 🚀 Blind Copy Trades")
+    st.markdown("### 🚀 Blind Copy (Time-based Bets)")
+    
+    # Blind copy section
     active_trades = [t for t in df.to_dict('records') 
                     if any(w in str(t.get('Market', '')).lower() 
                           for w in ['6pm','7pm','8pm','9pm','10pm','pm','am','et','h '])]
@@ -46,34 +47,35 @@ def simulate_combined(df, your_bankroll, wallet_address, ratio=200, hedge_minute
             title = str(trade.get('Market', 'N/A'))[:35]
             if ratiod >= min_order:
                 your_usd = max(ratiod, min_order)
-                shares = max(your_usd / price, 5)
+                shares = int(your_usd / price)
                 total_trader += trader_size
                 total_your += your_usd
                 valid += 1
-                table_rows.append(f"| `{title}` | **${trader_size:.2f}** | **${price:.3f}** | **${ratiod:.2f}** | {shares:.0f} | **${your_usd:.2f}** |")
+                table_rows.append(f"| `{title}` | **${trader_size:.2f}** | **${price:.3f}** | **${ratiod:.2f}** | {shares} | **${your_usd:.2f}** |")
             else:
                 table_rows.append(f"| `{title}` | **${trader_size:.2f}** | **${price:.3f}** | **${ratiod:.2f}** | **0** | **SKIPPED** |")
         
         col1, col2, col3 = st.columns(3)
         with col1: st.metric("Trader", f"${total_trader:.2f}")
-        with col2: st.metric("Your Total", f"${total_your:.2f}")
+        with col2: st.metric("Your Copy", f"${total_your:.2f}")
         with col3: st.metric("Valid", valid)
         st.markdown("\n".join(table_rows))
     else:
-        st.info("📭 No time-based trades")
+        st.info("📭 No qualifying trades")
     
     st.markdown("---")
     
-    # ===== HEDGE ANALYZER =====
-    st.markdown("### 🔄 Net Hedge Positions")
+    # Hedge analyzer
+    st.markdown("### 🔄 Net Hedge Exposure")
     url = f"https://data-api.polymarket.com/positions?user={wallet_address}&limit=500"
     try:
         positions = requests.get(url, timeout=10).json()
         cutoff = datetime.now() - timedelta(minutes=hedge_minutes)
-        btc_pos = [p for p in positions if (p.get('endDate') and 
-                                          datetime.fromisoformat(p['endDate'].replace('Z','+00:00')) > cutoff and
-                                          'btc' in str(p.get('title','')).lower() and 
-                                          ('up' in str(p.get('title','')).lower() or 'down' in str(p.get('title','')).lower()))]
+        btc_pos = [p for p in positions 
+                  if (p.get('endDate') and 
+                      datetime.fromisoformat(p['endDate'].replace('Z','+00:00')) > cutoff and
+                      'btc' in str(p.get('title','')).lower() and 
+                      any(x in str(p.get('title','')).lower() for x in ['up','down']))]
         
         if btc_pos:
             up = defaultdict(float)
@@ -82,20 +84,19 @@ def simulate_combined(df, your_bankroll, wallet_address, ratio=200, hedge_minute
                 cid = p.get('conditionId')
                 if cid:
                     size = abs(p.get('size', 0))
-                    outcome = p.get('outcome', '').lower()
-                    if 'up' in outcome or 'yes' in outcome:
+                    outcome = str(p.get('outcome','')).lower()
+                    if any(x in outcome for x in ['up','yes']):
                         up[cid] += size
-                    elif 'down' in outcome or 'no' in outcome:
+                    elif any(x in outcome for x in ['down','no']):
                         down[cid] += size
             
             hedge_data = []
             net_up = net_down = 0
-            for cid in set(list(up) + list(down)):
-                u = up[cid]
-                d = down[cid]
+            for cid in set(list(up.keys()) + list(down.keys())):
+                u, d = up[cid], down[cid]
                 net = u - d
                 if abs(net) > 5:
-                    your_up = max(net / ratio * 0.52, 0)   # avg price ~0.52
+                    your_up = max(net / ratio * 0.52, 0)
                     your_down = max((d - u) / ratio * 0.48, 0)
                     net_up += your_up
                     net_down += your_down
@@ -109,23 +110,22 @@ def simulate_combined(df, your_bankroll, wallet_address, ratio=200, hedge_minute
                     })
             
             if hedge_data:
-                st.dataframe(pd.DataFrame(hedge_data))
+                st.dataframe(pd.DataFrame(hedge_data), hide_index=True)
                 col1, col2 = st.columns(2)
                 with col1: st.metric("📈 Net UP", f"${net_up:.2f}")
                 with col2: st.metric("📉 Net DOWN", f"${net_down:.2f}")
                 st.info(f"**Hedge**: ${net_up:.0f} UP + ${net_down:.0f} DOWN (1:{ratio})")
             else:
-                st.info("⚖️ No meaningful net hedges")
+                st.info("⚖️ Balanced / no net exposure")
         else:
-            st.info("📭 No BTC Up/Down positions")
+            st.info("📭 No recent BTC Up/Down positions")
     except:
-        st.error("❌ Hedge fetch failed")
+        st.error("❌ Hedge analysis failed")
     
-    # Bankroll check (combined)
-    combined_total = total_your + net_up + net_down
-    if combined_total > your_bankroll * 1.1:
-        st.error(f"⚠️ Combined: ${combined_total:.2f} > bankroll!")
-
+    # Combined bankroll check
+    combined = total_your + net_up + net_down
+    if combined > your_bankroll:
+        st.warning(f"⚠️ Combined: ${combined:.2f} > bankroll ${your_bankroll:.0f}")
 
 def simulate_historical_pnl(closed_pnl, ratio=200):
     """Backtest P&L"""
