@@ -155,7 +155,7 @@ if st.sidebar.button("🚀 Simulate Combined", type="primary"):
 # 👇 COMBINED RESULTS
 if st.session_state.get('show_combined', False) and not df.empty:
     st.markdown("---")
-    simulate_combined(df, your_bankroll, TRADER, copy_ratio, hedge_minutes)
+    simulate_combined(df, your_bankroll, TRADER, copy_ratio, hedge_minutes, hedge_ratio)
     
     if st.button("❌ Hide Combined"):
         st.session_state.show_combined = False
