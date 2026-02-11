@@ -16,7 +16,8 @@ st.set_page_config(layout="wide")
 from utils import track_0x8dxd
 from utils.config import EST, TRADER
 from utils.api import get_profile_name, get_trader_pnl, get_closed_trades_pnl
-from utils.simulator import simulate_copy_trades, simulate_historical_pnl
+from utils.simulator import simulate_copy_trades, simulate_historical_pnl, simulate_hedge
+
 
 
 # WS auto-starts INSIDE track_0x8dxd() - NO manual thread needed!
@@ -134,6 +135,15 @@ st.sidebar.markdown("### 🤖 Copy Trader 1:200")
 your_bankroll = st.sidebar.number_input("💰 Your Bankroll", value=1000.0, step=100.0)
 copy_ratio = st.sidebar.number_input("⚖️ Copy Ratio", value=200, step=50, min_value=0)  # 👈 min_value=0
 
+st.sidebar.markdown("### 🔄 Hedge Analyzer")
+hedge_wallet = st.sidebar.text_input("Wallet", value=TRADER)
+hedge_minutes = st.sidebar.slider("Hedge Minutes", 15, 60, 15)
+hedge_ratio = st.sidebar.number_input("Hedge Ratio", value=200, step=50)
+
+if st.sidebar.button("🔍 Analyze Hedge", type="secondary"):
+    simulate_hedge(hedge_wallet, hedge_minutes, hedge_ratio)
+
+
 # 👇 Watcher IMMEDIATELY after (looks "inside" the section)
 if 'last_bankroll' not in st.session_state:
     st.session_state.last_bankroll = your_bankroll
@@ -160,4 +170,5 @@ if st.session_state.show_dry_run and not df.empty:
 if st.session_state.show_dry_run and closed_pnl['crypto_count'] > 0:
     with st.expander("📈 Historical Backtest (1:200)"):
         simulate_historical_pnl(closed_pnl, copy_ratio)
+
 
