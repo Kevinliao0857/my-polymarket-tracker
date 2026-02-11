@@ -16,7 +16,8 @@ st.set_page_config(layout="wide")
 from utils import track_0x8dxd
 from utils.config import EST, TRADER
 from utils.api import get_profile_name, get_trader_pnl, get_closed_trades_pnl
-from utils.simulator import simulate_copy_trades, simulate_historical_pnl, simulate_hedge
+from utils.simulator import simulate_copy_trades, simulate_historical_pnl, simulate_hedge, simulate_combined  # 👈 Add simulate_combined
+
 
 
 
@@ -133,7 +134,9 @@ if "show_dry_run" not in st.session_state:
 
 st.sidebar.markdown("### 🤖 Copy Trader 1:200")
 your_bankroll = st.sidebar.number_input("💰 Your Bankroll", value=1000.0, step=100.0)
-copy_ratio = st.sidebar.number_input("⚖️ Copy Ratio", value=200, step=50, min_value=0)  # 👈 min_value=0
+copy_ratio = st.sidebar.number_input("⚖️ Copy Ratio", value=200, step=50, min_value=0)
+hedge_ratio = st.sidebar.number_input("Hedge Ratio", value=200, step=50)
+
 
 st.sidebar.markdown("### 🔄 Hedge Analyzer")
 hedge_wallet = st.sidebar.text_input("Wallet", value=TRADER)
@@ -155,20 +158,16 @@ if st.session_state.last_bankroll != your_bankroll or st.session_state.last_rati
     st.session_state.last_ratio = copy_ratio
     st.rerun()
 
-if st.sidebar.button("🚀 Simulate Copy", type="primary"):
-    st.session_state.show_dry_run = True
+if st.sidebar.button("🚀 Simulate Combined", type="primary"):
+    st.session_state.show_combined = True
 
-# 👇 SINGLE CALL - Results persist
-if st.session_state.show_dry_run and not df.empty:
+# 👇 COMBINED RESULTS
+if st.session_state.get('show_combined', False) and not df.empty:
     st.markdown("---")
-    simulate_copy_trades(df, your_bankroll, copy_ratio)  # 👈 Fixed args!
+    simulate_combined(df, your_bankroll, TRADER, copy_ratio, hedge_minutes)
     
-    if st.button("❌ Hide Dry Run"):  # Main area button
-        st.session_state.show_dry_run = False
+    if st.button("❌ Hide Combined"):
+        st.session_state.show_combined = False
         st.rerun()
-
-if st.session_state.show_dry_run and closed_pnl['crypto_count'] > 0:
-    with st.expander("📈 Historical Backtest (1:200)"):
-        simulate_historical_pnl(closed_pnl, copy_ratio)
 
 
