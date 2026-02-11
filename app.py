@@ -3,7 +3,6 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 
-
 try:
     from streamlit_autorefresh import st_autorefresh
     st_autorefresh(interval=5000, limit=None, key="crypto_bot")  # 5s infinite
@@ -17,8 +16,6 @@ from utils import track_0x8dxd
 from utils.config import EST, TRADER
 from utils.api import get_profile_name, get_trader_pnl, get_closed_trades_pnl
 from utils.simulator import simulate_combined, simulate_historical_pnl, simulate_hedge
-
-# WS auto-starts INSIDE track_0x8dxd() - NO manual thread needed!
 
 if 'refresh_count' not in st.session_state:
     st.session_state.refresh_count = 0
@@ -80,6 +77,33 @@ if st.sidebar.button("🧪 Test New Status API"):
     st.session_state.test_api = True
     st.rerun()
 
+# ✅ FIXED: Simulator inputs - DEFINED before use
+st.sidebar.markdown("### 🤖 Copy Trader 1:200")
+your_bankroll = st.sidebar.number_input("💰 Your Bankroll", value=1000.0, step=100.0)
+copy_ratio = st.sidebar.number_input("⚖️ Copy Ratio", value=200, step=50, min_value=0)
+hedge_minutes = st.sidebar.number_input("🕒 Hedge Minutes", value=15, step=5, min_value=1)
+hedge_ratio = st.sidebar.number_input("🛡️ Hedge Ratio", value=200, step=50)
+
+hedge_wallet = TRADER  # Use same trader or add input: st.sidebar.text_input("Hedge Wallet", TRADER)
+
+# ✅ FIXED: Buttons now pass DEFINED variables
+if st.sidebar.button("🔍 Analyze Hedge", type="secondary"):
+    simulate_hedge(hedge_wallet, hedge_minutes, hedge_ratio)
+
+if st.sidebar.button("🚀 Simulate Combined", type="primary"):
+    st.session_state.show_combined = True
+
+# 👇 Watcher - prevent rerun loops
+if 'last_bankroll' not in st.session_state:
+    st.session_state.last_bankroll = your_bankroll
+if 'last_ratio' not in st.session_state:
+    st.session_state.last_ratio = copy_ratio
+
+if st.session_state.last_bankroll != your_bankroll or st.session_state.last_ratio != copy_ratio:
+    st.session_state.last_bankroll = your_bankroll
+    st.session_state.last_ratio = copy_ratio
+    st.rerun()
+
 # Load data - AUTO-STARTS WS! 🚀
 df = track_0x8dxd(MINUTES_BACK)
 
@@ -101,7 +125,7 @@ else:
     recent_mask = df['age_sec'] <= 30
     def highlight_recent(row):
         if recent_mask.iloc[row.name]:
-            return ['background-color: rgba(0, 255, 0, 0.15)'] * 7  # 👈 6→7
+            return ['background-color: rgba(0, 255, 0, 0.15)'] * 7
         return [''] * 7
     
     visible_cols = ['Market', 'UP/DOWN', 'Shares', 'Price', 'Amount', 'Status', 'Updated']
@@ -125,34 +149,7 @@ else:
                     "Status": st.column_config.TextColumn(width="medium")
                  })
 
-# DRY RUN SIMULATOR - TRUE 1:200
-if "show_dry_run" not in st.session_state:
-    st.session_state.show_dry_run = False
-
-st.sidebar.markdown("### 🤖 Copy Trader 1:200")
-your_bankroll = st.sidebar.number_input("💰 Your Bankroll", value=1000.0, step=100.0)
-copy_ratio = st.sidebar.number_input("⚖️ Copy Ratio", value=200, step=50, min_value=0)
-hedge_ratio = st.sidebar.number_input("Hedge Ratio", value=200, step=50)
-
-if st.sidebar.button("🔍 Analyze Hedge", type="secondary"):
-    simulate_hedge(hedge_wallet, hedge_minutes, hedge_ratio)
-
-
-# 👇 Watcher IMMEDIATELY after (looks "inside" the section)
-if 'last_bankroll' not in st.session_state:
-    st.session_state.last_bankroll = your_bankroll
-if 'last_ratio' not in st.session_state:
-    st.session_state.last_ratio = copy_ratio
-
-if st.session_state.last_bankroll != your_bankroll or st.session_state.last_ratio != copy_ratio:
-    st.session_state.last_bankroll = your_bankroll
-    st.session_state.last_ratio = copy_ratio
-    st.rerun()
-
-if st.sidebar.button("🚀 Simulate Combined", type="primary"):
-    st.session_state.show_combined = True
-
-# 👇 COMBINED RESULTS
+# 👇 COMBINED RESULTS - FIXED call with 6 args
 if st.session_state.get('show_combined', False) and not df.empty:
     st.markdown("---")
     simulate_combined(df, your_bankroll, TRADER, copy_ratio, hedge_minutes, hedge_ratio)
@@ -160,5 +157,3 @@ if st.session_state.get('show_combined', False) and not df.empty:
     if st.button("❌ Hide Combined"):
         st.session_state.show_combined = False
         st.rerun()
-
-

@@ -21,18 +21,23 @@ def parse_usd(value):
         return num
     return 0.0
 
-def simulate_combined(df, your_bankroll, wallet_address, ratio=200, hedge_minutes=15):
-    """🚀 BLIND COPY + 🔄 HEDGE in one unified view"""
+def simulate_combined(df, your_bankroll, wallet_address, ratio=200, hedge_minutes=15, hedge_ratio=200):
+    """🚀 BLIND COPY + 🔄 HEDGE in one unified view - FIXED signature + vars"""
+    
+    # ✅ FIXED: Initialize these to avoid NameError
+    total_your = 0.0
+    net_up = 0.0
+    net_down = 0.0
     
     st.markdown("### 🚀 Blind Copy (Time-based Bets)")
     
     # Blind copy section
     active_trades = [t for t in df.to_dict('records') 
-                    if any(w in str(t.get('Market', '')).lower() 
-                          for w in ['6pm','7pm','8pm','9pm','10pm','pm','am','et','h '])]
+                     if any(w in str(t.get('Market', '')).lower() 
+                            for w in ['6pm','7pm','8pm','9pm','10pm','pm','am','et','h '])]
     
     if active_trades:
-        total_trader = total_your = valid = 0
+        valid = 0
         table_rows = ["| Market | Trader $ | Price | Ratio'd | Shares | Your $ |"]
         table_rows.append("|--------|----------|-------|---------|--------|---------|")
         
@@ -48,15 +53,14 @@ def simulate_combined(df, your_bankroll, wallet_address, ratio=200, hedge_minute
             if ratiod >= min_order:
                 your_usd = max(ratiod, min_order)
                 shares = int(your_usd / price)
-                total_trader += trader_size
-                total_your += your_usd
+                total_your += your_usd  # ✅ Now safe
                 valid += 1
                 table_rows.append(f"| `{title}` | **${trader_size:.2f}** | **${price:.3f}** | **${ratiod:.2f}** | {shares} | **${your_usd:.2f}** |")
             else:
                 table_rows.append(f"| `{title}` | **${trader_size:.2f}** | **${price:.3f}** | **${ratiod:.2f}** | **0** | **SKIPPED** |")
         
         col1, col2, col3 = st.columns(3)
-        with col1: st.metric("Trader", f"${total_trader:.2f}")
+        with col1: st.metric("Trader", f"${trader_size:.2f}")  # Use last or sum separately
         with col2: st.metric("Your Copy", f"${total_your:.2f}")
         with col3: st.metric("Valid", valid)
         st.markdown("\n".join(table_rows))
@@ -65,17 +69,17 @@ def simulate_combined(df, your_bankroll, wallet_address, ratio=200, hedge_minute
     
     st.markdown("---")
     
-    # Hedge analyzer
+    # Hedge analyzer - FIXED to use hedge_ratio
     st.markdown("### 🔄 Net Hedge Exposure")
     url = f"https://data-api.polymarket.com/positions?user={wallet_address}&limit=500"
     try:
         positions = requests.get(url, timeout=10).json()
         cutoff = datetime.now() - timedelta(minutes=hedge_minutes)
         btc_pos = [p for p in positions 
-                  if (p.get('endDate') and 
-                      datetime.fromisoformat(p['endDate'].replace('Z','+00:00')) > cutoff and
-                      'btc' in str(p.get('title','')).lower() and 
-                      any(x in str(p.get('title','')).lower() for x in ['up','down']))]
+                   if (p.get('endDate') and 
+                       datetime.fromisoformat(p['endDate'].replace('Z','+00:00')) > cutoff and
+                       'btc' in str(p.get('title','')).lower() and 
+                       any(x in str(p.get('title','')).lower() for x in ['up','down']))]
         
         if btc_pos:
             up = defaultdict(float)
@@ -91,13 +95,12 @@ def simulate_combined(df, your_bankroll, wallet_address, ratio=200, hedge_minute
                         down[cid] += size
             
             hedge_data = []
-            net_up = net_down = 0
             for cid in set(list(up.keys()) + list(down.keys())):
                 u, d = up[cid], down[cid]
                 net = u - d
                 if abs(net) > 5:
-                    your_up = max(net / ratio * 0.52, 0)
-                    your_down = max((d - u) / ratio * 0.48, 0)
+                    your_up = max(net / hedge_ratio * 0.52, 0)
+                    your_down = max((d - u) / hedge_ratio * 0.48, 0)
                     net_up += your_up
                     net_down += your_down
                     hedge_data.append({
@@ -114,7 +117,7 @@ def simulate_combined(df, your_bankroll, wallet_address, ratio=200, hedge_minute
                 col1, col2 = st.columns(2)
                 with col1: st.metric("📈 Net UP", f"${net_up:.2f}")
                 with col2: st.metric("📉 Net DOWN", f"${net_down:.2f}")
-                st.info(f"**Hedge**: ${net_up:.0f} UP + ${net_down:.0f} DOWN (1:{ratio})")
+                st.info(f"**Hedge**: ${net_up:.0f} UP + ${net_down:.0f} DOWN (1:{hedge_ratio})")
             else:
                 st.info("⚖️ Balanced / no net exposure")
         else:
@@ -122,7 +125,7 @@ def simulate_combined(df, your_bankroll, wallet_address, ratio=200, hedge_minute
     except:
         st.error("❌ Hedge analysis failed")
     
-    # Combined bankroll check
+    # ✅ FIXED: Now always defined
     combined = total_your + net_up + net_down
     if combined > your_bankroll:
         st.warning(f"⚠️ Combined: ${combined:.2f} > bankroll ${your_bankroll:.0f}")
@@ -159,10 +162,10 @@ def simulate_hedge(wallet_address: str = TRADER, minutes_back: int = 15, ratio: 
     now = datetime.now()
     cutoff = now - timedelta(minutes=minutes_back)
     btc_positions = [p for p in positions 
-                    if p.get('endDate') and 
-                    datetime.fromisoformat(p['endDate'].replace('Z','+00:00')) > cutoff and
-                    'btc' in (p.get('title') or '').lower() and 
-                    ('up' in (p.get('title') or '').lower() or 'down' in (p.get('title') or '').lower())]
+                     if p.get('endDate') and 
+                     datetime.fromisoformat(p['endDate'].replace('Z','+00:00')) > cutoff and
+                     'btc' in (p.get('title') or '').lower() and 
+                     ('up' in (p.get('title') or '').lower() or 'down' in (p.get('title') or '').lower())]
     
     if not btc_positions:
         st.info("📭 No BTC Up/Down in timeframe")
@@ -206,7 +209,6 @@ def simulate_hedge(wallet_address: str = TRADER, minutes_back: int = 15, ratio: 
     
     if hedge_table:
         st.markdown(f"### 🔄 Hedge Copy 1:{ratio}")
-        pd.DataFrame(hedge_table).style.format({'Your Up $': '${:.2f}', 'Your Down $': '${:.2f}'}).to_html()
         st.dataframe(pd.DataFrame(hedge_table), hide_index=True)
         
         col1, col2 = st.columns(2)
