@@ -134,12 +134,6 @@ your_bankroll = st.sidebar.number_input("💰 Your Bankroll", value=1000.0, step
 copy_ratio = st.sidebar.number_input("⚖️ Copy Ratio", value=200, step=50, min_value=0)
 hedge_ratio = st.sidebar.number_input("Hedge Ratio", value=200, step=50)
 
-
-st.sidebar.markdown("### 🔄 Hedge Analyzer")
-hedge_wallet = st.sidebar.text_input("Wallet", value=TRADER)
-hedge_minutes = st.sidebar.slider("Hedge Minutes", 15, 60, 15)
-hedge_ratio = st.sidebar.number_input("Hedge Ratio", value=200, step=50)
-
 if st.sidebar.button("🔍 Analyze Hedge", type="secondary"):
     simulate_hedge(hedge_wallet, hedge_minutes, hedge_ratio)
 
