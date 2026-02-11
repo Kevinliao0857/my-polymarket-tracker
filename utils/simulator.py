@@ -4,6 +4,7 @@ import re
 import requests
 from datetime import datetime, timedelta
 from collections import defaultdict
+from utils.config import TRADER
 
 def parse_usd(value):
     """$1,234 → 1234.0, N/A → 0, 1k → 1000"""
