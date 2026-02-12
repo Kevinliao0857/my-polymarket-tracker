@@ -173,23 +173,27 @@ if st.session_state.get('show_simulate', False):
     
     # Only run if actually started
     if st.session_state.sim_start_time:
-        pos_df = get_open_positions(TRADER)  # Fetch fresh
+        pos_df = get_open_positions(TRADER)
         if pos_df.empty:
             st.warning("No positions to simulate")
         else:
-            sim_results = run_position_simulator(pos_df, st.session_state.bankroll, st.session_state.copy_ratio)
+            # 👈 SAFE VALUES
+            saved_bankroll = st.session_state.get('bankroll', 1000.0)
+            saved_copy_ratio = st.session_state.get('copy_ratio', 10)
+            
+            sim_results = run_position_simulator(pos_df, saved_bankroll, saved_copy_ratio)
             
             if not sim_results['valid']:
                 st.error(sim_results['message'])
             else:
-                track_simulation_pnl(sim_results, st.session_state.bankroll)
+                track_simulation_pnl(sim_results, saved_bankroll)
                 
                 sim_df = sim_results['sim_df']
                 total_cost = sim_results['total_cost']
                 total_pnl = sim_results['total_pnl']
                 skipped = sim_results['skipped']
                 
-                # Header metric
+                # Header metric  
                 sim_color = "🟢" if total_pnl >= 0 else "🔴"
                 st.metric("Total Investment", f"${total_cost:,.0f}", f"{sim_color}${abs(total_pnl):,.0f}")
         
