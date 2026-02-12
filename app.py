@@ -151,6 +151,9 @@ else:
             "PnL": st.column_config.NumberColumn(format="$%.2f", width="small"),
         })
         st.caption(f"✅ {len(pos_df)} crypto positions | Uses official avgPrice [data-api.polymarket.com/positions]")
+        
+        # Debug
+        st.caption(f"🕐 Open positions: {len(pos_df)} | Total trader shares: {pos_df['Shares'].sum():.0f}")
 
 if st.session_state.get('show_simulate', False) and not pos_df.empty:
     st.markdown("---")
@@ -215,6 +218,7 @@ if st.session_state.get('show_simulate', False) and not pos_df.empty:
                     st.dataframe(recent, use_container_width=True, hide_index=True)
 
                 st.caption(f"⏱️ {len(hist_df)} snapshots | Latest: ${total_pnl:+.2f}")
+
 
             except Exception as e:
                 st.caption("📈 History loading...")
