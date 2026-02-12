@@ -87,11 +87,6 @@ if st.sidebar.button("🔄 Force Refresh", type="primary"):
     st.rerun()
 
 
-if st.sidebar.button("🧪 Test New Status API"):
-    st.session_state.test_api = True
-    st.rerun()
-
-
 # ✅ FIXED: Simulator inputs - DEFINED before use
 st.sidebar.markdown("### 🤖 Copy Trader 1:200")
 your_bankroll = st.sidebar.number_input("💰 Your Bankroll", value=1000.0, step=100.0)
@@ -132,9 +127,6 @@ df = track_0x8dxd(MINUTES_BACK)
 if df.empty:
     st.info("No crypto trades found")
 else:
-    # TEST BUTTON RESULT
-    if 'test_api' in st.session_state:
-        del st.session_state.test_api
     
     newest_sec = df['age_sec'].min()
     newest_str = f"{int(newest_sec)//60}m {int(newest_sec)%60}s ago"
