@@ -130,30 +130,30 @@ else:
             "Status": st.column_config.TextColumn(width="medium")
          })
 
-    # 👇 OPEN POSITIONS TABLE
-    pos_df = get_open_positions(TRADER)
-    if not pos_df.empty:
-        st.markdown("---")
-        st.subheader("📈 Open Positions (Avg Entry Prices)")
-        pos_visible_cols = ['Market', 'UP/DOWN', 'Shares', 'AvgPrice', 'CurPrice', 'Amount', 'PnL', 'Status', 'Updated']
-        pos_recent_mask = pos_df['age_sec'] <= 300
-        def highlight_recent_pos(row):
-            if pos_recent_mask.iloc[row.name]:
-                return ['background-color: rgba(0, 255, 0, 0.15)'] * len(pos_visible_cols)
-            return [''] * len(pos_visible_cols)
-        
-        styled_pos = pos_df[pos_visible_cols].style.apply(highlight_recent_pos, axis=1)
-        st.dataframe(styled_pos, height=300, hide_index=True, column_config={
-            "UP/DOWN": st.column_config.TextColumn(width="medium"),
-            "AvgPrice": st.column_config.NumberColumn(format="$%.2f", width="small"),
-            "CurPrice": st.column_config.NumberColumn(format="$%.2f", width="small"),
-            "Amount": st.column_config.NumberColumn(format="$%.2f", width="small"),
-            "PnL": st.column_config.NumberColumn(format="$%.2f", width="small"),
-        })
-        st.caption(f"✅ {len(pos_df)} crypto positions | Uses official avgPrice [data-api.polymarket.com/positions]")
-        
-        # Debug
-        st.caption(f"🕐 Open positions: {len(pos_df)} | Total trader shares: {pos_df['Shares'].sum():.0f}")
+# 👇 OPEN POSITIONS TABLE
+pos_df = get_open_positions(TRADER)
+if not pos_df.empty:
+    st.markdown("---")
+    st.subheader("📈 Open Positions (Avg Entry Prices)")
+    pos_visible_cols = ['Market', 'UP/DOWN', 'Shares', 'AvgPrice', 'CurPrice', 'Amount', 'PnL', 'Status', 'Updated']
+    pos_recent_mask = pos_df['age_sec'] <= 300
+    def highlight_recent_pos(row):
+        if pos_recent_mask.iloc[row.name]:
+            return ['background-color: rgba(0, 255, 0, 0.15)'] * len(pos_visible_cols)
+        return [''] * len(pos_visible_cols)
+    
+    styled_pos = pos_df[pos_visible_cols].style.apply(highlight_recent_pos, axis=1)
+    st.dataframe(styled_pos, height=300, hide_index=True, column_config={
+        "UP/DOWN": st.column_config.TextColumn(width="medium"),
+        "AvgPrice": st.column_config.NumberColumn(format="$%.2f", width="small"),
+        "CurPrice": st.column_config.NumberColumn(format="$%.2f", width="small"),
+        "Amount": st.column_config.NumberColumn(format="$%.2f", width="small"),
+        "PnL": st.column_config.NumberColumn(format="$%.2f", width="small"),
+    })
+    st.caption(f"✅ {len(pos_df)} crypto positions | Uses official avgPrice [data-api.polymarket.com/positions]")
+    
+    # Debug
+    st.caption(f"🕐 Open positions: {len(pos_df)} | Total trader shares: {pos_df['Shares'].sum():.0f}")
 
 if st.session_state.get('show_simulate', False) and not pos_df.empty:
     st.markdown("---")
