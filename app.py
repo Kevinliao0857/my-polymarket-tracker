@@ -275,32 +275,29 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: int):
     if skipped > 0:
         st.markdown("---")
         st.subheader(f"⏭️ Skipped Bets ({skipped} < 5 shares)")
-    
-        # Get ALL positions and filter skipped
+
+        # Simple filter - no complex styling
         all_pos_df = get_open_positions(TRADER)
-        # Rebuild sim_df to get correct indices
-        temp_sim_results = run_position_simulator(all_pos_df, 1000, st.session_state.get('copy_ratio', 10))
-        sim_indices = temp_sim_results['sim_df'].index if temp_sim_results['valid'] else []
-        
-        skipped_df = all_pos_df.drop(sim_indices).reset_index(drop=True)
-        
-        skip_cols = ['Market', 'UP/DOWN', 'Shares', 'AvgPrice', 'Status']
-        if not skipped_df.empty:
-            skip_recent_mask = skipped_df['age_sec'] <= 300
-            def highlight_skip_recent(row_idx):
-                if skip_recent_mask.iloc[row_idx]:
-                    return ['background-color: rgba(255, 255, 0, 0.2)'] * len(skip_cols)
-                return [''] * len(skip_cols)
-            
-            styled_skip = skipped_df[skip_cols].style.apply(highlight_skip_recent, axis=0)
-            st.dataframe(styled_skip, use_container_width=True, height=200, hide_index=True,
-                         column_config={
-                             "Shares": st.column_config.NumberColumn(format="%.1f"),
-                             "AvgPrice": st.column_config.NumberColumn(format="$%.2f")
-                         })
-            st.caption("💡 Skipped = <5 shares after copy ratio | Yellow = recent")
+        temp_sim = run_position_simulator(all_pos_df, 1000, st.session_state.get('copy_ratio', 10))
+
+        if temp_sim['valid']:
+            sim_indices = set(temp_sim['sim_df'].index)
+            skipped_df = all_pos_df[~all_pos_df.index.isin(sim_indices)].copy()
+
+            if not skipped_df.empty:
+                skip_cols = ['Market', 'UP/DOWN', 'Shares', 'AvgPrice', 'Status']
+                skipped_df_display = skipped_df[skip_cols].round(2)
+
+                st.dataframe(skipped_df_display, use_container_width=True, height=200, hide_index=True,
+                             column_config={
+                                 "Shares": st.column_config.NumberColumn(format="%.1f"),
+                                 "AvgPrice": st.column_config.NumberColumn(format="$%.2f")
+                             })
+                st.caption("💡 Skipped = <5 shares after copy ratio")
+            else:
+                st.info("No skipped positions found")
         else:
-            st.info("No skipped positions")
+            st.info("Could not calculate skipped positions")
 
 
 with st.expander("🤖 Position Simulator", expanded=False):
