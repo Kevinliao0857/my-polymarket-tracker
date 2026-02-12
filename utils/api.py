@@ -75,7 +75,21 @@ def track_0x8dxd(minutes_back: int) -> pd.DataFrame:
     
     unique_combined.sort(key=lambda x: x.get('timestamp', 0) or x.get('updatedAt', 0) or 0, reverse=True)
     max_items = max(200, minutes_back * 15)
-    filtered_data = [item for item in unique_combined if is_crypto(item)][:max_items]
+ 
+    # OLD (broken)
+    # filtered_data = [item for item in unique_combined if is_crypto(item)][:max_items]
+    
+    # NEW (test)
+    filtered_data = []
+    for item in unique_combined:
+        if is_crypto(item):  # Keep your filter
+            # 🆕 Normalize REST data to WS format
+            if 'type' in item and item.get('type') == 'TRADE':  # REST format
+                item['event_type'] = 'trade'
+                item['asset_id'] = item.get('asset', item.get('assetId', 'N/A'))
+            filtered_data.append(item)
+        if len(filtered_data) >= max_items:
+            break
     
     rest_count = len(latest_bets)
     st.sidebar.info(f"📊 REST: {rest_count} total | WS: {ws_count} live")
