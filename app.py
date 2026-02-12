@@ -189,11 +189,33 @@ if st.session_state.get('show_simulate', False) and not pos_df.empty:
             runtime_min = (time.time() - st.session_state.sim_start_time) / 60 if st.session_state.sim_start_time else 0
             st.success(f"✅ {len(sim_df)}/{len(pos_df)} positions | Skipped {skipped} tiny | PnL: ${total_pnl:+.0f}")
         
-        # PnL trend chart
+        # 👇 CHART + RAW NUMBERS (best of both!)
         if len(st.session_state.sim_pnl_history) > 1:
             hist_df = pd.DataFrame(st.session_state.sim_pnl_history)
-            st.line_chart(hist_df.set_index('time')['pnl'], height=150, use_container_width=True)
-            st.caption(f"📈 Live PnL tracking | {runtime_min:.0f}min | {len(st.session_state.sim_pnl_history)} snapshots")
+            hist_df['Time'] = pd.to_datetime(hist_df['time']*60, unit='s', origin='unix').dt.strftime('%H:%M:%S')
+            hist_df['PnL $'] = hist_df['pnl'].round(2)
+            hist_df['PnL %'] = (hist_df['pnl'] / total_cost * 100).round(2)
+            
+            col_chart, col_table = st.columns(2)
+            
+            with col_chart:
+                st.markdown("**📈 Trend**")
+                st.line_chart(hist_df.set_index('time')['pnl'], height=200, use_container_width=True)
+            
+            with col_table:
+                st.markdown("**📊 Latest**")
+                st.dataframe(
+                    hist_df[['Time', 'PnL $', 'PnL %']].tail(8),  # Last 8
+                    use_container_width=True,
+                    column_config={
+                        "PnL $": st.column_config.NumberColumn(format="$%.2f"),
+                        "PnL %": st.column_config.NumberColumn(format="%.2f%"),
+                    },
+                    height=200
+                )
+            
+            st.caption(f"⏱️ {runtime_min:.0f}min | {len(hist_df)} snapshots | Now: ${total_pnl:+.2f}")
+        
         
         # 👇 Styled table (same as positions)
         sim_visible_cols = ['Market', 'UP/DOWN', 'Shares', 'Your Shares', 'AvgPrice', 'Your Avg', 
