@@ -1,7 +1,7 @@
 import streamlit as st
 import requests
 from datetime import datetime
-from typing import dict
+from typing import Dict
 
 from .config import EST, TRADER
 
