@@ -121,9 +121,24 @@ def render_simulator():
         except:
             pass
     
-    # Compact table
-    sim_cols = ['Market', 'UP/DOWN', 'Your Shares', 'Your Cost', 'Your PnL']
-    st.dataframe(sim_df[sim_cols], use_container_width=True, height=250)
+    # 👇 TABLE WITH STATUS + GREEN HIGHLIGHTING
+    sim_cols = ['Market', 'UP/DOWN', 'Your Shares', 'Your Cost', 'Your PnL', 'Status']
+    recent_mask = sim_df['age_sec'] <= 300
+    def highlight_recent(row):
+        if recent_mask.iloc[row.name]:
+            return ['background-color: rgba(0, 255, 0, 0.15)'] * len(sim_cols)
+        return [''] * len(sim_cols)
+
+    styled_sim = sim_df[sim_cols].style.apply(highlight_recent, axis=1)
+    st.dataframe(styled_sim, use_container_width=True, height=300, hide_index=True,
+                 column_config={
+                     "Your Shares": st.column_config.NumberColumn(format="%.1f"),
+                     "Your Cost": st.column_config.NumberColumn(format="$%.2f"),
+                     "Your PnL": st.column_config.NumberColumn(format="$%.2f"),
+                     "Status": st.column_config.TextColumn("Status/Expiry")
+                 })
+    st.caption("✅ Green rows = active <5min | Status shows expiry/active")
+
 
 # =====================================================
 # MAIN TRADES TABLE

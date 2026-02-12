@@ -46,3 +46,4 @@ def track_simulation_pnl(sim_results, bankroll: float) -> None:
             'positions': sim_results['positions']
         }
         st.session_state.sim_pnl_history.append(snapshot)
+
