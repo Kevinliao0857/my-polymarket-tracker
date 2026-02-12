@@ -170,7 +170,7 @@ if st.session_state.get('show_simulate', False) and not pos_df.empty:
         st.error(sim_results['message'])
     else:
         # Track PnL history
-        track_simulation_pnl(sim_results)
+        track_simulation_pnl(sim_results, bankroll)
         
         sim_df = sim_results['sim_df']
         total_cost = sim_results['total_cost']
@@ -194,30 +194,31 @@ if st.session_state.get('show_simulate', False) and not pos_df.empty:
         if len(st.session_state.sim_pnl_history) > 1:
             try:
                 hist_df = pd.DataFrame(st.session_state.sim_pnl_history)
-                
+
                 # Fix time column
                 hist_df['Time'] = hist_df['time'].apply(lambda x: f"{int(x):.0f}m")
-                
+
                 # Safe PnL % (avoid div0 + NaN)
+                hist_df['Portfolio $'] = hist_df['portfolio'].round(2)
                 hist_df['PnL $'] = hist_df['pnl'].round(2)
-                hist_df['PnL %'] = hist_df.apply(lambda row: f"{(row["pnl"]/total_cost*100):+.1f}%" if total_cost > 0 else "0.0%", axis=1)
-                
+                hist_df['PnL %'] = (hist_df['pnl'] / hist_df['cost'] * 100).round(2)
+
                 col_chart, col_table = st.columns(2)
-                
+
                 with col_chart:
                     st.markdown("**📈 Trend**")
                     st.line_chart(hist_df.set_index('Time')['PnL $'], height=200)
-                
+
                 with col_table:
                     st.markdown("**📊 Raw $**")
-                    recent = hist_df[['Time', 'PnL $', 'PnL %']].tail(8)
+                    recent = hist_df[['Time', 'Portfolio $', 'PnL $', 'PnL %']].tail(8)
                     st.dataframe(recent, use_container_width=True, hide_index=True)
-                
+
                 st.caption(f"⏱️ {len(hist_df)} snapshots | Latest: ${total_pnl:+.2f}")
-                
+
             except Exception as e:
                 st.caption("📈 History loading...")
-        
+
         
         # 👇 Styled table (same as positions)
         sim_visible_cols = ['Market', 'UP/DOWN', 'Shares', 'Your Shares', 'AvgPrice', 'Your Avg', 

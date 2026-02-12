@@ -34,9 +34,16 @@ def run_position_simulator(pos_df: pd.DataFrame, bankroll: float, copy_ratio: in
         'skipped': len(pos_df) - len(sim_df)
     }
 
-def track_simulation_pnl(sim_results) -> None:
+def track_simulation_pnl(sim_results, bankroll: float) -> None:
     """Track PnL history"""
     if st.session_state.get('sim_start_time'):
         runtime_min = (time.time() - st.session_state.sim_start_time) / 60
-        snapshot = {'time': runtime_min, 'pnl': sim_results['total_pnl'], 'cost': sim_results['total_cost'], 'positions': sim_results['positions']}
+        snapshot = {
+            'time': runtime_min, 
+            'pnl': sim_results['total_pnl'], 
+            'portfolio': bankroll + sim_results['total_pnl'],
+            'cost': sim_results['total_cost'],
+            'positions': sim_results['positions']
+        }
         st.session_state.sim_pnl_history.append(snapshot)
+
