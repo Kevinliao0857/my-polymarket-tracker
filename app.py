@@ -244,17 +244,24 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: int):
     bankroll_change = current_bankroll - initial_bankroll
     
     # Header metrics
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.metric("🏦 Your Bankroll", f"${current_bankroll:,.0f}", f"${bankroll_change:+,.0f}")
     with col2:
-        st.metric("📈 Unrealized PnL", f"${total_pnl:+,.0f}")
+        usage_pct = (total_cost / initial_bankroll * 100) if initial_bankroll > 0 else 0
+        usage_color = "🟢" if usage_pct <= 50 else "🟡" if usage_pct <= 80 else "🔴"
+        st.metric("💼 Capital Used", f"{usage_color}${total_cost:,.0f}", 
+                  f"{usage_pct:.0f}% of ${initial_bankroll:,.0f}")
     with col3:
+        st.metric("📈 Unrealized PnL", f"${total_pnl:+,.0f}")
+    with col4:
         total_positions = len(sim_df) + skipped
         st.metric("📊 Simulated", f"{len(sim_df)}/{total_positions} ({skipped} skipped)")
-    
+
     runtime_min = (time.time() - st.session_state.sim_start_time) / 60
-    st.caption(f"⏱️ {runtime_min:.1f}min | 1:{copy_ratio} | Expired bets = realized gains/losses")
+    st.caption(f"⏱️ {runtime_min:.1f}min | 1:{copy_ratio} | "
+               f"💼 ${total_cost:,.0f} used ({usage_pct:.0f}% of bankroll) | "
+               f"Expired bets = realized gains/losses")
     
     # History chart
     if len(st.session_state.sim_pnl_history) > 1:
