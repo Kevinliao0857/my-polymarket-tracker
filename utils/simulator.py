@@ -11,21 +11,26 @@ def run_position_simulator(pos_df: pd.DataFrame, initial_bankroll: float, copy_r
     
     # 👇 FIXED HEDGE PAIRING LOGIC
     market_groups = sim_df.groupby('Market')
-    paired_rows = []
+    paired_rows = []  # List of dicts for safe DataFrame construction
     
     for market, group in market_groups:
         group = group.reset_index(drop=True)
+        
         if len(group) == 2:
             up_mask = group['UP/DOWN'].str.contains('UP', na=False)
             down_mask = group['UP/DOWN'].str.contains('DOWN', na=False)
+            
             if up_mask.any() and down_mask.any():
-                up_row = group[up_mask].iloc[0].to_dict()
-                down_row = group[down_mask].iloc[0].to_dict()
-                if up_row['Your Shares'] >= 5 or down_row['Your Shares'] >= 5:
-                    paired_rows.append(up_row)
-                    paired_rows.append(down_row)
-                continue
-        
+                up_row = group[up_mask].iloc[0]
+                down_row = group[down_mask].iloc[0]
+                
+                # ✅ BOTH must have >=5 Your Shares → include pair, else skip both
+                if up_row['Your Shares'] >= 5 and down_row['Your Shares'] >= 5:
+                    paired_rows.append(up_row.to_dict())
+                    paired_rows.append(down_row.to_dict())
+                continue  # Skip normal single logic
+            
+        # Single positions only (non-hedges)
         valid_rows = group[group['Your Shares'] >= 5].to_dict('records')
         paired_rows.extend(valid_rows)
     
