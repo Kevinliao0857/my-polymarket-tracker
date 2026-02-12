@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import requests
 from datetime import datetime
+import time
 
 from .config import EST, TRADER
 from .status import get_status_hybrid
