@@ -180,8 +180,8 @@ else:
 
     # 👇 NEW: Open Positions Table (avg prices!)
     pos_df = get_open_positions(TRADER)
-    st.write("DEBUG:", pos_df.shape, "rows")  # ← ADD ONLY THIS LINE
-    
+    # st.write("DEBUG:", pos_df.shape, "rows")  # ← ADD ONLY THIS LINE
+
     if not pos_df.empty:
         st.markdown("---")
         st.subheader("📈 Open Positions (Avg Entry Prices)")
