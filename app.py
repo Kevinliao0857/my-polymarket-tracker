@@ -270,6 +270,29 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: int):
     
     styled_sim = sim_df[sim_cols].style.apply(highlight_recent, axis=1)
     st.dataframe(styled_sim, use_container_width=True, height=350, hide_index=True)
+   
+    # 👇 SKIPPED BETS TABLE (below main table)
+    if skipped > 0:
+        st.markdown("---")
+        st.subheader(f"⏭️ Skipped Bets ({skipped} < 5 shares)")
+
+        # Get skipped positions
+        all_pos_df = get_open_positions(TRADER)
+        skipped_df = all_pos_df[~all_pos_df.index.isin(sim_df.index)]  # Positions not in sim_df
+
+        skip_cols = ['Market', 'UP/DOWN', 'Shares', 'AvgPrice', 'Status']
+        skip_recent_mask = skipped_df['age_sec'] <= 300
+        def highlight_skip_recent(row):
+            return ['background-color: rgba(255, 255, 0, 0.2)'] * len(skip_cols) if skip_recent_mask.iloc[row.name] else ['']
+
+        styled_skip = skipped_df[skip_cols].style.apply(highlight_skip_recent, axis=1)
+        st.dataframe(styled_skip, use_container_width=True, height=200, hide_index=True,
+             column_config={
+                 "Shares": st.column_config.NumberColumn(format="%.1f"),
+                 "AvgPrice": st.column_config.NumberColumn(format="$%.2f")
+             })
+        st.caption("💡 Skipped = <5 shares after copy ratio | Yellow = recent")
+
 
 with st.expander("🤖 Position Simulator", expanded=False):
     if 'sim_start_time' not in st.session_state:
