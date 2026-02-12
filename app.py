@@ -17,7 +17,7 @@ st.set_page_config(layout="wide")
 # ✅ FIXED IMPORTS - ADD get_open_positions
 from utils.api import get_open_positions, track_0x8dxd, get_profile_name, get_trader_pnl, get_closed_trades_pnl 
 from utils.config import EST, TRADER
-from utils.simulator import simulate_combined, simulate_historical_pnl, simulate_hedge
+from utils.simulator import dry_run_copy, simulate_combined, simulate_historical_pnl, simulate_hedge
 
 
 
@@ -99,8 +99,12 @@ hedge_wallet = TRADER  # Use same trader or add input: st.sidebar.text_input("He
 
 
 # ✅ FIXED: Buttons now pass DEFINED variables
-if st.sidebar.button("🔍 Analyze Hedge", type="secondary"):
-    simulate_hedge(hedge_wallet, hedge_minutes, hedge_ratio)
+if st.sidebar.button("🤖 Dry-Run Copy Bot", type="primary"):
+    dry_run_copy(your_bankroll, copy_ratio)
+
+st.sidebar.markdown("---")
+if st.sidebar.button("🔄 Hedge Analyzer"):
+    simulate_hedge(TRADER, hedge_minutes, hedge_ratio)
 
 
 if st.sidebar.button("🚀 Simulate Combined", type="primary"):

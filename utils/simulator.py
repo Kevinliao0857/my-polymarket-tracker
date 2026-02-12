@@ -4,22 +4,78 @@ import re
 import requests
 from datetime import datetime, timedelta
 from collections import defaultdict
+from utils.api import get_latest_bets, is_crypto 
+from utils.filters import get_up_down           
 from utils.config import TRADER
 
 def parse_usd(value):
-    """$1,234 → 1234.0, N/A → 0, 1k → 1000"""
-    if pd.isna(value) or value is None:
-        return 0.0
-    text = str(value).upper()
-    if 'N/A' in text or 'NAN' in text:
-        return 0.0
-    nums = re.findall(r'[\d,]+\.?\d*', text.replace('$', ''))
-    if nums:
-        num = float(nums[0].replace(',', ''))
-        if 'K' in text:
-            num *= 1000
-        return num
+    """$1,234 → 1234.0"""
+    if pd.isna(value) or value is None: return 0.0
+    text = str(value).upper().replace('$', '').replace(',', '')
+    nums = re.findall(r'[\d.]+\d*', text)
+    if nums: return float(nums[0])
     return 0.0
+
+def dry_run_copy(your_bankroll=1000, ratio=200, max_per_trade=50):
+    """🤖 DRY-RUN COPY BOT - Shows EXACT orders you'd place"""
+    st.markdown("### 🤖 Dry-Run Copy Trader (1:{})".format(ratio))
+    
+    trades = get_latest_bets(TRADER, limit=20)
+    copy_orders = []
+    
+    for trade in trades:
+        if not is_crypto(trade): continue
+        
+        trader_size = parse_usd(trade.get('size', 0))
+        if trader_size < 5: continue
+        
+        your_size = min(trader_size / ratio, max_per_trade)
+        
+        asset_id = trade.get('asset') or trade.get('assetId')
+        price = parse_usd(trade.get('price', 0.5))
+        direction = get_up_down(trade)
+        title = (trade.get('title') or '?')[:60]
+        timestamp = trade.get('timestamp', time.time())
+        
+        copy_orders.append({
+            'Time': datetime.fromtimestamp(timestamp).strftime('%H:%M'),
+            'Market': title,
+            'Direction': direction,
+            'Trader Shares': f"{trader_size:.0f}",
+            'Your Shares': f"{your_size:.1f}",
+            'Price': f"${price:.3f}",
+            'Your $': f"${your_size * price:.2f}",
+            'Asset ID': asset_id[:16] + '...' if asset_id else 'N/A'
+        })
+    
+    if copy_orders:
+        df = pd.DataFrame(copy_orders)
+        total_cost = df['Your $'].sum()
+        
+        col1, col2, col3 = st.columns(3)
+        with col1: st.metric("Total Orders", len(df))
+        with col2: st.metric("Total Cost", f"${total_cost:.0f}")
+        with col3: st.metric("Bankroll Left", f"${your_bankroll-total_cost:.0f}")
+        
+        st.dataframe(df, height=400, hide_index=True)
+        
+        if st.button("✅ CONFIRM DRY-RUN ORDERS"):
+            st.success(f"🚀 Executed {len(df)} orders | Cost: ${total_cost:.0f}")
+            st.balloons()
+    else:
+        st.info("📭 No recent BUY trades to copy")
+
+def real_trade_toggle(your_bankroll=1000, ratio=200):
+    """🔴 REAL TRADING MODE (disabled by default)"""
+    st.warning("⚠️ REAL TRADING DISABLED - Dry-run only")
+    
+    if st.checkbox("🔴 ENABLE REAL TRADING (DANGER!)"):
+        st.error("🚫 REAL TRADING DISABLED FOR SAFETY")
+        # TODO: Add API key input + signer
+        # place_polymarket_order(asset_id, your_size)
+    
+    st.info("💡 Enable in production: Add API key + signer")
+
 
 def simulate_combined(df, your_bankroll, wallet_address, ratio=200, hedge_minutes=15, hedge_ratio=200):
     """🚀 BLIND COPY + 🔄 HEDGE - TRUE SCROLLING + SHOWS FULL DATA"""
@@ -161,7 +217,6 @@ def simulate_combined(df, your_bankroll, wallet_address, ratio=200, hedge_minute
     combined = total_your + net_up + net_down
     if combined > your_bankroll:
         st.warning(f"⚠️ Combined: ${combined:.2f} > bankroll ${your_bankroll:.0f}")
-
 
 def simulate_historical_pnl(closed_pnl, ratio=200):
     """Backtest P&L"""
