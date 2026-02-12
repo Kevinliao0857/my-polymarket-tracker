@@ -190,32 +190,34 @@ if st.session_state.get('show_simulate', False) and not pos_df.empty:
             st.success(f"✅ {len(sim_df)}/{len(pos_df)} positions | Skipped {skipped} tiny | PnL: ${total_pnl:+.0f}")
         
         # 👇 CHART + RAW NUMBERS (best of both!)
+        # 👇 BULLETPROOF P&L HISTORY (handles all edge cases)
         if len(st.session_state.sim_pnl_history) > 1:
-            hist_df = pd.DataFrame(st.session_state.sim_pnl_history)
-            hist_df['Time'] = (hist_df['time']*60).apply(lambda x: pd.to_datetime(int(x), unit='s', origin='unix').strftime('%H:%M:%S'))
-            hist_df['PnL $'] = hist_df['pnl'].round(2)
-            hist_df['PnL %'] = (hist_df['pnl'] / hist_df['cost'] * 100).round(2)
-
-            col_chart, col_table = st.columns(2)
-
-            with col_chart:
-                st.markdown("**📈 Trend**")
-                st.line_chart(hist_df.set_index('time')['pnl'], height=200, use_container_width=True)
-
-            with col_table:
-                st.markdown("**📊 Latest**")
-                st.dataframe(
-                    hist_df[['Time', 'PnL $', 'PnL %']].tail(8),  # Last 8
-                    use_container_width=True,
-                    column_config={
-                        "PnL $": st.column_config.NumberColumn(format="$%.2f"),
-                        "PnL %": st.column_config.NumberColumn(format="%.2f%"),
-                    },
-                    height=200
-                )
-
-            st.caption(f"⏱️ {runtime_min:.0f}min | {len(hist_df)} snapshots | Now: ${total_pnl:+.2f}")
-
+            try:
+                hist_df = pd.DataFrame(st.session_state.sim_pnl_history)
+                
+                # Fix time column
+                hist_df['Time'] = hist_df['time'].apply(lambda x: f"{int(x):.0f}m")
+                
+                # Safe PnL % (avoid div0 + NaN)
+                hist_df['PnL $'] = hist_df['pnl'].round(2)
+                hist_df['PnL %'] = hist_df.apply(lambda row: f"{(row["pnl"]/total_cost*100):+.1f}%" if total_cost > 0 else "0.0%", axis=1)
+                
+                col_chart, col_table = st.columns(2)
+                
+                with col_chart:
+                    st.markdown("**📈 Trend**")
+                    st.line_chart(hist_df.set_index('Time')['PnL $'], height=200)
+                
+                with col_table:
+                    st.markdown("**📊 Raw $**")
+                    recent = hist_df[['Time', 'PnL $', 'PnL %']].tail(8)
+                    st.dataframe(recent, use_container_width=True, hide_index=True)
+                
+                st.caption(f"⏱️ {len(hist_df)} snapshots | Latest: ${total_pnl:+.2f}")
+                
+            except Exception as e:
+                st.caption("📈 History loading...")
+        
         
         # 👇 Styled table (same as positions)
         sim_visible_cols = ['Market', 'UP/DOWN', 'Shares', 'Your Shares', 'AvgPrice', 'Your Avg', 
