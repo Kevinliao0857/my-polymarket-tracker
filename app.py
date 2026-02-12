@@ -19,6 +19,14 @@ if 'refresh_count' not in st.session_state:
     st.session_state.refresh_count = 0
 st.session_state.refresh_count += 1
 
+if 'sim_start_time' not in st.session_state:
+    st.session_state.sim_start_time = None
+if 'sim_pnl_history' not in st.session_state:
+    st.session_state.sim_pnl_history = []
+if 'sim_bankroll_used' not in st.session_state:
+    st.session_state.sim_bankroll_used = 0
+
+
 # MAIN TITLE
 st.markdown(f"# ₿ 0x8dxd Crypto Bot Tracker")
 
@@ -73,7 +81,11 @@ if st.sidebar.button("🔄 Force Refresh", type="primary"):
 
 st.sidebar.markdown("---")
 if st.sidebar.button("🤖 Simulate", type="primary"):
+    if st.session_state.sim_start_time is None:
+        st.session_state.sim_start_time = time.time()  # 👈 START TRACKING
+        st.session_state.sim_pnl_history = []  # 👈 RESET
     st.session_state.show_simulate = True
+
 
 # Load data - AUTO-STARTS WS! 🚀
 df = track_0x8dxd(MINUTES_BACK)
@@ -171,6 +183,22 @@ if st.session_state.get('show_simulate', False) and not pos_df.empty:
     total_cost = sim_df['Your Cost'].sum().round(2)
     total_pnl = sim_df['Your PnL'].sum().round(2)
     
+    # 👇 TRACK SIMULATED P&L OVER TIME
+    if st.session_state.sim_start_time:
+        runtime_min = (time.time() - st.session_state.sim_start_time) / 60
+        st.info(f"⏱️ Simulation running: {runtime_min:.1f}min | History: {len(st.session_state.sim_pnl_history)} snapshots")
+
+        # Store this snapshot
+        snapshot = {'time': runtime_min, 'pnl': total_pnl, 'positions': len(sim_df)}
+        st.session_state.sim_pnl_history.append(snapshot)
+
+        # Show PnL chart
+        if len(st.session_state.sim_pnl_history) > 1:
+            hist_df = pd.DataFrame(st.session_state.sim_pnl_history)
+            st.line_chart(hist_df.set_index('time')['pnl'], height=200)
+            st.caption(f"📈 Simulated PnL trend | Started {datetime.fromtimestamp(st.session_state.sim_start_time, EST).strftime('%I:%M %p ET')}")
+
+
     # Header metric
     sim_color = "🟢" if total_pnl >= 0 else "🔴"
     st.metric("Total Investment", f"${total_cost:,.0f}", f"{sim_color}${abs(total_pnl):,.0f}")
@@ -203,6 +231,15 @@ if st.session_state.get('show_simulate', False) and not pos_df.empty:
     
     st.caption(f"✅ Simulated {len(sim_df)}/{len(pos_df)} positions | Skipped {len(pos_df)-len(sim_df)} tiny | 1:{copy_ratio}")
     
-    if st.button("❌ Hide Simulator"):
-        st.session_state.show_simulate = False
-        st.rerun()
+    col_btn1, col_btn2 = st.columns(2)
+    with col_btn1:
+        if col_btn1.button("❌ Hide"):
+            st.session_state.show_simulate = False
+            st.rerun()
+    with col_btn2:
+        if col_btn2.button("🛑 Stop Simulation"):
+            st.session_state.sim_start_time = None
+            st.session_state.sim_pnl_history = []
+            st.session_state.show_simulate = False
+            st.rerun()
+    
