@@ -4,15 +4,34 @@ import time
 from typing import Dict
 
 def run_position_simulator(pos_df: pd.DataFrame, initial_bankroll: float, copy_ratio: int = 10) -> Dict:
-    """Core simulation logic"""
+    """Hedge-aware simulator - pairs UP/DOWN same market"""
     sim_df = pos_df.copy()
     sim_df['Your Shares'] = (sim_df['Shares'].astype(float) / copy_ratio).round(1)
-    sim_df['Buy?'] = sim_df['Your Shares'] >= 5
-    sim_df = sim_df[sim_df['Buy?']].copy().reset_index(drop=True)
+    
+    # 👇 HEDGE PAIRING LOGIC
+    market_groups = sim_df.groupby('Market')
+    paired_df = []
+    
+    for market, group in market_groups:
+        if len(group) == 2 and 'UP' in group['UP/DOWN'].str.cat() and 'DOWN' in group['UP/DOWN'].str.cat():
+            # Hedge pair found - simulate BOTH if ANY >=5 shares
+            up_group = group[group['UP/DOWN'].str.contains('UP')].iloc[0]
+            down_group = group[group['UP/DOWN'].str.contains('DOWN')].iloc[0]
+            
+            if up_group['Your Shares'] >= 5 or down_group['Your Shares'] >= 5:
+                paired_df.append(up_group)
+                paired_df.append(down_group)
+        else:
+            # Single position - normal threshold
+            valid_group = group[group['Your Shares'] >= 5]
+            paired_df.extend(valid_group.to_dict('records'))
+    
+    sim_df = pd.DataFrame(paired_df).reset_index(drop=True)
     
     if len(sim_df) == 0:
-        return {'valid': False, 'message': "No positions ≥5 shares!"}
+        return {'valid': False, 'message': "No valid positions (hedge/single)"}
     
+    # Price/PnL math (unchanged)
     avg_price = sim_df['AvgPrice'].str.replace('$', '').astype(float)
     cur_price = sim_df['CurPrice'].str.replace('$', '').astype(float)
     
@@ -29,8 +48,10 @@ def run_position_simulator(pos_df: pd.DataFrame, initial_bankroll: float, copy_r
         'total_cost': total_cost,
         'total_pnl': total_pnl,
         'positions': len(sim_df),
-        'skipped': len(pos_df) - len(sim_df)
+        'skipped': len(pos_df) - len(sim_df),
+        'hedge_pairs': len(market_groups)  # Track hedge detection
     }
+
 
 def get_realized_bankroll(initial_bankroll: float, sim_df: pd.DataFrame) -> float:
     """Calculate REAL bankroll: initial $ + realized PnL from EXPIRED positions"""

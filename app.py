@@ -231,6 +231,14 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: int):
     total_pnl = sim_results['total_pnl']
     skipped = sim_results['skipped']
     
+    # 👇 HEDGE MARKER
+    market_groups = sim_df.groupby('Market')
+    hedge_markets = []
+    for market, group in market_groups:
+        if len(group) >= 2 and any('UP' in str(updown) for updown in group['UP/DOWN']):
+            hedge_markets.append(market)
+    sim_df['Hedge?'] = sim_df['Market'].apply(lambda x: '🛡️ Hedge' if x in hedge_markets else '')
+    
     # 🔥 REAL BANKROLL CALCULATION
     current_bankroll = get_realized_bankroll(initial_bankroll, sim_df)
     bankroll_change = current_bankroll - initial_bankroll
@@ -259,7 +267,7 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: int):
             st.line_chart(hist_df.set_index('Time')['realized_pnl'], height=200)
     
     # Table with Status highlighting
-    sim_cols = ['Market', 'UP/DOWN', 'Status', 'Shares', 'Your Shares', 'Your Cost', 'Your PnL']
+    sim_cols = ['Market', 'UP/DOWN', 'Status', 'Shares', 'Your Shares', 'Your Cost', 'Your PnL', 'Hedge?']
     recent_mask = sim_df['age_sec'] <= 300
     def highlight_recent(row):
         if recent_mask.iloc[row.name]:
@@ -294,8 +302,6 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: int):
             st.caption("💡 Skipped = <5 **Your Shares** after copy ratio")
         else:
             st.info("No skipped positions")
-
-
 
 
 with st.expander("🤖 Position Simulator", expanded=False):
