@@ -1,10 +1,28 @@
 import re
 import pandas as pd
 
-def parse_usd(value):
-    """$1,234 → 1234.0, N/A → 0"""
-    if pd.isna(value) or value is None: return 0.0
-    text = str(value).upper().replace('$', '').replace(',', '')
-    nums = re.findall(r'[\d.]+\d*', text)
-    if nums: return float(nums[0])
-    return 0.0
+def parse_usd(price_raw):
+    """Parse messy USD prices → float. Handles '$0.52', '0.52 USD', 0.52, None."""
+    if not price_raw:
+        return 0.50
+    try:
+        if isinstance(price_raw, (int, float)):
+            return float(price_raw)
+        # Clean common formats
+        clean = str(price_raw).replace('$', '').replace(',', '').replace('USD', '').strip()
+        return float(clean)
+    except:
+        return 0.50
+
+def format_short_title(title, max_len=85):
+    """Truncate titles safely."""
+    if len(title) > max_len:
+        return title[:max_len] + '...'
+    return title
+
+def safe_float(val, default=0.0):
+    """Convert to float safely."""
+    try:
+        return float(val)
+    except:
+        return default

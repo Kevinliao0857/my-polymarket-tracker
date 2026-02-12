@@ -11,7 +11,7 @@ from .filters import is_crypto, get_up_down
 from .data import safe_fetch
 from .status import get_status_hybrid
 from .websocket import rtds_listener, live_trades
-from .shared import parse_usd  # ✅ NEW - breaks circle
+from .shared import parse_usd
 
 # WS startup (unchanged)
 if 'ws_started' not in st.session_state:
