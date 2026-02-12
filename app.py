@@ -152,34 +152,46 @@ else:
         })
         st.caption(f"✅ {len(pos_df)} crypto positions | Uses official avgPrice [data-api.polymarket.com/positions]")
 
-if st.session_state.get('show_simulate', False) and not pos_df.empty:
+if st.session_state.get('show_simulate', False):
     st.markdown("---")
     st.subheader("🤖 Your Position Simulator")
     
-    # Sliders
     col_sim1, col_sim2 = st.columns(2)
     with col_sim1:
         bankroll = st.number_input("💰 Your Bankroll", value=1000.0, step=100.0)
     with col_sim2:
         copy_ratio = st.number_input("⚖️ Copy Ratio", value=10, step=5, min_value=1)
     
-    # 🧠 Run simulation (clean!)
-    sim_results = run_position_simulator(pos_df, bankroll, copy_ratio)
+    # 👈 CONFIRM BUTTON - set params FIRST
+    if st.button("🚀 Confirm & Start Simulation", type="primary"):
+        if st.session_state.sim_start_time is None:
+            st.session_state.sim_start_time = time.time()
+            st.session_state.sim_pnl_history = []
+        st.session_state.bankroll = bankroll  # Save confirmed values
+        st.session_state.copy_ratio = copy_ratio
+        st.rerun()
     
-    if not sim_results['valid']:
-        st.error(sim_results['message'])
-    else:
-        # Track PnL history
-        track_simulation_pnl(sim_results, bankroll)
-        
-        sim_df = sim_results['sim_df']
-        total_cost = sim_results['total_cost']
-        total_pnl = sim_results['total_pnl']
-        skipped = sim_results['skipped']
-        
-        # Header metric
-        sim_color = "🟢" if total_pnl >= 0 else "🔴"
-        st.metric("Total Investment", f"${total_cost:,.0f}", f"{sim_color}${abs(total_pnl):,.0f}")
+    # Only run if actually started
+    if st.session_state.sim_start_time:
+        pos_df = get_open_positions(TRADER)  # Fetch fresh
+        if pos_df.empty:
+            st.warning("No positions to simulate")
+        else:
+            sim_results = run_position_simulator(pos_df, st.session_state.bankroll, st.session_state.copy_ratio)
+            
+            if not sim_results['valid']:
+                st.error(sim_results['message'])
+            else:
+                track_simulation_pnl(sim_results, st.session_state.bankroll)
+                
+                sim_df = sim_results['sim_df']
+                total_cost = sim_results['total_cost']
+                total_pnl = sim_results['total_pnl']
+                skipped = sim_results['skipped']
+                
+                # Header metric
+                sim_color = "🟢" if total_pnl >= 0 else "🔴"
+                st.metric("Total Investment", f"${total_cost:,.0f}", f"{sim_color}${abs(total_pnl):,.0f}")
         
         # Bankroll + history
         if total_cost > bankroll:
