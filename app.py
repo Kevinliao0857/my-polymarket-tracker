@@ -15,10 +15,10 @@ st.set_page_config(layout="wide")
 
 
 # ✅ FIXED IMPORTS - ADD get_open_positions
-from utils import track_0x8dxd, get_open_positions  # 👈 NEW!
+from utils.api import get_open_positions, track_0x8dxd, get_profile_name, get_trader_pnl, get_closed_trades_pnl 
 from utils.config import EST, TRADER
-from utils.api import get_profile_name, get_trader_pnl, get_closed_trades_pnl
 from utils.simulator import simulate_combined, simulate_historical_pnl, simulate_hedge
+
 
 
 if 'refresh_count' not in st.session_state:
