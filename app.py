@@ -101,7 +101,14 @@ hedge_wallet = TRADER  # Use same trader or add input: st.sidebar.text_input("He
 
 # ✅ FIXED: Buttons now pass DEFINED variables
 if st.sidebar.button("🤖 Dry-Run Copy Bot", type="primary"):
+    st.session_state.show_dry_run = True
+
+if st.session_state.get('show_dry_run', False):
+    st.markdown("---")
     dry_run_copy(your_bankroll, copy_ratio)
+    if st.button("❌ Hide Dry-Run"):
+        st.session_state.show_dry_run = False
+        st.rerun()
 
 st.sidebar.markdown("---")
 if st.sidebar.button("🔄 Hedge Analyzer"):
