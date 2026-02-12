@@ -3,35 +3,38 @@ import pandas as pd
 import time
 from typing import Dict
 
+
 def run_position_simulator(pos_df: pd.DataFrame, initial_bankroll: float, copy_ratio: int = 10) -> Dict:
     """Hedge-aware simulator - pairs UP/DOWN same market"""
     sim_df = pos_df.copy()
     sim_df['Your Shares'] = (sim_df['Shares'].astype(float) / copy_ratio).round(1)
     
-    # 👇 HEDGE PAIRING LOGIC
+    # 👇 FIXED HEDGE PAIRING LOGIC
     market_groups = sim_df.groupby('Market')
-    paired_df = []
+    paired_rows = []
     
     for market, group in market_groups:
-        if len(group) == 2 and 'UP' in group['UP/DOWN'].str.cat() and 'DOWN' in group['UP/DOWN'].str.cat():
-            # Hedge pair found - simulate BOTH if ANY >=5 shares
-            up_group = group[group['UP/DOWN'].str.contains('UP')].iloc[0]
-            down_group = group[group['UP/DOWN'].str.contains('DOWN')].iloc[0]
-            
-            if up_group['Your Shares'] >= 5 or down_group['Your Shares'] >= 5:
-                paired_df.append(up_group)
-                paired_df.append(down_group)
-        else:
-            # Single position - normal threshold
-            valid_group = group[group['Your Shares'] >= 5]
-            paired_df.extend(valid_group.to_dict('records'))
+        group = group.reset_index(drop=True)
+        if len(group) == 2:
+            up_mask = group['UP/DOWN'].str.contains('UP', na=False)
+            down_mask = group['UP/DOWN'].str.contains('DOWN', na=False)
+            if up_mask.any() and down_mask.any():
+                up_row = group[up_mask].iloc[0].to_dict()
+                down_row = group[down_mask].iloc[0].to_dict()
+                if up_row['Your Shares'] >= 5 or down_row['Your Shares'] >= 5:
+                    paired_rows.append(up_row)
+                    paired_rows.append(down_row)
+                continue
+        
+        valid_rows = group[group['Your Shares'] >= 5].to_dict('records')
+        paired_rows.extend(valid_rows)
     
-    sim_df = pd.DataFrame(paired_df).reset_index(drop=True)
+    sim_df = pd.DataFrame(paired_rows).reset_index(drop=True)
     
     if len(sim_df) == 0:
         return {'valid': False, 'message': "No valid positions (hedge/single)"}
     
-    # Price/PnL math (unchanged)
+    # Rest unchanged...
     avg_price = sim_df['AvgPrice'].str.replace('$', '').astype(float)
     cur_price = sim_df['CurPrice'].str.replace('$', '').astype(float)
     
@@ -49,7 +52,7 @@ def run_position_simulator(pos_df: pd.DataFrame, initial_bankroll: float, copy_r
         'total_pnl': total_pnl,
         'positions': len(sim_df),
         'skipped': len(pos_df) - len(sim_df),
-        'hedge_pairs': len(market_groups)  # Track hedge detection
+        'hedge_pairs': len([m for m, g in market_groups if len(g) == 2 and g['UP/DOWN'].str.contains('UP').any() and g['UP/DOWN'].str.contains('DOWN').any()])  # Improved count
     }
 
 
