@@ -18,7 +18,7 @@ st.set_page_config(layout="wide")
 from utils.api import get_open_positions, track_0x8dxd, get_profile_name, get_trader_pnl, get_closed_trades_pnl 
 from utils.config import EST, TRADER
 from utils.simulator import (
-    dry_run_copy, simulate_combined, simulate_historical_pnl, simulate_hedge
+    dry_run_copy, dry_run_copy_positions, simulate_combined, simulate_historical_pnl, simulate_hedge
 )
 
 
@@ -100,8 +100,8 @@ hedge_wallet = TRADER  # Use same trader or add input: st.sidebar.text_input("He
 
 
 # ✅ FIXED: Buttons now pass DEFINED variables
-if st.sidebar.button("🤖 Dry-Run Copy Bot", type="primary"):
-    st.session_state.show_dry_run = True
+if st.sidebar.button("📈 Copy Open Positions", type="primary"):
+    dry_run_copy_positions(your_bankroll, copy_ratio)
 
 if st.session_state.get('show_dry_run', False):
     st.markdown("---")
