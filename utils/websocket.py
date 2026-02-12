@@ -45,26 +45,40 @@ def rtds_listener():
                 return
             
             try:
-                data = json.loads(msg)
+                # 👇 FIX 1: Robust JSON + str check
+                if isinstance(msg, str):
+                    data = json.loads(msg)
+                else:
+                    data = msg
+                
                 event_type = data.get('event_type', 'unknown')
                 asset_id = data.get('asset_id') or data.get('asset') or 'N/A'
-                size = (data.get('size') or 
-                        data.get('price', {}).get('value', 0) or 
-                        data.get('price', 0) or 0)
-                print(f"🧑‍💻 EVENT: {event_type} | Asset: {asset_id} | Size/Price: {size}")
                 
-                # 🆕 Handle only trades/last_trade_price + robust size
+                # 👇 FIX 2: ONLY real trades (Polymarket sends book spam)
                 if event_type not in ('trade', 'last_trade_price'):
-                    return
+                    return  # Ignore price_change/book
                 
-                trade_data = data
+                # 👇 FIX 3: Better size/price parsing
+                size = data.get('size') or data.get('amount') or 0
+                price = data.get('price') or data.get('last_price') or 0
+                
+                print(f"🧑‍💻 TRADE: {event_type} | Asset: {asset_id[:16]}... | Size: {size} | Price: {price}")
+                
+                trade_data = {
+                    'event_type': event_type,
+                    'asset_id': asset_id,
+                    'size': size,
+                    'price': price,
+                    'timestamp': data.get('timestamp', time.time())
+                }
                 trade_data['proxyWallet'] = TRADER
-                trade_data['title'] = data.get('question', data.get('market', {}).get('question', 'Market Trade'))
-                ts = trade_data.get('timestamp') or time.time()
+                trade_data['title'] = data.get('question', data.get('market', {}).get('question', f"Asset {asset_id[:16]}"))
+                
                 live_trades.append(trade_data)
-                print(f"✅ ADDED #{len(live_trades)}")
+                print(f"✅ TRADE ADDED #{len(live_trades)} | Size: {size}")
+                
             except Exception as e:
-                print(f"❌ Parse: {e}")
+                print(f"❌ Parse error: {e} | Raw: {str(msg)[:100]}...")
         
         def on_open(ws):
             ws.send(json.dumps({"type": "market", "assets_ids": assets}))
