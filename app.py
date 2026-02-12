@@ -276,28 +276,25 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: int):
         st.markdown("---")
         st.subheader(f"⏭️ Skipped Bets ({skipped} < 5 shares)")
 
-        # Simple filter - no complex styling
         all_pos_df = get_open_positions(TRADER)
-        temp_sim = run_position_simulator(all_pos_df, 1000, st.session_state.get('copy_ratio', 10))
+        copy_ratio = st.session_state.get('copy_ratio', 10)
 
-        if temp_sim['valid']:
-            sim_indices = set(temp_sim['sim_df'].index)
-            skipped_df = all_pos_df[~all_pos_df.index.isin(sim_indices)].copy()
+        # Calculate Your Shares for ALL positions
+        all_pos_df['Your Shares'] = (all_pos_df['Shares'].astype(float) / copy_ratio).round(1)
+        skipped_df = all_pos_df[all_pos_df['Your Shares'] < 5].copy()
 
-            if not skipped_df.empty:
-                skip_cols = ['Market', 'UP/DOWN', 'Shares', 'AvgPrice', 'Status']
-                skipped_df_display = skipped_df[skip_cols].round(2)
-
-                st.dataframe(skipped_df_display, use_container_width=True, height=200, hide_index=True,
-                             column_config={
-                                 "Shares": st.column_config.NumberColumn(format="%.1f"),
-                                 "AvgPrice": st.column_config.NumberColumn(format="$%.2f")
-                             })
-                st.caption("💡 Skipped = <5 shares after copy ratio")
-            else:
-                st.info("No skipped positions found")
+        skip_cols = ['Market', 'UP/DOWN', 'Shares', 'Your Shares', 'AvgPrice', 'Status']
+        if not skipped_df.empty:
+            st.dataframe(skipped_df[skip_cols], use_container_width=True, height=200, hide_index=True,
+                         column_config={
+                             "Shares": st.column_config.NumberColumn(format="%.1f"),
+                             "Your Shares": st.column_config.NumberColumn(format="%.1f", color="orange"),
+                             "AvgPrice": st.column_config.NumberColumn(format="$%.2f")
+                         })
+            st.caption("💡 Red = <5 Your Shares after copy ratio")
         else:
-            st.info("Could not calculate skipped positions")
+            st.info("No skipped positions")
+
 
 
 with st.expander("🤖 Position Simulator", expanded=False):
