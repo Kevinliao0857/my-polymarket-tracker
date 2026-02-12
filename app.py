@@ -153,6 +153,12 @@ if st.session_state.get('show_simulate', False) and not pos_df.empty:
     # 👇 FIXED SIMULATION - perfect math
     sim_df = pos_df.copy()
     sim_df['Your Shares'] = (sim_df['Shares'].astype(float) / copy_ratio).round(1)
+    sim_df['Buy?'] = sim_df['Your Shares'] >= 5  # 👈 NEW
+    sim_df = sim_df[sim_df['Buy?']].copy().reset_index(drop=True)  # 👈 Filter out <5 shares
+
+    if len(sim_df) == 0:
+        st.warning("⚠️ No positions meet 5-share minimum!")
+        st.stop()
     
     # Clean price extraction
     avg_price = sim_df['AvgPrice'].str.replace('$', '').astype(float)
@@ -195,7 +201,7 @@ if st.session_state.get('show_simulate', False) and not pos_df.empty:
         "Your PnL": st.column_config.NumberColumn(format="$%.2f", width="small"),
     })
     
-    st.caption(f"✅ Simulated {len(sim_df)} positions | 1:{copy_ratio} ratio")
+    st.caption(f"✅ Simulated {len(sim_df)}/{len(pos_df)} positions | Skipped {len(pos_df)-len(sim_df)} tiny | 1:{copy_ratio}")
     
     if st.button("❌ Hide Simulator"):
         st.session_state.show_simulate = False
