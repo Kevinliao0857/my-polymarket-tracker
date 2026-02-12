@@ -209,37 +209,6 @@ else:
 # =====================================================
 # 🤖 SIMULATOR (COLLAPSIBLE) - REAL BANKROLL TRACKING
 # =====================================================
-with st.expander("🤖 Position Simulator", expanded=False):
-    if 'sim_start_time' not in st.session_state:
-        st.session_state.sim_start_time = None
-    if 'sim_pnl_history' not in st.session_state:
-        st.session_state.sim_pnl_history = []
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        initial_bankroll = st.number_input("💰 Starting Bankroll", value=1000.0, step=100.0)
-    with col2:
-        copy_ratio = st.number_input("⚖️ Copy Ratio", value=10, step=5, min_value=1)
-    
-    col_btn1, col_btn2 = st.columns(2)
-    with col_btn1:
-        if col_btn1.button("🚀 Start Sim", type="primary", use_container_width=True):
-            st.session_state.initial_bankroll = initial_bankroll
-            st.session_state.copy_ratio = copy_ratio
-            if st.session_state.sim_start_time is None:
-                st.session_state.sim_start_time = time.time()
-                st.session_state.sim_pnl_history = []
-            st.rerun()
-    with col_btn2:
-        if col_btn2.button("🛑 Reset", use_container_width=True):
-            for key in ['sim_start_time', 'sim_pnl_history', 'initial_bankroll', 'copy_ratio']:
-                st.session_state.pop(key, None)
-            st.rerun()
-    
-    if st.session_state.sim_start_time:
-        initial_bankroll = st.session_state.get('initial_bankroll', 1000.0)
-        copy_ratio = st.session_state.get('copy_ratio', 10)
-        render_real_bankroll_simulator(initial_bankroll, copy_ratio)
 
 def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: int):
     """Render simulator with REAL bankroll tracking"""
@@ -295,8 +264,40 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: int):
         if recent_mask.iloc[row.name]:
             return ['background-color: rgba(0, 255, 0, 0.15)'] * len(sim_cols)
         elif 'expired' in str(sim_df.iloc[row.name]['Status']).lower():
-            return ['background-color: rgba(255, 165, 0, 0.2)'] * len(sim_cols)  # Orange for expired
+            return ['background-color: rgba(255, 165, 0, 0.2)'] * len(sim_cols)
         return [''] * len(sim_cols)
     
     styled_sim = sim_df[sim_cols].style.apply(highlight_recent, axis=1)
     st.dataframe(styled_sim, use_container_width=True, height=350, hide_index=True)
+
+with st.expander("🤖 Position Simulator", expanded=False):
+    if 'sim_start_time' not in st.session_state:
+        st.session_state.sim_start_time = None
+    if 'sim_pnl_history' not in st.session_state:
+        st.session_state.sim_pnl_history = []
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        initial_bankroll = st.number_input("💰 Starting Bankroll", value=1000.0, step=100.0)
+    with col2:
+        copy_ratio = st.number_input("⚖️ Copy Ratio", value=10, step=5, min_value=1)
+    
+    col_btn1, col_btn2 = st.columns(2)
+    with col_btn1:
+        if col_btn1.button("🚀 Start Sim", type="primary", use_container_width=True):
+            st.session_state.initial_bankroll = initial_bankroll
+            st.session_state.copy_ratio = copy_ratio
+            if st.session_state.sim_start_time is None:
+                st.session_state.sim_start_time = time.time()
+                st.session_state.sim_pnl_history = []
+            st.rerun()
+    with col_btn2:
+        if col_btn2.button("🛑 Reset", use_container_width=True):
+            for key in ['sim_start_time', 'sim_pnl_history', 'initial_bankroll', 'copy_ratio']:
+                st.session_state.pop(key, None)
+            st.rerun()
+    
+    if st.session_state.sim_start_time:
+        initial_bankroll = st.session_state.get('initial_bankroll', 1000.0)
+        copy_ratio = st.session_state.get('copy_ratio', 10)
+        render_real_bankroll_simulator(initial_bankroll, copy_ratio)
