@@ -67,12 +67,13 @@ MINUTES_BACK = st.sidebar.slider("⏰ Minutes back", 15, 120, 30, 5)
 now_ts = int(time.time())
 st.sidebar.caption(f"From: {datetime.fromtimestamp(now_ts - MINUTES_BACK*60, EST).strftime('%H:%M %p ET')}")
 
+# SIDEBAR (after profile/slider/refresh):
 if st.sidebar.button("🔄 Force Refresh", type="primary"):
     st.rerun()
 
 st.sidebar.markdown("---")
-if st.sidebar.button("🚀 Simulate Combined", type="primary"):
-    st.session_state.show_combined = True
+if st.sidebar.button("🤖 Simulate", type="primary"):
+    st.session_state.show_simulate = True
 
 # Load data - AUTO-STARTS WS! 🚀
 df = track_0x8dxd(MINUTES_BACK)
@@ -138,11 +139,38 @@ else:
         })
         st.caption(f"✅ {len(pos_df)} crypto positions | Uses official avgPrice [data-api.polymarket.com/positions]")
 
-# 👇 SIMULATE COMBINED (requires simulator import - kept minimal)
-if st.session_state.get('show_combined', False) and not df.empty:
+if st.session_state.get('show_simulate', False) and not pos_df.empty:
     st.markdown("---")
-    # Note: You'll need to add back simulator import + variables when ready
-    st.info("🛠️ Simulator section - add back imports when ready")
-    if st.button("❌ Hide Combined"):
-        st.session_state.show_combined = False
+    st.subheader("🤖 Position Simulator")
+    
+    # Sliders
+    col_sim1, col_sim2 = st.columns(2)
+    with col_sim1:
+        bankroll = st.number_input("💰 Your Bankroll", value=1000.0, step=100.0)
+    with col_sim2:
+        copy_ratio = st.number_input("⚖️ Copy Ratio", value=10, step=5, min_value=1, help="e.g. 10 = copy 1/10th of their position size")
+    
+    st.caption(f"💡 Simulates copying {len(pos_df)} positions at 1:{copy_ratio} ratio with ${bankroll:,.0f} bankroll")
+    
+    # SIMULATED TABLE - scale positions by ratio
+    sim_df = pos_df.copy()
+    sim_df['Your Shares'] = (sim_df['Shares'].astype(float) / copy_ratio).round(1)
+    sim_df['Your Cost'] = (sim_df['Your Shares'] * sim_df['AvgPrice'].str.replace('$', '').astype(float)).round(2)
+    total_needed = sim_df['Your Cost'].sum().round(2)
+    sim_df['Total Cost'] = f"${total_needed:.2f}"
+    
+    # Bankroll check
+    if total_needed > bankroll:
+        st.error(f"⚠️ Need ${total_needed:,.0f} but only have ${bankroll:,.0f}")
+    else:
+        st.success(f"✅ Fits! ${total_needed:,.0f} / ${bankroll:,.0f} used ({(total_needed/bankroll)*100:.0f}%)")
+    
+    # Show simulated positions
+    sim_cols = ['Market', 'UP/DOWN', 'Shares', 'Your Shares', 'AvgPrice', 'Your Cost', 'PnL']
+    st.dataframe(sim_df[sim_cols], use_container_width=True)
+    
+    st.caption(f"📊 Total investment: ${total_needed:,.0f} | Ratio 1:{copy_ratio}")
+    
+    if st.button("❌ Hide Simulator"):
+        st.session_state.show_simulate = False
         st.rerun()
