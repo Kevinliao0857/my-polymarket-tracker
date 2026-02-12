@@ -29,7 +29,8 @@ def simulate_combined(df, your_bankroll, trader, copy_ratio, hedge_minutes, hedg
     st.markdown("### 🚀 Combined Copy + Hedge Results")
     st.success("✅ Simulation complete!")
     st.info(f"📊 {len(df)} trades analyzed | 💰 ${your_bankroll:,} | ⚖️ 1:{copy_ratio}")
-    # Add charts/tables here later
+    if not df.empty:
+        st.bar_chart(df.groupby('UP/DOWN')['Amount'].sum())
 
 def simulate_historical_pnl(*args):
     """Historical PnL simulation."""
