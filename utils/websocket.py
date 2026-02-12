@@ -11,46 +11,12 @@ live_trades: deque = deque(maxlen=2000)
 
 
 def rtds_listener():
-    """🆕 Fixed WS listener with pings, server pongs, and real asset IDs."""
+    """🆕 Fixed WS listener with pings, server pongs, real asset IDs, and robust parsing."""
     reconnect_delay = 1
     ping_interval = 10  # Seconds
     ws_base_url = "wss://ws-subscriptions-clob.polymarket.com"
 
-    def on_message(ws, msg):
-        if msg.strip() == "ping":
-            ws.send("PING")
-            print("🏓 PONG")
-            return
-
-        try:
-            data = json.loads(msg) if isinstance(msg, str) else msg
-
-            # 👇 FIX 1: Handle LIST of trades (common!)
-            if isinstance(data, list):
-                for item in data:
-                    process_trade(item)
-                return
-
-            event_type = data.get('event_type', 'unknown')
-            asset_id = (
-                data.get('asset_id')
-                or data.get('asset')
-                or data.get('assetId')
-                or 'N/A'
-            )
-
-            # 👇 FIX 2: TRADES only (ignore book spam)
-            if event_type not in ('trade', 'last_trade_price'):
-                return
-
-            process_trade(data)  # 👇 Helper below
-
-        except json.JSONDecodeError as e:
-            print(f"❌ JSON error: {e}")
-        except Exception as e:
-            print(f"❌ Parse: {e} | Type: {type(msg)}")
-
-    def process_trade(data):  # 👇 NEW helper
+    def process_trade(data):  # 👇 NEW helper - expects DICT only
         """Parse single trade safely"""
         size = (
             data.get('size')
@@ -91,6 +57,44 @@ def rtds_listener():
 
         live_trades.append(trade_data)
         print(f"✅ TRADE ADDED #{len(live_trades)} | Size: {size} Price: ${price:.3f}")
+
+    def on_message(ws, msg):
+        if msg.strip() == "ping":
+            ws.send("PING")
+            print("🏓 PONG")
+            return
+
+        try:
+            # 🆕 Handle string vs dict upfront
+            if isinstance(msg, str):
+                data = json.loads(msg)
+            else:
+                data = msg
+
+            # 👇 Handle LIST of trades
+            if isinstance(data, list):
+                for item in data:
+                    process_trade(item)
+                return
+
+            event_type = data.get('event_type', 'unknown')
+            asset_id = (
+                data.get('asset_id')
+                or data.get('asset')
+                or data.get('assetId')
+                or 'N/A'
+            )
+
+            # 👇 TRADES only (ignore book spam)
+            if event_type not in ('trade', 'last_trade_price'):
+                return
+
+            process_trade(data)
+
+        except json.JSONDecodeError as e:
+            print(f"❌ JSON error: {e} | Raw: {msg[:100]}...")
+        except Exception as e:
+            print(f"❌ Parse: {e} | Type: {type(msg)} | Raw: {msg[:100]}...")
 
     def on_open(ws):
         ws.send(json.dumps({"type": "market", "assets_ids": assets}))
