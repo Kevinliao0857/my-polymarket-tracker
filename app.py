@@ -207,7 +207,7 @@ else:
         st.caption(f"✅ {len(pos_df)} positions")
 
 # =====================================================
-# 🤖 SIMULATOR (COLLAPSIBLE)
+# 🤖 SIMULATOR (COLLAPSIBLE) - REAL BANKROLL TRACKING
 # =====================================================
 with st.expander("🤖 Position Simulator", expanded=False):
     if 'sim_start_time' not in st.session_state:
@@ -217,26 +217,86 @@ with st.expander("🤖 Position Simulator", expanded=False):
     
     col1, col2 = st.columns(2)
     with col1:
-        bankroll = st.number_input("💰 Bankroll", value=1000.0, step=100.0)
+        initial_bankroll = st.number_input("💰 Starting Bankroll", value=1000.0, step=100.0)
     with col2:
         copy_ratio = st.number_input("⚖️ Copy Ratio", value=10, step=5, min_value=1)
     
     col_btn1, col_btn2 = st.columns(2)
     with col_btn1:
         if col_btn1.button("🚀 Start Sim", type="primary", use_container_width=True):
-            st.session_state.bankroll = bankroll
+            st.session_state.initial_bankroll = initial_bankroll
             st.session_state.copy_ratio = copy_ratio
             if st.session_state.sim_start_time is None:
                 st.session_state.sim_start_time = time.time()
                 st.session_state.sim_pnl_history = []
             st.rerun()
     with col_btn2:
-        if col_btn2.button("🛑 Stop Sim", use_container_width=True):
-            st.session_state.sim_start_time = None
-            st.session_state.sim_pnl_history = []
-            st.session_state.pop('bankroll', None)
-            st.session_state.pop('copy_ratio', None)
+        if col_btn2.button("🛑 Reset", use_container_width=True):
+            for key in ['sim_start_time', 'sim_pnl_history', 'initial_bankroll', 'copy_ratio']:
+                st.session_state.pop(key, None)
             st.rerun()
     
     if st.session_state.sim_start_time:
-        render_simulator()
+        initial_bankroll = st.session_state.get('initial_bankroll', 1000.0)
+        copy_ratio = st.session_state.get('copy_ratio', 10)
+        render_real_bankroll_simulator(initial_bankroll, copy_ratio)
+
+def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: int):
+    """Render simulator with REAL bankroll tracking"""
+    from utils.simulator import run_position_simulator, track_simulation_pnl, get_realized_bankroll
+    
+    pos_df = get_open_positions(TRADER)
+    if pos_df.empty:
+        st.warning("No positions to simulate")
+        return
+    
+    sim_results = run_position_simulator(pos_df, initial_bankroll, copy_ratio)
+    if not sim_results['valid']:
+        st.error(sim_results['message'])
+        return
+    
+    track_simulation_pnl(sim_results, initial_bankroll)
+    
+    sim_df = sim_results['sim_df']
+    total_cost = sim_results['total_cost']
+    total_pnl = sim_results['total_pnl']
+    skipped = sim_results['skipped']
+    
+    # 🔥 REAL BANKROLL CALCULATION
+    current_bankroll = get_realized_bankroll(initial_bankroll, sim_df)
+    bankroll_change = current_bankroll - initial_bankroll
+    
+    # Header metrics
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("🏦 Your Bankroll", f"${current_bankroll:,.0f}", f"${bankroll_change:+,.0f}")
+    with col2:
+        st.metric("📈 Unrealized PnL", f"${total_pnl:+,.0f}")
+    with col3:
+        st.metric("📊 Active Positions", f"{len(sim_df)}/{skipped} skipped")
+    
+    runtime_min = (time.time() - st.session_state.sim_start_time) / 60
+    st.caption(f"⏱️ {runtime_min:.1f}min | 1:{copy_ratio} | Expired bets = realized gains/losses")
+    
+    # History chart
+    if len(st.session_state.sim_pnl_history) > 1:
+        hist_df = pd.DataFrame(st.session_state.sim_pnl_history)
+        hist_df['Time'] = hist_df['time'].apply(lambda x: f"{int(x):.0f}m")
+        col_chart1, col_chart2 = st.columns(2)
+        with col_chart1:
+            st.line_chart(hist_df.set_index('Time')['bankroll'], height=200)
+        with col_chart2:
+            st.line_chart(hist_df.set_index('Time')['realized_pnl'], height=200)
+    
+    # Table with Status highlighting
+    sim_cols = ['Market', 'UP/DOWN', 'Status', 'Shares', 'Your Shares', 'Your Cost', 'Your PnL']
+    recent_mask = sim_df['age_sec'] <= 300
+    def highlight_recent(row):
+        if recent_mask.iloc[row.name]:
+            return ['background-color: rgba(0, 255, 0, 0.15)'] * len(sim_cols)
+        elif 'expired' in str(sim_df.iloc[row.name]['Status']).lower():
+            return ['background-color: rgba(255, 165, 0, 0.2)'] * len(sim_cols)  # Orange for expired
+        return [''] * len(sim_cols)
+    
+    styled_sim = sim_df[sim_cols].style.apply(highlight_recent, axis=1)
+    st.dataframe(styled_sim, use_container_width=True, height=350, hide_index=True)

@@ -1,11 +1,10 @@
 import streamlit as st
 import pandas as pd
 import time
-from datetime import datetime
-from typing import Optional, List, Dict
+from typing import Dict
 
-def run_position_simulator(pos_df: pd.DataFrame, bankroll: float, copy_ratio: int = 10) -> Dict:
-    """Core simulation logic - returns results dict"""
+def run_position_simulator(pos_df: pd.DataFrame, initial_bankroll: float, copy_ratio: int = 10) -> Dict:
+    """Core simulation logic"""
     sim_df = pos_df.copy()
     sim_df['Your Shares'] = (sim_df['Shares'].astype(float) / copy_ratio).round(1)
     sim_df['Buy?'] = sim_df['Your Shares'] >= 5
@@ -14,7 +13,6 @@ def run_position_simulator(pos_df: pd.DataFrame, bankroll: float, copy_ratio: in
     if len(sim_df) == 0:
         return {'valid': False, 'message': "No positions ≥5 shares!"}
     
-    # Price math
     avg_price = sim_df['AvgPrice'].str.replace('$', '').astype(float)
     cur_price = sim_df['CurPrice'].str.replace('$', '').astype(float)
     
@@ -34,16 +32,34 @@ def run_position_simulator(pos_df: pd.DataFrame, bankroll: float, copy_ratio: in
         'skipped': len(pos_df) - len(sim_df)
     }
 
-def track_simulation_pnl(sim_results, bankroll: float) -> None:
-    """Track PnL history - FIXED for Streamlit"""
+def get_realized_bankroll(initial_bankroll: float, sim_df: pd.DataFrame) -> float:
+    """Calculate REAL bankroll: initial $ + realized PnL from EXPIRED positions"""
+    # Expired/settled positions (status indicates closed/expired)
+    expired_positions = sim_df[sim_df['Status'].str.contains('expired|settled|closed', case=False, na=False)]
+    
+    if len(expired_positions) == 0:
+        return initial_bankroll  # No realized gains/losses yet
+    
+    # Sum realized PnL from expired positions only
+    realized_pnl = expired_positions['Your PnL'].sum()
+    final_bankroll = initial_bankroll + realized_pnl
+    
+    return round(final_bankroll, 2)
+
+def track_simulation_pnl(sim_results, initial_bankroll: float) -> None:
+    """Track real bankroll history"""
     if 'sim_start_time' in st.session_state and st.session_state.sim_start_time:
         runtime_min = (time.time() - st.session_state.sim_start_time) / 60
+        current_bankroll = get_realized_bankroll(initial_bankroll, sim_results['sim_df'])
+        
         snapshot = {
-            'time': runtime_min, 
-            'pnl': sim_results['total_pnl'], 
-            'portfolio': bankroll + sim_results['total_pnl'],
+            'time': runtime_min,
+            'bankroll': current_bankroll,
+            'pnl': sim_results['total_pnl'],
+            'realized_pnl': current_bankroll - initial_bankroll,
             'cost': sim_results['total_cost'],
             'positions': sim_results['positions']
         }
+        if 'sim_pnl_history' not in st.session_state:
+            st.session_state.sim_pnl_history = []
         st.session_state.sim_pnl_history.append(snapshot)
-
