@@ -19,7 +19,6 @@ def parse_usd(value):
     return 0.0
 
 def dry_run_copy(your_bankroll=1000, ratio=200, max_per_trade=50):
-    """🤖 DRY-RUN COPY BOT - Shows EXACT orders you'd place"""
     st.markdown("### 🤖 Dry-Run Copy Trader (1:{})".format(ratio))
     
     trades = get_latest_bets(TRADER, limit=20)
@@ -32,7 +31,6 @@ def dry_run_copy(your_bankroll=1000, ratio=200, max_per_trade=50):
         if trader_size < 5: continue
         
         your_size = min(trader_size / ratio, max_per_trade)
-        
         asset_id = trade.get('asset') or trade.get('assetId')
         price = parse_usd(trade.get('price', 0.5))
         direction = get_up_down(trade)
@@ -46,26 +44,30 @@ def dry_run_copy(your_bankroll=1000, ratio=200, max_per_trade=50):
             'Trader Shares': f"{trader_size:.0f}",
             'Your Shares': f"{your_size:.1f}",
             'Price': f"${price:.3f}",
-            'Your $': f"${your_size * price:.2f}",
-            'Asset ID': asset_id[:16] + '...' if asset_id else 'N/A'
+            'Your $': round(your_size * price, 2),  # 🆕 NUMERIC!
+            'Asset ID': (asset_id[:16] + '...') if asset_id else 'N/A'
         })
     
     if copy_orders:
         df = pd.DataFrame(copy_orders)
-        total_cost = df['Your $'].sum()
+        total_cost = df['Your $'].sum()  # ✅ Numeric!
         
         col1, col2, col3 = st.columns(3)
         with col1: st.metric("Total Orders", len(df))
         with col2: st.metric("Total Cost", f"${total_cost:.0f}")
         with col3: st.metric("Bankroll Left", f"${your_bankroll-total_cost:.0f}")
         
-        st.dataframe(df, height=400, hide_index=True)
+        # Format Your $ as currency for display
+        df_display = df.copy()
+        df_display['Your $'] = df_display['Your $'].apply(lambda x: f"${x:.2f}")
+        st.dataframe(df_display, height=400, hide_index=True)
         
         if st.button("✅ CONFIRM DRY-RUN ORDERS"):
             st.success(f"🚀 Executed {len(df)} orders | Cost: ${total_cost:.0f}")
             st.balloons()
     else:
         st.info("📭 No recent BUY trades to copy")
+
 
 def real_trade_toggle(your_bankroll=1000, ratio=200):
     """🔴 REAL TRADING MODE (disabled by default)"""
