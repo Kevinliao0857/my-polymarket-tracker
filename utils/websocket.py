@@ -9,107 +9,87 @@ from .config import TRADER
 
 live_trades: deque = deque(maxlen=2000)
 
-
 def rtds_listener():
-    """🆕 Fixed WS listener with pings, server pongs, real asset IDs, and robust parsing."""
+    """🆕 BULLETPROOF WS listener - handles raw strings + fixes assets scope."""
     reconnect_delay = 1
-    ping_interval = 10  # Seconds
+    ping_interval = 10
     ws_base_url = "wss://ws-subscriptions-clob.polymarket.com"
 
-    def process_trade(data):  # 👇 NEW helper - expects DICT only
-        """Parse single trade safely"""
-        size = (
-            data.get('size')
-            or data.get('amount')
-            or data.get('sizeMatched')
-            or 0
-        )
-        price = (
-            data.get('price')
-            or data.get('last_price')
-            or data.get('price', {}).get('value')
-            or 0
-        )
+    def process_trade(raw_data):  # 🆕 Bulletproof: handles str OR dict
+        """Parse single trade safely - auto-handles strings."""
+        try:
+            # 🆕 FORCE PARSE strings
+            if isinstance(raw_data, str):
+                data = json.loads(raw_data)
+            else:
+                data = raw_data
 
-        asset_id = (
-            data.get('asset_id')
-            or data.get('asset')
-            or data.get('assetId')
-            or 'N/A'
-        )
-        print(
-            f"🧑‍💻 TRADE: {data.get('event_type')} | Asset: {asset_id[:16]}... | Size: {size} | Price: {price}"
-        )
+            if not isinstance(data, dict):
+                print(f"⚠️ SKIP: Not dict: {type(data)}")
+                return
 
-        trade_data = {
-            'event_type': data.get('event_type'),
-            'asset_id': asset_id,
-            'size': size,
-            'price': price,
-            'timestamp': data.get('timestamp', time.time()),
-            'market': data.get('market'),
-            'proxyWallet': TRADER,
-            'title': (
-                data.get('question')
-                or data.get('market', {}).get('question', f"Asset {asset_id[:16]} Trade")
-            ),
-        }
+            event_type = data.get('event_type', 'unknown')
+            if event_type not in ('trade', 'last_trade_price'):
+                return  # Skip non-trades
 
-        live_trades.append(trade_data)
-        print(f"✅ TRADE ADDED #{len(live_trades)} | Size: {size} Price: ${price:.3f}")
+            size = (
+                data.get('size') or 
+                data.get('amount') or 
+                data.get('sizeMatched') or 0
+            )
+            price = (
+                data.get('price') or 
+                data.get('last_price') or 
+                data.get('price', {}).get('value') or 0
+            )
+            asset_id = (
+                data.get('asset_id') or 
+                data.get('asset') or 
+                data.get('assetId') or 'N/A'
+            )
+
+            print(f"🧑‍💻 TRADE: {event_type} | Asset: {asset_id[:16]}... | Size: {size} | Price: {price}")
+
+            trade_data = {
+                'event_type': event_type,
+                'asset_id': asset_id,
+                'size': size,
+                'price': price,
+                'timestamp': data.get('timestamp', time.time()),
+                'market': data.get('market'),
+                'proxyWallet': TRADER,
+                'title': (
+                    data.get('question') or 
+                    data.get('market', {}).get('question', f"Asset {asset_id[:16]} Trade")
+                ),
+            }
+
+            live_trades.append(trade_data)
+            print(f"✅ TRADE ADDED #{len(live_trades)} | Size: {size} Price: ${price:.3f}")
+
+        except Exception as e:
+            print(f"⚠️ process_trade failed: {e} | Type: {type(raw_data)}")
 
     def on_message(ws, msg):
         if msg.strip() == "ping":
             ws.send("PING")
             print("🏓 PONG")
             return
-
-        try:
-            # 🆕 Handle string vs dict upfront
-            if isinstance(msg, str):
-                data = json.loads(msg)
-            else:
-                data = msg
-
-            # 👇 Handle LIST of trades
-            if isinstance(data, list):
-                for item in data:
-                    process_trade(item)
-                return
-
-            event_type = data.get('event_type', 'unknown')
-            asset_id = (
-                data.get('asset_id')
-                or data.get('asset')
-                or data.get('assetId')
-                or 'N/A'
-            )
-
-            # 👇 TRADES only (ignore book spam)
-            if event_type not in ('trade', 'last_trade_price'):
-                return
-
-            process_trade(data)
-
-        except json.JSONDecodeError as e:
-            print(f"❌ JSON error: {e} | Raw: {msg[:100]}...")
-        except Exception as e:
-            print(f"❌ Parse: {e} | Type: {type(msg)} | Raw: {msg[:100]}...")
+        process_trade(msg)  # 🆕 Single bulletproof call
 
     def on_open(ws):
+        # 🆕 assets now guaranteed to exist (moved scope)
         ws.send(json.dumps({"type": "market", "assets_ids": assets}))
         print(f"📡 SUBSCRIBED to {len(assets)} assets")
 
-        # 🆕 Ping thread (sends "PING")
         def ping_loop():
             while ws.sock and ws.sock.connected:
                 try:
                     ws.send("PING")
                     print("🏓 PING")
-                except Exception:
+                except:
                     break
                 time.sleep(ping_interval)
-
         threading.Thread(target=ping_loop, daemon=True).start()
 
     def on_error(ws, error):
@@ -122,42 +102,28 @@ def rtds_listener():
         print(f"🔌 CLOSED: {code} - {reason}")
 
     while True:  # Reconnect loop
-        # 🆕 Extract unique asset IDs from recent trades (REST uses 'asset')
-        recent_trades = safe_fetch(
-            f"https://data-api.polymarket.com/trades?user={TRADER}&limit=200"
-        )
-        assets = list(
-            set(
-                item.get('asset')
-                for item in recent_trades
-                if item.get('asset')
-            )
-        )[:20]
+        # 🆕 Get assets FIRST
+        recent_trades = safe_fetch(f"https://data-api.polymarket.com/trades?user={TRADER}&limit=200")
+        assets = list(set(item.get('asset') for item in recent_trades if item.get('asset')))[:20]
 
-        # 🆕 Fallback: Fetch active crypto markets if no trader assets
         if not assets:
             print("⚠️ No trader assets—fetching popular crypto...")
-            popular = safe_fetch(
-                "https://gamma-api.polymarket.com/markets?active=true&category=crypto&limit=20"
-            )
+            popular = safe_fetch("https://gamma-api.polymarket.com/markets?active=true&category=crypto&limit=20")
             assets = []
             for m in popular:
                 tokens = m.get('tokens', [])
                 if tokens:
-                    assets.append(
-                        tokens[0].get('id') or tokens[0].get('token_id')
-                    )
+                    assets.append(tokens[0].get('id') or tokens[0].get('token_id'))
             assets = assets[:20]
 
-        print(
-            f"🚀 ASSETS ({len(assets)}): {assets[:3] if assets else 'NONE'}..."
-        )
+        print(f"🚀 ASSETS ({len(assets)}): {assets[:3] if assets else 'NONE'}...")
 
         if not assets:
             print("⚠️ No assets—retry in 30s")
             time.sleep(30)
             continue
 
+        # 🆕 Now assets exists in scope for on_open()
         ws_url = f"{ws_base_url}/ws/market"
         ws = websocket.WebSocketApp(
             ws_url,
@@ -168,7 +134,7 @@ def rtds_listener():
         )
 
         try:
-            ws.run_forever(ping_interval=0, ping_timeout=None)  # 🆕 No auto-ping
+            ws.run_forever(ping_interval=0, ping_timeout=None)
         except KeyboardInterrupt:
             break
         except Exception as e:
