@@ -11,22 +11,13 @@ except ImportError:
 
 st.set_page_config(layout="wide")
 
-# ✅ CLEAN IMPORTS - only what we need
+# ✅ CLEAN IMPORTS
 from utils.api import get_open_positions, track_0x8dxd, get_profile_name, get_trader_pnl, get_closed_trades_pnl 
 from utils.config import EST, TRADER
-from utils.simulator import run_position_simulator, track_simulation_pnl
 
 if 'refresh_count' not in st.session_state:
     st.session_state.refresh_count = 0
 st.session_state.refresh_count += 1
-
-if 'sim_start_time' not in st.session_state:
-    st.session_state.sim_start_time = None
-if 'sim_pnl_history' not in st.session_state:
-    st.session_state.sim_pnl_history = []
-if 'sim_bankroll_used' not in st.session_state:
-    st.session_state.sim_bankroll_used = 0
-
 
 # MAIN TITLE
 st.markdown(f"# ₿ 0x8dxd Crypto Bot Tracker")
@@ -44,11 +35,7 @@ closed_pnl = get_closed_trades_pnl(TRADER)
 col1, col2, col3 = st.columns(3)
 with col1:
     pnl_color = "🟢" if pnl_data['total_pnl'] >= 0 else "🔴"
-    st.metric(
-        "Crypto P&L", 
-        f"{pnl_color}${abs(pnl_data['total_pnl']):,.0f}", 
-        delta=pnl_data['total_pnl']
-    )
+    st.metric("Crypto P&L", f"{pnl_color}${abs(pnl_data['total_pnl']):,.0f}", delta=pnl_data['total_pnl'])
 with col2:
     st.metric("Crypto Positions", pnl_data['crypto_count'])
 with col3:
@@ -76,19 +63,16 @@ MINUTES_BACK = st.sidebar.slider("⏰ Minutes back", 15, 120, 30, 5)
 now_ts = int(time.time())
 st.sidebar.caption(f"From: {datetime.fromtimestamp(now_ts - MINUTES_BACK*60, EST).strftime('%H:%M %p ET')}")
 
-# SIDEBAR (after profile/slider/refresh):
 if st.sidebar.button("🔄 Force Refresh", type="primary"):
     st.rerun()
 
+# 🚀 NEW: Simulator button (replaces 200+ lines!)
+if st.sidebar.button("🤖 Open Simulator", type="secondary"):
+    st.switch_page("pages/simulator.py")
+
 st.sidebar.markdown("---")
-if st.sidebar.button("🤖 Simulate", type="primary"):
-    if st.session_state.sim_start_time is None:
-        st.session_state.sim_start_time = time.time()  # 👈 START TRACKING
-        st.session_state.sim_pnl_history = []  # 👈 RESET
-    st.session_state.show_simulate = True
 
-
-# Load data - AUTO-STARTS WS! 🚀
+# Load data - AUTO-STARTS WS!
 df = track_0x8dxd(MINUTES_BACK)
 
 if df.empty:
@@ -130,7 +114,7 @@ else:
             "Status": st.column_config.TextColumn(width="medium")
          })
 
-    # 👇 OPEN POSITIONS TABLE
+    # OPEN POSITIONS TABLE
     pos_df = get_open_positions(TRADER)
     if not pos_df.empty:
         st.markdown("---")
@@ -151,122 +135,3 @@ else:
             "PnL": st.column_config.NumberColumn(format="$%.2f", width="small"),
         })
         st.caption(f"✅ {len(pos_df)} crypto positions | Uses official avgPrice [data-api.polymarket.com/positions]")
-
-if st.session_state.get('show_simulate', False):
-    st.markdown("---")
-    st.subheader("🤖 Your Position Simulator")
-    
-    col_sim1, col_sim2 = st.columns(2)
-    with col_sim1:
-        bankroll = st.number_input("💰 Your Bankroll", value=1000.0, step=100.0)
-    with col_sim2:
-        copy_ratio = st.number_input("⚖️ Copy Ratio", value=10, step=5, min_value=1)
-    
-    # 👈 CONFIRM BUTTON - set params FIRST
-    if st.button("🚀 Confirm & Start Simulation", type="primary"):
-        if st.session_state.sim_start_time is None:
-            st.session_state.sim_start_time = time.time()
-            st.session_state.sim_pnl_history = []
-        st.session_state.bankroll = bankroll  # Save confirmed values
-        st.session_state.copy_ratio = copy_ratio
-        st.rerun()
-    
-    # Only run if actually started
-    if st.session_state.sim_start_time:
-        pos_df = get_open_positions(TRADER)
-        if pos_df.empty:
-            st.warning("No positions to simulate")
-        else:
-            # 👈 SAFE VALUES
-            saved_bankroll = st.session_state.get('bankroll', 1000.0)
-            saved_copy_ratio = st.session_state.get('copy_ratio', 10)
-            
-            sim_results = run_position_simulator(pos_df, saved_bankroll, saved_copy_ratio)
-            
-            if not sim_results['valid']:
-                st.error(sim_results['message'])
-            else:
-                track_simulation_pnl(sim_results, saved_bankroll)
-                
-                sim_df = sim_results['sim_df']
-                total_cost = sim_results['total_cost']
-                total_pnl = sim_results['total_pnl']
-                skipped = sim_results['skipped']
-                
-                # Header metric  
-                sim_color = "🟢" if total_pnl >= 0 else "🔴"
-                st.metric("Total Investment", f"${total_cost:,.0f}", f"{sim_color}${abs(total_pnl):,.0f}")
-        
-                # Bankroll + history
-                if total_cost > bankroll:
-                    st.error(f"⚠️ Need ${total_cost:,.0f} > ${bankroll:,.0f}")
-                else:
-                    pnl_pct = (total_pnl / total_cost * 100) if total_cost > 0 else 0
-                    runtime_min = (time.time() - st.session_state.sim_start_time) / 60 if st.session_state.sim_start_time else 0
-                    st.success(f"✅ {len(sim_df)}/{len(pos_df)} positions | Skipped {skipped} tiny | PnL: ${total_pnl:+.0f}")
-                
-                # 👇 CHART + RAW NUMBERS (best of both!)
-                # 👇 BULLETPROOF P&L HISTORY (handles all edge cases)
-                if len(st.session_state.sim_pnl_history) > 1:
-                    try:
-                        hist_df = pd.DataFrame(st.session_state.sim_pnl_history)
-
-                        # Fix time column
-                        hist_df['Time'] = hist_df['time'].apply(lambda x: f"{int(x):.0f}m")
-
-                        # Safe PnL % (avoid div0 + NaN)
-                        hist_df['Portfolio $'] = hist_df['portfolio'].round(2)
-                        hist_df['PnL $'] = hist_df['pnl'].round(2)
-                        hist_df['PnL %'] = (hist_df['pnl'] / hist_df['cost'] * 100).round(2)
-
-                        col_chart, col_table = st.columns(2)
-
-                        with col_chart:
-                            st.markdown("**📈 Trend**")
-                            st.line_chart(hist_df.set_index('Time')['PnL $'], height=200)
-
-                        with col_table:
-                            st.markdown("**📊 Raw $**")
-                            recent = hist_df[['Time', 'Portfolio $', 'PnL $', 'PnL %']].tail(8)
-                            st.dataframe(recent, use_container_width=True, hide_index=True)
-
-                        st.caption(f"⏱️ {len(hist_df)} snapshots | Latest: ${total_pnl:+.2f}")
-
-
-                    except Exception as e:
-                        st.caption("📈 History loading...")
-
-                
-                # 👇 Styled table (same as positions)
-                sim_visible_cols = ['Market', 'UP/DOWN', 'Shares', 'Your Shares', 'AvgPrice', 'Your Avg', 
-                                   'Your Cost', 'Your PnL', 'Status', 'Updated']
-                sim_recent_mask = sim_df['age_sec'] <= 300
-                def highlight_recent_sim(row):
-                    if sim_recent_mask.iloc[row.name]:
-                        return ['background-color: rgba(0, 255, 0, 0.15)'] * len(sim_visible_cols)
-                    return [''] * len(sim_visible_cols)
-                
-                styled_sim = sim_df[sim_visible_cols].style.apply(highlight_recent_sim, axis=1)
-                st.dataframe(styled_sim, height=300, hide_index=True, column_config={
-                    "UP/DOWN": st.column_config.TextColumn(width="medium"),
-                    "Your Shares": st.column_config.NumberColumn(format="%.1f", width="small"),
-                    "AvgPrice": st.column_config.TextColumn("Their Avg", width="small"),
-                    "Your Avg": st.column_config.TextColumn("Your Avg", width="small"),
-                    "Your Cost": st.column_config.NumberColumn(format="$%.2f", width="small"),
-                    "Your PnL": st.column_config.NumberColumn(format="$%.2f", width="small"),
-                })
-                
-                st.caption(f"✅ Simulated PnL tracking | 1:{copy_ratio} | 5-share minimum")
-                
-                # 👇 Buttons
-                col_btn1, col_btn2 = st.columns(2)
-                with col_btn1:
-                    if col_btn1.button("❌ Hide", use_container_width=True):
-                        st.session_state.show_simulate = False
-                        st.rerun()
-                with col_btn2:
-                    if col_btn2.button("🛑 Stop Sim", use_container_width=True):
-                        st.session_state.sim_start_time = None
-                        st.session_state.sim_pnl_history = []
-                        st.session_state.show_simulate = False
-                        st.rerun()
