@@ -5,7 +5,8 @@ import requests
 from datetime import datetime, timedelta
 from collections import defaultdict
 from utils.api import get_latest_bets, is_crypto 
-from utils.filters import get_up_down           
+from utils.filters import get_up_down  
+from .shared import parse_usd         
 from utils.config import TRADER
 
 def parse_usd(value):
