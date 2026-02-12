@@ -288,12 +288,13 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: int):
             st.dataframe(skipped_df[skip_cols], use_container_width=True, height=200, hide_index=True,
                          column_config={
                              "Shares": st.column_config.NumberColumn(format="%.1f"),
-                             "Your Shares": st.column_config.NumberColumn(format="%.1f", color="orange"),
+                             "Your Shares": st.column_config.NumberColumn(format="%.1f"),  # ✅ Fixed
                              "AvgPrice": st.column_config.NumberColumn(format="$%.2f")
                          })
-            st.caption("💡 Red = <5 Your Shares after copy ratio")
+            st.caption("💡 Skipped = <5 **Your Shares** after copy ratio")
         else:
             st.info("No skipped positions")
+
 
 
 
