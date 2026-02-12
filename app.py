@@ -193,76 +193,76 @@ if st.session_state.get('show_simulate', False):
                 sim_color = "🟢" if total_pnl >= 0 else "🔴"
                 st.metric("Total Investment", f"${total_cost:,.0f}", f"{sim_color}${abs(total_pnl):,.0f}")
         
-        # Bankroll + history
-        if total_cost > bankroll:
-            st.error(f"⚠️ Need ${total_cost:,.0f} > ${bankroll:,.0f}")
-        else:
-            pnl_pct = (total_pnl / total_cost * 100) if total_cost > 0 else 0
-            runtime_min = (time.time() - st.session_state.sim_start_time) / 60 if st.session_state.sim_start_time else 0
-            st.success(f"✅ {len(sim_df)}/{len(pos_df)} positions | Skipped {skipped} tiny | PnL: ${total_pnl:+.0f}")
-        
-        # 👇 CHART + RAW NUMBERS (best of both!)
-        # 👇 BULLETPROOF P&L HISTORY (handles all edge cases)
-        if len(st.session_state.sim_pnl_history) > 1:
-            try:
-                hist_df = pd.DataFrame(st.session_state.sim_pnl_history)
+                # Bankroll + history
+                if total_cost > bankroll:
+                    st.error(f"⚠️ Need ${total_cost:,.0f} > ${bankroll:,.0f}")
+                else:
+                    pnl_pct = (total_pnl / total_cost * 100) if total_cost > 0 else 0
+                    runtime_min = (time.time() - st.session_state.sim_start_time) / 60 if st.session_state.sim_start_time else 0
+                    st.success(f"✅ {len(sim_df)}/{len(pos_df)} positions | Skipped {skipped} tiny | PnL: ${total_pnl:+.0f}")
+                
+                # 👇 CHART + RAW NUMBERS (best of both!)
+                # 👇 BULLETPROOF P&L HISTORY (handles all edge cases)
+                if len(st.session_state.sim_pnl_history) > 1:
+                    try:
+                        hist_df = pd.DataFrame(st.session_state.sim_pnl_history)
 
-                # Fix time column
-                hist_df['Time'] = hist_df['time'].apply(lambda x: f"{int(x):.0f}m")
+                        # Fix time column
+                        hist_df['Time'] = hist_df['time'].apply(lambda x: f"{int(x):.0f}m")
 
-                # Safe PnL % (avoid div0 + NaN)
-                hist_df['Portfolio $'] = hist_df['portfolio'].round(2)
-                hist_df['PnL $'] = hist_df['pnl'].round(2)
-                hist_df['PnL %'] = (hist_df['pnl'] / hist_df['cost'] * 100).round(2)
+                        # Safe PnL % (avoid div0 + NaN)
+                        hist_df['Portfolio $'] = hist_df['portfolio'].round(2)
+                        hist_df['PnL $'] = hist_df['pnl'].round(2)
+                        hist_df['PnL %'] = (hist_df['pnl'] / hist_df['cost'] * 100).round(2)
 
-                col_chart, col_table = st.columns(2)
+                        col_chart, col_table = st.columns(2)
 
-                with col_chart:
-                    st.markdown("**📈 Trend**")
-                    st.line_chart(hist_df.set_index('Time')['PnL $'], height=200)
+                        with col_chart:
+                            st.markdown("**📈 Trend**")
+                            st.line_chart(hist_df.set_index('Time')['PnL $'], height=200)
 
-                with col_table:
-                    st.markdown("**📊 Raw $**")
-                    recent = hist_df[['Time', 'Portfolio $', 'PnL $', 'PnL %']].tail(8)
-                    st.dataframe(recent, use_container_width=True, hide_index=True)
+                        with col_table:
+                            st.markdown("**📊 Raw $**")
+                            recent = hist_df[['Time', 'Portfolio $', 'PnL $', 'PnL %']].tail(8)
+                            st.dataframe(recent, use_container_width=True, hide_index=True)
 
-                st.caption(f"⏱️ {len(hist_df)} snapshots | Latest: ${total_pnl:+.2f}")
+                        st.caption(f"⏱️ {len(hist_df)} snapshots | Latest: ${total_pnl:+.2f}")
 
 
-            except Exception as e:
-                st.caption("📈 History loading...")
+                    except Exception as e:
+                        st.caption("📈 History loading...")
 
-        
-        # 👇 Styled table (same as positions)
-        sim_visible_cols = ['Market', 'UP/DOWN', 'Shares', 'Your Shares', 'AvgPrice', 'Your Avg', 
-                           'Your Cost', 'Your PnL', 'Status', 'Updated']
-        sim_recent_mask = sim_df['age_sec'] <= 300
-        def highlight_recent_sim(row):
-            if sim_recent_mask.iloc[row.name]:
-                return ['background-color: rgba(0, 255, 0, 0.15)'] * len(sim_visible_cols)
-            return [''] * len(sim_visible_cols)
-        
-        styled_sim = sim_df[sim_visible_cols].style.apply(highlight_recent_sim, axis=1)
-        st.dataframe(styled_sim, height=300, hide_index=True, column_config={
-            "UP/DOWN": st.column_config.TextColumn(width="medium"),
-            "Your Shares": st.column_config.NumberColumn(format="%.1f", width="small"),
-            "AvgPrice": st.column_config.TextColumn("Their Avg", width="small"),
-            "Your Avg": st.column_config.TextColumn("Your Avg", width="small"),
-            "Your Cost": st.column_config.NumberColumn(format="$%.2f", width="small"),
-            "Your PnL": st.column_config.NumberColumn(format="$%.2f", width="small"),
-        })
-        
-        st.caption(f"✅ Simulated PnL tracking | 1:{copy_ratio} | 5-share minimum")
-        
-        # 👇 Buttons
-        col_btn1, col_btn2 = st.columns(2)
-        with col_btn1:
-            if col_btn1.button("❌ Hide", use_container_width=True):
-                st.session_state.show_simulate = False
-                st.rerun()
-        with col_btn2:
-            if col_btn2.button("🛑 Stop Sim", use_container_width=True):
-                st.session_state.sim_start_time = None
-                st.session_state.sim_pnl_history = []
-                st.session_state.show_simulate = False
-                st.rerun()
+                
+                # 👇 Styled table (same as positions)
+                sim_visible_cols = ['Market', 'UP/DOWN', 'Shares', 'Your Shares', 'AvgPrice', 'Your Avg', 
+                                   'Your Cost', 'Your PnL', 'Status', 'Updated']
+                sim_recent_mask = sim_df['age_sec'] <= 300
+                def highlight_recent_sim(row):
+                    if sim_recent_mask.iloc[row.name]:
+                        return ['background-color: rgba(0, 255, 0, 0.15)'] * len(sim_visible_cols)
+                    return [''] * len(sim_visible_cols)
+                
+                styled_sim = sim_df[sim_visible_cols].style.apply(highlight_recent_sim, axis=1)
+                st.dataframe(styled_sim, height=300, hide_index=True, column_config={
+                    "UP/DOWN": st.column_config.TextColumn(width="medium"),
+                    "Your Shares": st.column_config.NumberColumn(format="%.1f", width="small"),
+                    "AvgPrice": st.column_config.TextColumn("Their Avg", width="small"),
+                    "Your Avg": st.column_config.TextColumn("Your Avg", width="small"),
+                    "Your Cost": st.column_config.NumberColumn(format="$%.2f", width="small"),
+                    "Your PnL": st.column_config.NumberColumn(format="$%.2f", width="small"),
+                })
+                
+                st.caption(f"✅ Simulated PnL tracking | 1:{copy_ratio} | 5-share minimum")
+                
+                # 👇 Buttons
+                col_btn1, col_btn2 = st.columns(2)
+                with col_btn1:
+                    if col_btn1.button("❌ Hide", use_container_width=True):
+                        st.session_state.show_simulate = False
+                        st.rerun()
+                with col_btn2:
+                    if col_btn2.button("🛑 Stop Sim", use_container_width=True):
+                        st.session_state.sim_start_time = None
+                        st.session_state.sim_pnl_history = []
+                        st.session_state.show_simulate = False
+                        st.rerun()
