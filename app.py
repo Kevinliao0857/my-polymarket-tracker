@@ -14,6 +14,7 @@ st.set_page_config(layout="wide")
 # ✅ CLEAN IMPORTS - only what we need
 from utils.api import get_open_positions, track_0x8dxd, get_profile_name, get_trader_pnl, get_closed_trades_pnl 
 from utils.config import EST, TRADER
+from utils.simulator import run_position_simulator, track_simulation_pnl
 
 if 'refresh_count' not in st.session_state:
     st.session_state.refresh_count = 0
@@ -162,84 +163,68 @@ if st.session_state.get('show_simulate', False) and not pos_df.empty:
     with col_sim2:
         copy_ratio = st.number_input("⚖️ Copy Ratio", value=10, step=5, min_value=1)
     
-    # 👇 FIXED SIMULATION - perfect math
-    sim_df = pos_df.copy()
-    sim_df['Your Shares'] = (sim_df['Shares'].astype(float) / copy_ratio).round(1)
-    sim_df['Buy?'] = sim_df['Your Shares'] >= 5  # 👈 NEW
-    sim_df = sim_df[sim_df['Buy?']].copy().reset_index(drop=True)  # 👈 Filter out <5 shares
-
-    if len(sim_df) == 0:
-        st.warning("⚠️ No positions meet 5-share minimum!")
-        st.stop()
+    # 🧠 Run simulation (clean!)
+    sim_results = run_position_simulator(pos_df, bankroll, copy_ratio)
     
-    # Clean price extraction
-    avg_price = sim_df['AvgPrice'].str.replace('$', '').astype(float)
-    cur_price = sim_df['CurPrice'].str.replace('$', '').astype(float)
-    
-    sim_df['Your Avg'] = sim_df['AvgPrice']
-    sim_df['Your Cost'] = (sim_df['Your Shares'] * avg_price).round(2)
-    sim_df['Your PnL'] = sim_df['Your Shares'] * (cur_price - avg_price).round(2)
-    
-    total_cost = sim_df['Your Cost'].sum().round(2)
-    total_pnl = sim_df['Your PnL'].sum().round(2)
-    
-    # 👇 TRACK SIMULATED P&L OVER TIME
-    if st.session_state.sim_start_time:
-        runtime_min = (time.time() - st.session_state.sim_start_time) / 60
-        st.info(f"⏱️ Simulation running: {runtime_min:.1f}min | History: {len(st.session_state.sim_pnl_history)} snapshots")
-
-        # Store this snapshot
-        snapshot = {'time': runtime_min, 'pnl': total_pnl, 'positions': len(sim_df)}
-        st.session_state.sim_pnl_history.append(snapshot)
-
-        # Show PnL chart
+    if not sim_results['valid']:
+        st.error(sim_results['message'])
+    else:
+        # Track PnL history
+        track_simulation_pnl(sim_results)
+        
+        sim_df = sim_results['sim_df']
+        total_cost = sim_results['total_cost']
+        total_pnl = sim_results['total_pnl']
+        skipped = sim_results['skipped']
+        
+        # Header metric
+        sim_color = "🟢" if total_pnl >= 0 else "🔴"
+        st.metric("Total Investment", f"${total_cost:,.0f}", f"{sim_color}${abs(total_pnl):,.0f}")
+        
+        # Bankroll + history
+        if total_cost > bankroll:
+            st.error(f"⚠️ Need ${total_cost:,.0f} > ${bankroll:,.0f}")
+        else:
+            pnl_pct = (total_pnl / total_cost * 100) if total_cost > 0 else 0
+            runtime_min = (time.time() - st.session_state.sim_start_time) / 60 if st.session_state.sim_start_time else 0
+            st.success(f"✅ {len(sim_df)}/{len(pos_df)} positions | Skipped {skipped} tiny | PnL: ${total_pnl:+.0f}")
+        
+        # PnL trend chart
         if len(st.session_state.sim_pnl_history) > 1:
             hist_df = pd.DataFrame(st.session_state.sim_pnl_history)
-            st.line_chart(hist_df.set_index('time')['pnl'], height=200)
-            st.caption(f"📈 Simulated PnL trend | Started {datetime.fromtimestamp(st.session_state.sim_start_time, EST).strftime('%I:%M %p ET')}")
-
-
-    # Header metric
-    sim_color = "🟢" if total_pnl >= 0 else "🔴"
-    st.metric("Total Investment", f"${total_cost:,.0f}", f"{sim_color}${abs(total_pnl):,.0f}")
-    
-    # Bankroll validation
-    if total_cost > bankroll:
-        st.error(f"⚠️ Need ${total_cost:,.0f} > ${bankroll:,.0f}")
-    else:
-        pnl_pct = (total_pnl / total_cost * 100) if total_cost > 0 else 0
-        st.success(f"✅ Fits! ${total_cost:,.0f} used ({(total_cost/bankroll)*100:.0f}%) | PnL: ${total_pnl:+.0f}")
-    
-    # 👇 IDENTICAL POSITIONS TABLE STYLING
-    sim_visible_cols = ['Market', 'UP/DOWN', 'Shares', 'Your Shares', 'AvgPrice', 'Your Avg', 
-                       'Your Cost', 'Your PnL', 'Status', 'Updated']
-    sim_recent_mask = sim_df['age_sec'] <= 300
-    def highlight_recent_sim(row):
-        if sim_recent_mask.iloc[row.name]:
-            return ['background-color: rgba(0, 255, 0, 0.15)'] * len(sim_visible_cols)
-        return [''] * len(sim_visible_cols)
-    
-    styled_sim = sim_df[sim_visible_cols].style.apply(highlight_recent_sim, axis=1)
-    st.dataframe(styled_sim, height=300, hide_index=True, column_config={
-        "UP/DOWN": st.column_config.TextColumn(width="medium"),
-        "Your Shares": st.column_config.NumberColumn(format="%.1f", width="small"),
-        "AvgPrice": st.column_config.TextColumn("Their Avg", width="small"),
-        "Your Avg": st.column_config.TextColumn("Your Avg", width="small"),
-        "Your Cost": st.column_config.NumberColumn(format="$%.2f", width="small"),
-        "Your PnL": st.column_config.NumberColumn(format="$%.2f", width="small"),
-    })
-    
-    st.caption(f"✅ Simulated {len(sim_df)}/{len(pos_df)} positions | Skipped {len(pos_df)-len(sim_df)} tiny | 1:{copy_ratio}")
-    
-    col_btn1, col_btn2 = st.columns(2)
-    with col_btn1:
-        if col_btn1.button("❌ Hide"):
-            st.session_state.show_simulate = False
-            st.rerun()
-    with col_btn2:
-        if col_btn2.button("🛑 Stop Simulation"):
-            st.session_state.sim_start_time = None
-            st.session_state.sim_pnl_history = []
-            st.session_state.show_simulate = False
-            st.rerun()
-    
+            st.line_chart(hist_df.set_index('time')['pnl'], height=150, use_container_width=True)
+            st.caption(f"📈 Live PnL tracking | {runtime_min:.0f}min | {len(st.session_state.sim_pnl_history)} snapshots")
+        
+        # 👇 Styled table (same as positions)
+        sim_visible_cols = ['Market', 'UP/DOWN', 'Shares', 'Your Shares', 'AvgPrice', 'Your Avg', 
+                           'Your Cost', 'Your PnL', 'Status', 'Updated']
+        sim_recent_mask = sim_df['age_sec'] <= 300
+        def highlight_recent_sim(row):
+            if sim_recent_mask.iloc[row.name]:
+                return ['background-color: rgba(0, 255, 0, 0.15)'] * len(sim_visible_cols)
+            return [''] * len(sim_visible_cols)
+        
+        styled_sim = sim_df[sim_visible_cols].style.apply(highlight_recent_sim, axis=1)
+        st.dataframe(styled_sim, height=300, hide_index=True, column_config={
+            "UP/DOWN": st.column_config.TextColumn(width="medium"),
+            "Your Shares": st.column_config.NumberColumn(format="%.1f", width="small"),
+            "AvgPrice": st.column_config.TextColumn("Their Avg", width="small"),
+            "Your Avg": st.column_config.TextColumn("Your Avg", width="small"),
+            "Your Cost": st.column_config.NumberColumn(format="$%.2f", width="small"),
+            "Your PnL": st.column_config.NumberColumn(format="$%.2f", width="small"),
+        })
+        
+        st.caption(f"✅ Simulated PnL tracking | 1:{copy_ratio} | 5-share minimum")
+        
+        # 👇 Buttons
+        col_btn1, col_btn2 = st.columns(2)
+        with col_btn1:
+            if col_btn1.button("❌ Hide", use_container_width=True):
+                st.session_state.show_simulate = False
+                st.rerun()
+        with col_btn2:
+            if col_btn2.button("🛑 Stop Sim", use_container_width=True):
+                st.session_state.sim_start_time = None
+                st.session_state.sim_pnl_history = []
+                st.session_state.show_simulate = False
+                st.rerun()
