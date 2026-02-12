@@ -242,7 +242,8 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: int):
     with col2:
         st.metric("📈 Unrealized PnL", f"${total_pnl:+,.0f}")
     with col3:
-        st.metric("📊 Active Positions", f"{len(sim_df)}/{skipped} skipped")
+        total_positions = len(sim_df) + skipped
+        st.metric("📊 Simulated", f"{len(sim_df)}/{total_positions} ({skipped} skipped)")
     
     runtime_min = (time.time() - st.session_state.sim_start_time) / 60
     st.caption(f"⏱️ {runtime_min:.1f}min | 1:{copy_ratio} | Expired bets = realized gains/losses")
