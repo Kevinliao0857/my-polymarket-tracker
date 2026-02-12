@@ -192,16 +192,16 @@ if st.session_state.get('show_simulate', False) and not pos_df.empty:
         # 👇 CHART + RAW NUMBERS (best of both!)
         if len(st.session_state.sim_pnl_history) > 1:
             hist_df = pd.DataFrame(st.session_state.sim_pnl_history)
-            hist_df['Time'] = pd.to_datetime(hist_df['time']*60, unit='s', origin='unix').dt.strftime('%H:%M:%S')
+            hist_df['Time'] = (hist_df['time']*60).apply(lambda x: pd.to_datetime(int(x), unit='s', origin='unix').strftime('%H:%M:%S'))
             hist_df['PnL $'] = hist_df['pnl'].round(2)
-            hist_df['PnL %'] = (hist_df['pnl'] / total_cost * 100).round(2)
-            
+            hist_df['PnL %'] = (hist_df['pnl'] / hist_df['cost'] * 100).round(2)
+
             col_chart, col_table = st.columns(2)
-            
+
             with col_chart:
                 st.markdown("**📈 Trend**")
                 st.line_chart(hist_df.set_index('time')['pnl'], height=200, use_container_width=True)
-            
+
             with col_table:
                 st.markdown("**📊 Latest**")
                 st.dataframe(
@@ -213,9 +213,9 @@ if st.session_state.get('show_simulate', False) and not pos_df.empty:
                     },
                     height=200
                 )
-            
+
             st.caption(f"⏱️ {runtime_min:.0f}min | {len(hist_df)} snapshots | Now: ${total_pnl:+.2f}")
-        
+
         
         # 👇 Styled table (same as positions)
         sim_visible_cols = ['Market', 'UP/DOWN', 'Shares', 'Your Shares', 'AvgPrice', 'Your Avg', 
