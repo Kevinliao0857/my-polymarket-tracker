@@ -143,33 +143,40 @@ if st.session_state.get('show_simulate', False) and not pos_df.empty:
     st.markdown("---")
     st.subheader("🤖 Your Position Simulator")
     
-    # Sliders (same layout as positions)
+    # Sliders
     col_sim1, col_sim2 = st.columns(2)
     with col_sim1:
         bankroll = st.number_input("💰 Your Bankroll", value=1000.0, step=100.0)
     with col_sim2:
         copy_ratio = st.number_input("⚖️ Copy Ratio", value=10, step=5, min_value=1)
     
-    # SIMULATE - clone positions data + scale
+    # 👇 FIXED SIMULATION - perfect math
     sim_df = pos_df.copy()
     sim_df['Your Shares'] = (sim_df['Shares'].astype(float) / copy_ratio).round(1)
-    sim_df['Your Avg'] = sim_df['AvgPrice']  # Same entry
-    sim_df['Your Cost'] = (sim_df['Your Shares'] * sim_df['AvgPrice'].str.replace('$', '').astype(float)).round(2)
-    sim_df['Your PnL'] = (sim_df['Your Shares'] * sim_df['PnL'].str.replace('$', '').astype(float)).round(2)
+    
+    # Clean price extraction
+    avg_price = sim_df['AvgPrice'].str.replace('$', '').astype(float)
+    cur_price = sim_df['CurPrice'].str.replace('$', '').astype(float)
+    
+    sim_df['Your Avg'] = sim_df['AvgPrice']
+    sim_df['Your Cost'] = (sim_df['Your Shares'] * avg_price).round(2)
+    sim_df['Your PnL'] = sim_df['Your Shares'] * (cur_price - avg_price).round(2)
     
     total_cost = sim_df['Your Cost'].sum().round(2)
     total_pnl = sim_df['Your PnL'].sum().round(2)
     
-    # Bankroll check (match metric style)
+    # Header metric
     sim_color = "🟢" if total_pnl >= 0 else "🔴"
     st.metric("Total Investment", f"${total_cost:,.0f}", f"{sim_color}${abs(total_pnl):,.0f}")
     
+    # Bankroll validation
     if total_cost > bankroll:
         st.error(f"⚠️ Need ${total_cost:,.0f} > ${bankroll:,.0f}")
     else:
-        st.success(f"✅ {((total_cost/bankroll)*100):.0f}% of bankroll | PnL: {total_pnl:+.0f}")
+        pnl_pct = (total_pnl / total_cost * 100) if total_cost > 0 else 0
+        st.success(f"✅ Fits! ${total_cost:,.0f} used ({(total_cost/bankroll)*100:.0f}%) | PnL: ${total_pnl:+.0f}")
     
-    # 👇 IDENTICAL STYLING to positions table
+    # 👇 IDENTICAL POSITIONS TABLE STYLING
     sim_visible_cols = ['Market', 'UP/DOWN', 'Shares', 'Your Shares', 'AvgPrice', 'Your Avg', 
                        'Your Cost', 'Your PnL', 'Status', 'Updated']
     sim_recent_mask = sim_df['age_sec'] <= 300
@@ -188,7 +195,7 @@ if st.session_state.get('show_simulate', False) and not pos_df.empty:
         "Your PnL": st.column_config.NumberColumn(format="$%.2f", width="small"),
     })
     
-    st.caption(f"✅ Simulated {len(sim_df)} positions | 1:{copy_ratio} ratio | ${total_cost:,.0f} total")
+    st.caption(f"✅ Simulated {len(sim_df)} positions | 1:{copy_ratio} ratio")
     
     if st.button("❌ Hide Simulator"):
         st.session_state.show_simulate = False
