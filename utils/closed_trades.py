@@ -4,7 +4,7 @@ import requests
 from typing import Dict
 from .config import TICKERS, FULL_NAMES  # 👈 PERFECT: All crypto names
 
-@st.cache_data(ttl=10)
+@st.cache_data(ttl=2)
 def get_closed_trades_pnl(address: str) -> dict:
     """Sum P&L from closed SETTLED crypto trades"""
     try:

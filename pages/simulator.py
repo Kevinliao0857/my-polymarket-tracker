@@ -73,8 +73,8 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: int):
             st.line_chart(hist_df.set_index('Time')['pnl'], height=200)
     
     # TEMP DEBUG:
-    debug_closed = get_closed_trades_pnl(TRADER)
-    st.error(f"🔍 DEBUG closed=${debug_closed['total']} copy_ratio={copy_ratio} result=${debug_closed['total']/copy_ratio}")
+    fresh_closed = get_closed_trades_pnl(TRADER)
+    st.error(f"🔍 FRESH={fresh_closed['total']} cached={get_closed_trades_pnl(TRADER)['total']}")
 
 
     # Table
@@ -182,6 +182,11 @@ def show_simulator():
         with col2:
             allocation_pct = st.number_input("⚖️ Allocation %", value=10.0, min_value=1.0, max_value=100.0, step=1.0, 
                                             help="10% = copy 10% of trader's shares (equiv 1:10)")
+        if st.button("🗑️ CLEAR CACHES", key="nuke_cache"):
+            st.cache_data.clear()
+            st.rerun()
+        st.info("💡 Click 'CLEAR CACHES' if Simulated Realized stuck at $0")
+
 
         col_btn1, col_btn2 = st.columns(2)
         with col_btn1:
