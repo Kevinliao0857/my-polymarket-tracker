@@ -34,35 +34,34 @@ def get_status_hybrid(item: Dict[str, Any], now_ts: int) -> str:
                 return f"🟢 ACTIVE (til ~{format_display_time(end_h)})"
             return "⚫ EXPIRED"
     
-    # 2.5 DATE + TIME
+    # 2.5 DATE + TIME: "Feb 12 3AM" / "February 12 3AM"
     date_match = re.search(
-        r'\b(jan(uary)?|feb(ruary)?|mar(ch)?|apr(il)?|may|jun(e)?|jul(y)?|aug(ust)?|sep(tember)?|oct(ober)?|nov(ember)?|dec(ember)?)\s+(\d{1,2})\s+(\d{1,2}(?::?\d{2})?[ap]m)',
+        r'\b('
+        r'jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|'
+        r'jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?'
+        r')\s+(\d{1,2})\s+(\d{1,2}(?::?\d{2})?[ap]m)',
         title
     )
     if date_match:
-        mon_str = date_match.group(1).lower()  # 'february' or 'feb'
+        mon_str = date_match.group(1).lower()
         day_str = date_match.group(2)
         time_str = date_match.group(3)
         
         mon = MONTHS_MAP.get(mon_str)
-        day = int(day_str)
-        
-        event_hour = parse_time_to_decimal(time_str)
-        if event_hour is not None:
-            event_dt = now_est.replace(month=mon, day=day, 
-                                      hour=int(event_hour), 
-                                      minute=int((event_hour % 1) * 60),
-                                      second=0, microsecond=0)
-            # Handle past year rollover (e.g., Dec in Jan)
-            if event_dt < now_est.replace(month=1, day=1):
-                event_dt = event_dt.replace(year=now_est.year + 1)
-            # Handle today past time → tomorrow
-            elif event_dt.date() == now_est.date() and now_est.time() > event_dt.time():
-                event_dt += timedelta(days=1)
-            
-            if now_est < event_dt:
-                return f"🟢 ACTIVE (til {event_dt.strftime('%b %d %I:%M %p ET')})"
-            return "⚫ EXPIRED"
+        if mon is not None and day_str and time_str:
+            day = int(day_str)
+            event_hour = parse_time_to_decimal(time_str)
+            if event_hour is not None:
+                event_dt = now_est.replace(
+                    month=mon, day=day,
+                    hour=int(event_hour),
+                    minute=int((event_hour % 1) * 60),
+                    second=0, microsecond=0
+                )
+                
+                if now_est < event_dt:
+                    return f"🟢 ACTIVE (til {event_dt.strftime('%b %d %I:%M %p ET')})"
+                return "⚫ EXPIRED"
     
     # 3. SINGLE TIME → Next occurrence
     time_match = re.search(r'(\d{1,2}:?\d{2}?[ap]m)', title)
