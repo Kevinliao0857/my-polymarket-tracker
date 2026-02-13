@@ -39,10 +39,12 @@ def run_position_simulator(pos_df: pd.DataFrame, initial_bankroll: float, copy_r
     if len(sim_df) == 0:
         return {'valid': False, 'message': "No valid positions (hedge/single)"}
     
-    # Rest unchanged...
-    avg_price = sim_df['AvgPrice'].str.replace('$', '').astype(float)
-    cur_price = sim_df['CurPrice'].str.replace('$', '').astype(float)
+    avg_price = pd.to_numeric(sim_df['AvgPrice'].astype(str).str.replace('$', ''), errors='coerce').fillna(0.0)
+    cur_price = pd.to_numeric(sim_df['CurPrice'].astype(str).str.replace('$', ''), errors='coerce').fillna(0.0)
     
+    if avg_price.isna().all() or cur_price.isna().all():
+        return {'valid': False, 'message': "Missing/invalid AvgPrice or CurPrice columns"}
+
     sim_df['Your Avg'] = sim_df['AvgPrice']
     sim_df['Your Cost'] = (sim_df['Your Shares'] * avg_price).round(2)
     sim_df['Your PnL'] = sim_df['Your Shares'] * (cur_price - avg_price).round(2)
