@@ -2,7 +2,7 @@ import streamlit as st
 import requests
 
 from typing import Dict
-from .config import TRADER, TICKERS, FULL_NAMES  # 👈 PERFECT: All crypto names
+from .config import TICKERS, FULL_NAMES  # 👈 PERFECT: All crypto names
 
 @st.cache_data(ttl=10)
 def get_closed_trades_pnl(address: str) -> dict:

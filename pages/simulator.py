@@ -72,6 +72,11 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: int):
         with col_chart2:
             st.line_chart(hist_df.set_index('Time')['pnl'], height=200)
     
+    # TEMP DEBUG:
+    debug_closed = get_closed_trades_pnl(TRADER)
+    st.error(f"🔍 DEBUG closed=${debug_closed['total']} copy_ratio={copy_ratio} result=${debug_closed['total']/copy_ratio}")
+
+
     # Table
     sim_cols = ['Market', 'UP/DOWN', 'Status', 'Your Shares', 'Your Cost', 'Your PnL', 'Hedge?']
     recent_mask = sim_df['age_sec'] <= 300
