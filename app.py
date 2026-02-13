@@ -219,8 +219,6 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: int):
     if not pos_df.empty:
         st.error(f"🔍 Sample rows:\n{pos_df.head(2).to_dict()}")
     st.stop()  # 👈 HALTS HERE - check output, then remove these 4 lines + restart
-    
-    if pos_df.empty:
 
     if pos_df.empty:
         st.warning("No LIVE positions to simulate")
