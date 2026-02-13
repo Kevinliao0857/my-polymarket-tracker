@@ -30,7 +30,7 @@ def get_closed_trades_pnl(address: str) -> dict:
                     crypto_count += 1
         
         # 👈 DEBUG AFTER loop:
-        st.write(f"🔍 trades={len(trades)} settled={settled_count} crypto={crypto_count} total=${total_profit}")
+        # st.write(f"🔍 trades={len(trades)} settled={settled_count} crypto={crypto_count} total=${total_profit}")
         
         return {
             'total': total_profit,
