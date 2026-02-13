@@ -62,26 +62,28 @@ def run_position_simulator(pos_df: pd.DataFrame, initial_bankroll: float, copy_r
 
 
 def get_realized_bankroll(initial_bankroll: float, pos_df: pd.DataFrame) -> float:
-    """Calculate REAL bankroll from trader's positions (handles missing Your PnL)"""
-    # Expired positions
+    """Safe realized PnL calc - handles missing columns"""
     expired_mask = pos_df['Status'].str.contains('expired|settled|closed|finished', 
                                                  case=False, na=False)
     expired_positions = pos_df[expired_mask]
     
     if len(expired_positions) == 0:
-        return initial_bankroll
+        return float(initial_bankroll)
     
-    # Handle missing Your PnL column (use PnL if available)
-    if 'Your PnL' in expired_positions.columns:
-        realized_pnl = expired_positions['Your PnL'].sum()
-    elif 'PnL' in expired_positions.columns:
-        realized_pnl = expired_positions['PnL'].sum()
-    else:
-        return initial_bankroll  # No PnL data
+    # Safe PnL column lookup (try multiple possible names)
+    pnl_col = None
+    for col in ['Your PnL', 'PnL', 'pnl', 'profit_loss', 'P&L']:
+        if col in expired_positions.columns:
+            pnl_col = col
+            break
     
-    final_bankroll = initial_bankroll + realized_pnl
+    if pnl_col is None:
+        print(f"WARNING: No PnL column found in {list(expired_positions.columns)}")
+        return float(initial_bankroll)
+    
+    realized_pnl = pd.to_numeric(expired_positions[pnl_col], errors='coerce').sum()
+    final_bankroll = float(initial_bankroll) + realized_pnl
     return round(final_bankroll, 2)
-
 
 def track_simulation_pnl(sim_results, initial_bankroll: float) -> None:
     """Track real bankroll history"""
