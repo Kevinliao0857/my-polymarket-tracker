@@ -211,14 +211,17 @@ else:
 # =====================================================
 
 def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: int):
-    """Render simulator with REAL bankroll tracking"""
+    """Dynamic sim: excludes expired positions as they settle"""
     from utils.simulator import run_position_simulator, track_simulation_pnl, get_realized_bankroll
     
+    # 🔄 DYNAMIC: Always get FRESH positions (expired auto-excluded by API)
     pos_df = get_open_positions(TRADER)
+    
     if pos_df.empty:
-        st.warning("No positions to simulate")
+        st.warning("No LIVE positions to simulate")
         return
     
+    # Run sim on current LIVE positions only
     sim_results = run_position_simulator(pos_df, initial_bankroll, copy_ratio)
     if not sim_results['valid']:
         st.error(sim_results['message'])
@@ -231,16 +234,8 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: int):
     total_pnl = sim_results['total_pnl']
     skipped = sim_results['skipped']
     
-    # 👇 HEDGE MARKER
-    market_groups = sim_df.groupby('Market')
-    hedge_markets = []
-    for market, group in market_groups:
-        if len(group) >= 2 and any('UP' in str(updown) for updown in group['UP/DOWN']):
-            hedge_markets.append(market)
-    sim_df['Hedge?'] = sim_df['Market'].apply(lambda x: '🛡️ Hedge' if x in hedge_markets else '')
-    
-    # 🔥 REAL BANKROLL CALCULATION
-    current_bankroll = get_realized_bankroll(initial_bankroll, sim_df)
+    # 🔥 REAL BANKROLL (expired positions already excluded from sim)
+    current_bankroll = get_realized_bankroll(initial_bankroll, sim_df)  # Only realized from past expiries
     bankroll_change = current_bankroll - initial_bankroll
     
     # Header metrics
@@ -257,13 +252,19 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: int):
     with col4:
         total_positions = len(sim_df) + skipped
         st.metric("📊 Simulated", f"{len(sim_df)}/{total_positions} ({skipped} skipped)")
-
+    
     runtime_min = (time.time() - st.session_state.sim_start_time) / 60
     st.caption(f"⏱️ {runtime_min:.1f}min | 1:{copy_ratio} | "
-               f"💼 ${total_cost:,.0f} used ({usage_pct:.0f}% of bankroll) | "
-               f"Expired bets = realized gains/losses")
+               f"🔄 LIVE only ({len(sim_df)} positions) | "
+               f"💼 ${total_cost:,.0f} used ({usage_pct:.0f}%) | "
+               f"Past expiries → realized PnL")
     
-    # History chart
+    # Hedge marker (unchanged)
+    market_groups = sim_df.groupby('Market')
+    hedge_markets = [m for m, g in market_groups if len(g) >= 2 and g['UP/DOWN'].str.contains('UP').any()]
+    sim_df['Hedge?'] = sim_df['Market'].apply(lambda x: '🛡️ Hedge' if x in hedge_markets else '')
+    
+    # History charts (unchanged)
     if len(st.session_state.sim_pnl_history) > 1:
         hist_df = pd.DataFrame(st.session_state.sim_pnl_history)
         hist_df['Time'] = hist_df['time'].apply(lambda x: f"{int(x):.0f}m")
@@ -273,7 +274,7 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: int):
         with col_chart2:
             st.line_chart(hist_df.set_index('Time')['realized_pnl'], height=200)
     
-    # Table with Status highlighting
+    # Table (unchanged highlighting)
     sim_cols = ['Market', 'UP/DOWN', 'Status', 'Shares', 'Your Shares', 'Your Cost', 'Your PnL', 'Hedge?']
     recent_mask = sim_df['age_sec'] <= 300
     def highlight_recent(row):
@@ -285,25 +286,21 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: int):
     
     styled_sim = sim_df[sim_cols].style.apply(highlight_recent, axis=1)
     st.dataframe(styled_sim, use_container_width=True, height=350, hide_index=True)
-   
-    # 👇 SKIPPED BETS TABLE (below main table)
+    
+    # Skipped bets table (unchanged)
     if skipped > 0:
         st.markdown("---")
         st.subheader(f"⏭️ Skipped Bets ({skipped} < 5 shares)")
-
         all_pos_df = get_open_positions(TRADER)
-        copy_ratio = st.session_state.get('copy_ratio', 10)
-
-        # Calculate Your Shares for ALL positions
         all_pos_df['Your Shares'] = (all_pos_df['Shares'].astype(float) / copy_ratio).round(1)
         skipped_df = all_pos_df[all_pos_df['Your Shares'] < 5].copy()
-
+        
         skip_cols = ['Market', 'UP/DOWN', 'Shares', 'Your Shares', 'AvgPrice', 'Status']
         if not skipped_df.empty:
             st.dataframe(skipped_df[skip_cols], use_container_width=True, height=200, hide_index=True,
                          column_config={
                              "Shares": st.column_config.NumberColumn(format="%.1f"),
-                             "Your Shares": st.column_config.NumberColumn(format="%.1f"),  # ✅ Fixed
+                             "Your Shares": st.column_config.NumberColumn(format="%.1f"),
                              "AvgPrice": st.column_config.NumberColumn(format="$%.2f")
                          })
             st.caption("💡 Skipped = <5 **Your Shares** after copy ratio")
