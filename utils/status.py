@@ -1,52 +1,53 @@
 import re
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, Any
 from .data import get_market_enddate
 from .config import EST
 
 def get_status_hybrid(item: Dict[str, Any], now_ts: int) -> str:
-    """🟢 Hybrid: API → Range parsing → Single time → Duration fallback"""
-    # 1. API first (unchanged)
-    condition_id = str(item.get('conditionId') or item.get('marketId') or '')
-    slug = str(item.get('slug') or '')
-    end_str = get_market_enddate(condition_id, slug)
     now_est = datetime.fromtimestamp(now_ts, EST)
-    now_decimal = now_est.hour + (now_est.minute / 60.0)
+    now_decimal = now_est.hour + now_est.minute / 60.0
     
+    # 1. API enddate (full date)
+    condition_id = str(item.get('conditionId') or item.get('marketId') or '')
+    end_str = get_market_enddate(condition_id, str(item.get('slug') or ''))
     if end_str:
         try:
             end_dt = pd.to_datetime(end_str).tz_convert(EST)
-            if now_est >= end_dt:
-                return "⚫ EXPIRED"
-            return f"🟢 ACTIVE (til {end_dt.strftime('%I:%M %p ET')}) 🟢"
-        except:
-            pass
+            if now_est < end_dt:
+                return f"🟢 ACTIVE (til {end_dt.strftime('%b %d %I:%M %p ET')})"
+            return "⚫ EXPIRED"
+        except: pass
     
     title = str(item.get('title') or item.get('question') or '').lower()
     
-    # 2. 👇 RANGE PARSING FIRST: "6:00PM-6:15PM" or "6PM-7PM"
+    # 2. RANGE: "6PM-7PM"
     range_match = re.search(r'(\d{1,2}:?\d{2}?[ap]m)\s*-\s*(\d{1,2}:?\d{2}?[ap]m)', title)
     if range_match:
         start_str, end_str = range_match.groups()
         start_h = parse_time_to_decimal(start_str)
         end_h = parse_time_to_decimal(end_str)
-        if start_h is not None and end_h is not None:
+        if start_h and end_h:
             if now_decimal >= start_h and now_decimal < end_h:
                 return f"🟢 ACTIVE (til ~{format_display_time(end_h)})"
             return "⚫ EXPIRED"
     
-    # 3. Single time → implicit 1h window: "6PM ET" = 6-7PM
+    # 3. SINGLE TIME → Next occurrence
     time_match = re.search(r'(\d{1,2}:?\d{2}?[ap]m)', title)
     if time_match:
-        start_h = parse_time_to_decimal(time_match.group(1))
-        if start_h is not None:
-            end_h = start_h + 1.0  # 1 hour window
-            if now_decimal >= start_h and now_decimal < end_h:
-                return f"🟢 ACTIVE (til ~{format_display_time(end_h)})"
+        event_hour = parse_time_to_decimal(time_match.group(1))
+        if event_hour is not None:
+            today_event = now_est.replace(hour=int(event_hour), 
+                                        minute=int((event_hour%1)*60), 
+                                        second=0, microsecond=0)
+            if now_est > today_event:
+                today_event += timedelta(days=1)
+            if now_est < today_event:
+                return f"🟢 ACTIVE (til {today_event.strftime('%b %d %I:%M %p')})"
             return "⚫ EXPIRED"
     
-    # 4. Duration fallback (1h, 30m)
+    # 4. Duration fallback
     dur_match = re.search(r'(\d+)\s*(h|hr|m|min)', title)
     if dur_match:
         val = int(dur_match.group(1))
@@ -56,12 +57,11 @@ def get_status_hybrid(item: Dict[str, Any], now_ts: int) -> str:
             return f"🟢 ACTIVE (til ~{format_display_time(expiry_h)})"
         return "⚫ EXPIRED"
     
-    # Next hour display for hourly bets
+    # 5. Next hour fallback
     next_hour = int(now_decimal + 1)
     disp_h = int(next_hour % 12) or 12
     ampm = 'PM' if next_hour >= 12 else 'AM'
     return f"🟢 ACTIVE (til ~{disp_h} {ampm})"
-
 
 def parse_time_to_decimal(time_str: str) -> float | None:
     """Convert '6PM' or '6:15PM' → decimal hour (18.25)"""
