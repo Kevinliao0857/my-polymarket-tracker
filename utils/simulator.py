@@ -12,18 +12,18 @@ def run_position_simulator(pos_df: pd.DataFrame, initial_bankroll: float, copy_r
     # 👇 FIXED HEDGE PAIRING LOGIC
     market_groups = sim_df.groupby('Market')
     paired_rows = []  # List of dicts for safe DataFrame construction
-    
+
     for market, group in market_groups:
         group = group.reset_index(drop=True)
-        
+
         if len(group) == 2:
             up_mask = group['UP/DOWN'].str.contains('UP', na=False)
             down_mask = group['UP/DOWN'].str.contains('DOWN', na=False)
-            
+
             if up_mask.any() and down_mask.any():
                 up_row = group[up_mask].iloc[0]
                 down_row = group[down_mask].iloc[0]
-                
+
                 # ✅ BOTH must have >=5 Your Shares → include pair, else skip both
                 if up_row['Your Shares'] >= 5 and down_row['Your Shares'] >= 5:
                     paired_rows.append(up_row.to_dict())
@@ -33,7 +33,7 @@ def run_position_simulator(pos_df: pd.DataFrame, initial_bankroll: float, copy_r
         # Single positions only (non-hedges)
         valid_rows = group[group['Your Shares'] >= 5].to_dict('records')
         paired_rows.extend(valid_rows)
-    
+
     sim_df = pd.DataFrame(paired_rows).reset_index(drop=True)
     
     if len(sim_df) == 0:
@@ -61,19 +61,27 @@ def run_position_simulator(pos_df: pd.DataFrame, initial_bankroll: float, copy_r
     }
 
 
-def get_realized_bankroll(initial_bankroll: float, sim_df: pd.DataFrame) -> float:
-    """Calculate REAL bankroll: initial $ + realized PnL from EXPIRED positions"""
-    # Expired/settled positions (status indicates closed/expired)
-    expired_positions = sim_df[sim_df['Status'].str.contains('expired|settled|closed', case=False, na=False)]
+def get_realized_bankroll(initial_bankroll: float, pos_df: pd.DataFrame) -> float:
+    """Calculate REAL bankroll from trader's positions (handles missing Your PnL)"""
+    # Expired positions
+    expired_mask = pos_df['Status'].str.contains('expired|settled|closed|finished', 
+                                                 case=False, na=False)
+    expired_positions = pos_df[expired_mask]
     
     if len(expired_positions) == 0:
-        return initial_bankroll  # No realized gains/losses yet
+        return initial_bankroll
     
-    # Sum realized PnL from expired positions only
-    realized_pnl = expired_positions['Your PnL'].sum()
+    # Handle missing Your PnL column (use PnL if available)
+    if 'Your PnL' in expired_positions.columns:
+        realized_pnl = expired_positions['Your PnL'].sum()
+    elif 'PnL' in expired_positions.columns:
+        realized_pnl = expired_positions['PnL'].sum()
+    else:
+        return initial_bankroll  # No PnL data
+    
     final_bankroll = initial_bankroll + realized_pnl
-    
     return round(final_bankroll, 2)
+
 
 def track_simulation_pnl(sim_results, initial_bankroll: float) -> None:
     """Track real bankroll history"""
