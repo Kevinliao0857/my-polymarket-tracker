@@ -2,7 +2,7 @@ import streamlit as st
 import time
 import pandas as pd
 from utils.config import TRADER
-from utils.api import get_open_positions
+from utils.api import get_open_positions, get_closed_trades_pnl
 from utils.simulator import run_position_simulator, track_simulation_pnl
 
 # =====================================================
@@ -33,18 +33,10 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: int):
     total_pnl = sim_results['total_pnl']
     skipped = sim_results['skipped']
     
-    # Simulated realized PnL (expired positions scaled)
-    all_pos_df = get_open_positions(TRADER)
-    expired_mask = all_pos_df['Status'].str.contains('expired|settled|closed|finished', case=False, na=False)
-    expired_df = all_pos_df[expired_mask].copy()
-    
-    simulated_realized_pnl = 0.0
-    if len(expired_df) > 0 and 'PnL' in expired_df.columns:
-        expired_df['Your Shares'] = (expired_df['Shares'].astype(float) / copy_ratio).round(1)
-        trader_pnl = pd.to_numeric(expired_df['PnL'], errors='coerce')
-        simulated_realized_pnl = (expired_df['Your Shares'] * trader_pnl).sum()
-    
+    # Simulated realized PnL (from closed trades)
+    simulated_realized_pnl = get_closed_trades_pnl(TRADER)['total'] * (100 / copy_ratio)
     current_bankroll = initial_bankroll + simulated_realized_pnl
+
     
     # Metrics
     col1, col2, col3, col4, col5 = st.columns(5)
@@ -179,14 +171,14 @@ def show_simulator():
             st.session_state.sim_start_time = None
         if 'sim_pnl_history' not in st.session_state:
             st.session_state.sim_pnl_history = []
-        
+
         col1, col2 = st.columns(2)
         with col1:
             initial_bankroll = st.number_input("💰 Starting Bankroll", value=1000.0, step=100.0)
         with col2:
             allocation_pct = st.number_input("⚖️ Allocation %", value=10.0, min_value=1.0, max_value=100.0, step=1.0, 
                                             help="10% = copy 10% of trader's shares (equiv 1:10)")
-        
+
         col_btn1, col_btn2 = st.columns(2)
         with col_btn1:
             if col_btn1.button("🚀 Start Sim", type="primary", use_container_width=True):
@@ -201,10 +193,9 @@ def show_simulator():
                 for key in ['sim_start_time', 'sim_pnl_history', 'initial_bankroll', 'allocation_pct']:  # 👈 Updated
                     st.session_state.pop(key, None)
                 st.rerun()
-        
+
         if st.session_state.sim_start_time:
             initial_bankroll = st.session_state.get('initial_bankroll', 1000.0)
             allocation_pct = st.session_state.get('allocation_pct', 10.0)
             copy_ratio = 100 / allocation_pct  # 👈 10% → copy_ratio=10 (1:10)
             render_real_bankroll_simulator(initial_bankroll, copy_ratio)
-    
