@@ -36,7 +36,6 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: int):
     # Simulated realized PnL (from closed trades)
     simulated_realized_pnl = get_closed_trades_pnl(TRADER)['total'] / copy_ratio
     current_bankroll = initial_bankroll + simulated_realized_pnl
-
     
     # Metrics
     col1, col2, col3, col4, col5 = st.columns(5)
