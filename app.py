@@ -262,8 +262,10 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: int):
     with col5:
         st.metric("📊 Simulated", f"{len(sim_df)}/{len(sim_df)+skipped}")
     
+    # 🔥 FIX: Calculate allocation_pct BEFORE caption
+    allocation_pct = (total_cost / current_bankroll * 100) if current_bankroll > 0 else 0
     runtime_min = (time.time() - st.session_state.sim_start_time) / 60
-    st.caption(f"⏱️ {runtime_min:.1f}min | {allocation_pct:.0f}% alloc")  # 👈 Clean!
+    st.caption(f"⏱️ {runtime_min:.1f}min | {allocation_pct:.0f}% alloc")
     
     # Hedge marker
     market_groups = sim_df.groupby('Market')
