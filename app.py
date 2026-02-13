@@ -215,10 +215,10 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: int):
     pos_df = get_open_positions(TRADER)
 
     # 🔥 TEMP DEBUG - ADD THESE 4 LINES:
-    st.error(f"🔍 DEBUG: pos_df columns = {list(pos_df.columns) if not pos_df.empty else 'EMPTY'}")
-    if not pos_df.empty:
-        st.error(f"🔍 Sample rows:\n{pos_df.head(2).to_dict()}")
-    st.stop()  # 👈 HALTS HERE - check output, then remove these 4 lines + restart
+    # st.error(f"🔍 DEBUG: pos_df columns = {list(pos_df.columns) if not pos_df.empty else 'EMPTY'}")
+    # if not pos_df.empty:
+    #     st.error(f"🔍 Sample rows:\n{pos_df.head(2).to_dict()}")
+    # st.stop()  # 👈 HALTS HERE - check output, then remove these 4 lines + restart
 
     if pos_df.empty:
         st.warning("No LIVE positions to simulate")
