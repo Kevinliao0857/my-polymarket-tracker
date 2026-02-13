@@ -14,7 +14,7 @@ st.set_page_config(layout="wide")
 # ✅ CLEAN IMPORTS
 from utils.api import get_open_positions, track_0x8dxd, get_profile_name, get_trader_pnl, get_closed_trades_pnl 
 from utils.config import EST, TRADER
-from utils.simulator import run_position_simulator, track_simulation_pnl
+from pages import trades, positions, simulator
 
 if 'refresh_count' not in st.session_state:
     st.session_state.refresh_count = 0
