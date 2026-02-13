@@ -5,6 +5,7 @@ from typing import Dict, Any
 from .data import get_market_enddate
 from .config import EST
 
+
 def get_status_hybrid(item: Dict[str, Any], now_ts: int) -> str:
     now_est = datetime.fromtimestamp(now_ts, EST)
     now_decimal = now_est.hour + now_est.minute / 60.0
@@ -31,6 +32,37 @@ def get_status_hybrid(item: Dict[str, Any], now_ts: int) -> str:
         if start_h and end_h:
             if now_decimal >= start_h and now_decimal < end_h:
                 return f"🟢 ACTIVE (til ~{format_display_time(end_h)})"
+            return "⚫ EXPIRED"
+    
+    # 2.5 DATE + TIME: "Feb 14 3PM"
+    date_match = re.search(
+        r'(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s+(\d{1,2})\s+(\d{1,2}(?::?\d{2})?[ap]m)',
+        title
+    )
+    if date_match:
+        mon_str, day_str, time_str = date_match.groups()
+        months = {
+            'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6, 'jul': 7,
+            'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12
+        }
+        mon = months[mon_str]
+        day = int(day_str)
+        
+        event_hour = parse_time_to_decimal(time_str)
+        if event_hour is not None:
+            event_dt = now_est.replace(month=mon, day=day, 
+                                      hour=int(event_hour), 
+                                      minute=int((event_hour % 1) * 60),
+                                      second=0, microsecond=0)
+            # Handle past year rollover (e.g., Dec in Jan)
+            if event_dt < now_est.replace(month=1, day=1):
+                event_dt = event_dt.replace(year=now_est.year + 1)
+            # Handle today past time → tomorrow
+            elif event_dt.date() == now_est.date() and now_est.time() > event_dt.time():
+                event_dt += timedelta(days=1)
+            
+            if now_est < event_dt:
+                return f"🟢 ACTIVE (til {event_dt.strftime('%b %d %I:%M %p ET')})"
             return "⚫ EXPIRED"
     
     # 3. SINGLE TIME → Next occurrence
@@ -63,6 +95,7 @@ def get_status_hybrid(item: Dict[str, Any], now_ts: int) -> str:
     ampm = 'PM' if next_hour >= 12 else 'AM'
     return f"🟢 ACTIVE (til ~{disp_h} {ampm})"
 
+
 def parse_time_to_decimal(time_str: str) -> float | None:
     """Convert '6PM' or '6:15PM' → decimal hour (18.25)"""
     time_str = time_str.lower().replace('et', '')
@@ -80,6 +113,7 @@ def parse_time_to_decimal(time_str: str) -> float | None:
         hour = 0
     
     return hour + (minute / 60.0)
+
 
 def format_display_time(decimal_h: float) -> str:
     """16.25 → '4:15 PM'"""
