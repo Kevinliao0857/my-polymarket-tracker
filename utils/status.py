@@ -3,7 +3,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 from typing import Dict, Any
 from .data import get_market_enddate
-from .config import EST
+from .config import EST, MONTHS_MAP
 
 
 def get_status_hybrid(item: Dict[str, Any], now_ts: int) -> str:
@@ -34,18 +34,17 @@ def get_status_hybrid(item: Dict[str, Any], now_ts: int) -> str:
                 return f"🟢 ACTIVE (til ~{format_display_time(end_h)})"
             return "⚫ EXPIRED"
     
-    # 2.5 DATE + TIME: "Feb 14 3PM"
+    # 2.5 DATE + TIME
     date_match = re.search(
-        r'(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s+(\d{1,2})\s+(\d{1,2}(?::?\d{2})?[ap]m)',
+        r'\b(jan(uary)?|feb(ruary)?|mar(ch)?|apr(il)?|may|jun(e)?|jul(y)?|aug(ust)?|sep(tember)?|oct(ober)?|nov(ember)?|dec(ember)?)\s+(\d{1,2})\s+(\d{1,2}(?::?\d{2})?[ap]m)',
         title
     )
     if date_match:
-        mon_str, day_str, time_str = date_match.groups()
-        months = {
-            'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6, 'jul': 7,
-            'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12
-        }
-        mon = months[mon_str]
+        mon_str = date_match.group(1).lower()  # 'february' or 'feb'
+        day_str = date_match.group(2)
+        time_str = date_match.group(3)
+        
+        mon = MONTHS_MAP.get(mon_str)
         day = int(day_str)
         
         event_hour = parse_time_to_decimal(time_str)
