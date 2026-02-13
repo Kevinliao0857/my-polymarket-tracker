@@ -85,20 +85,26 @@ def get_realized_bankroll(initial_bankroll: float, pos_df: pd.DataFrame) -> floa
     final_bankroll = float(initial_bankroll) + realized_pnl
     return round(final_bankroll, 2)
 
-def track_simulation_pnl(sim_results, initial_bankroll: float) -> None:
-    """Track real bankroll history"""
-    if 'sim_start_time' in st.session_state and st.session_state.sim_start_time:
-        runtime_min = (time.time() - st.session_state.sim_start_time) / 60
-        current_bankroll = get_realized_bankroll(initial_bankroll, sim_results['sim_df'])
-        
-        snapshot = {
-            'time': runtime_min,
-            'bankroll': current_bankroll,
-            'pnl': sim_results['total_pnl'],
-            'realized_pnl': current_bankroll - initial_bankroll,
-            'cost': sim_results['total_cost'],
-            'positions': sim_results['positions']
-        }
-        if 'sim_pnl_history' not in st.session_state:
-            st.session_state.sim_pnl_history = []
-        st.session_state.sim_pnl_history.append(snapshot)
+def get_simulated_realized_pnl(pos_df: pd.DataFrame, copy_ratio: int, initial_bankroll: float) -> float:
+    """Calculate realized PnL from trader positions using current copy ratio"""
+    # Filter expired positions
+    expired_mask = pos_df['Status'].str.contains('expired|settled|closed|finished', case=False, na=False)
+    expired_df = pos_df[expired_mask].copy()
+    
+    if len(expired_df) == 0:
+        return 0.0
+    
+    # Calculate Your Shares for expired positions
+    expired_df['Your Shares'] = (expired_df['Shares'].astype(float) / copy_ratio).round(1)
+    
+    # Calculate PnL (safe column handling)
+    if 'PnL' in expired_df.columns:
+        trader_pnl = pd.to_numeric(expired_df['PnL'], errors='coerce')
+    else:
+        return 0.0
+    
+    avg_price = pd.to_numeric(expired_df['AvgPrice'].str.replace('$', ''), errors='coerce')
+    your_pnl = expired_df['Your Shares'] * trader_pnl  # Proportional PnL
+    
+    return your_pnl.sum()
+
