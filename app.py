@@ -211,6 +211,105 @@ else:
 # =====================================================
 
 def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: int):
+    """Dynamic sim: excludes expired, tallies simulated realized PnL"""
+    pos_df = get_open_positions(TRADER)
+    if pos_df.empty:
+        st.warning("No LIVE positions to simulate")
+        return 
+    
+    sim_results = run_position_simulator(pos_df, initial_bankroll, copy_ratio)
+    if not sim_results['valid']:
+        st.error(sim_results['message'])
+        return 
+    
+    track_simulation_pnl(sim_results, initial_bankroll)
+    
+    sim_df = sim_results['sim_df']
+    total_cost = sim_results['total_cost']
+    total_pnl = sim_results['total_pnl']
+    skipped = sim_results['skipped']
+    
+    # 🔥 SIMULATED REALIZED PNL (inline from get_simulated_realized_pnl)
+    all_pos_df = get_open_positions(TRADER)  # Includes expired for realized calc
+    expired_mask = all_pos_df['Status'].str.contains('expired|settled|closed|finished', case=False, na=False)
+    expired_df = all_pos_df[expired_mask].copy()
+    
+    simulated_realized_pnl = 0.0
+    if len(expired_df) > 0:
+        expired_df['Your Shares'] = (expired_df['Shares'].astype(float) / copy_ratio).round(1)
+        if 'PnL' in expired_df.columns:
+            trader_pnl = pd.to_numeric(expired_df['PnL'], errors='coerce')
+            simulated_realized_pnl = (expired_df['Your Shares'] * trader_pnl).sum()
+    
+    # Current bankroll = initial + simulated realized
+    current_bankroll = initial_bankroll + simulated_realized_pnl
+    bankroll_change = simulated_realized_pnl
+    
+    # Header metrics
+    col1, col2, col3, col4, col5 = st.columns(5)
+    with col1:
+        st.metric("🏦 Simulated Bankroll", f"${current_bankroll:,.0f}", f"${bankroll_change:+,.0f}")
+    with col2:
+        usage_pct = (total_cost / current_bankroll * 100) if current_bankroll > 0 else 0
+        usage_color = "🟢" if usage_pct <= 50 else "🟡" if usage_pct <= 80 else "🔴"
+        st.metric("💼 Capital Used", f"{usage_color}${total_cost:,.0f}", f"{usage_pct:.0f}%")
+    with col3:
+        st.metric("📈 Unrealized PnL", f"${total_pnl:+,.0f}")
+    with col4:
+        st.metric("💰 Simulated Realized", f"${simulated_realized_pnl:+,.0f}")
+    with col5:
+        total_positions = len(sim_df) + skipped
+        st.metric("📊 Simulated", f"{len(sim_df)}/{total_positions}")
+    
+    runtime_min = (time.time() - st.session_state.sim_start_time) / 60
+    st.caption(f"⏱️ {runtime_min:.1f}min | 1:{copy_ratio} | "
+               f"🔄 {len(sim_df)} live pos | 💰 Expired PnL scaled | "
+               f"${total_cost:,.0f} used")
+    
+    # Hedge marker (unchanged)
+    market_groups = sim_df.groupby('Market')
+    hedge_markets = [m for m, g in market_groups if len(g) >= 2 and g['UP/DOWN'].str.contains('UP').any()]
+    sim_df['Hedge?'] = sim_df['Market'].apply(lambda x: '🛡️ Hedge' if x in hedge_markets else '')
+    
+    # History charts (unchanged)
+    if len(st.session_state.sim_pnl_history) > 1:
+        hist_df = pd.DataFrame(st.session_state.sim_pnl_history)
+        hist_df['Time'] = hist_df['time'].apply(lambda x: f"{int(x):.0f}m")
+        col_chart1, col_chart2 = st.columns(2)
+        with col_chart1:
+            st.line_chart(hist_df.set_index('Time')['bankroll'], height=200)
+        with col_chart2:
+            st.line_chart(hist_df.set_index('Time')['realized_pnl'], height=200)
+    
+    # Main table (unchanged)
+    sim_cols = ['Market', 'UP/DOWN', 'Status', 'Shares', 'Your Shares', 'Your Cost', 'Your PnL', 'Hedge?']
+    recent_mask = sim_df['age_sec'] <= 300
+    def highlight_recent(row):
+        if recent_mask.iloc[row.name]:
+            return ['background-color: rgba(0, 255, 0, 0.15)'] * len(sim_cols)
+        elif 'expired' in str(sim_df.iloc[row.name]['Status']).lower():
+            return ['background-color: rgba(255, 165, 0, 0.2)'] * len(sim_cols)
+        return [''] * len(sim_cols)
+    
+    styled_sim = sim_df[sim_cols].style.apply(highlight_recent, axis=1)
+    st.dataframe(styled_sim, use_container_width=True, height=350, hide_index=True)
+    
+    # Skipped table (unchanged)
+    if skipped > 0:
+        st.markdown("---")
+        st.subheader(f"⏭️ Skipped Bets ({skipped} < 5 shares)")
+        all_pos_df['Your Shares'] = (all_pos_df['Shares'].astype(float) / copy_ratio).round(1)
+        skipped_df = all_pos_df[all_pos_df['Your Shares'] < 5].copy()
+        skip_cols = ['Market', 'UP/DOWN', 'Shares', 'Your Shares', 'AvgPrice', 'Status']
+        if not skipped_df.empty:
+            st.dataframe(skipped_df[skip_cols], use_container_width=True, height=200, hide_index=True,
+                         column_config={
+                             "Shares": st.column_config.NumberColumn(format="%.1f"),
+                             "Your Shares": st.column_config.NumberColumn(format="%.1f"),
+                             "AvgPrice": st.column_config.NumberColumn(format="$%.2f")
+                         })
+            st.caption("💡 Skipped = <5 **Your Shares** after copy ratio")
+
     """Dynamic sim: excludes expired, tallies realized PnL"""
     from utils.simulator import run_position_simulator, track_simulation_pnl, get_realized_bankroll 
     
