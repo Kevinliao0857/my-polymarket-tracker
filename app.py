@@ -211,21 +211,18 @@ else:
 # =====================================================
 
 def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: int):
-    """Dynamic sim: excludes expired positions as they settle"""
-    from utils.simulator import run_position_simulator, track_simulation_pnl, get_realized_bankroll
+    """Render simulator with REAL bankroll tracking - excludes expired dynamically"""
+    from utils.simulator import run_position_simulator, track_simulation_pnl, get_realized_bankroll 
     
-    # 🔄 DYNAMIC: Always get FRESH positions (expired auto-excluded by API)
     pos_df = get_open_positions(TRADER)
-    
     if pos_df.empty:
         st.warning("No LIVE positions to simulate")
-        return
+        return 
     
-    # Run sim on current LIVE positions only
     sim_results = run_position_simulator(pos_df, initial_bankroll, copy_ratio)
     if not sim_results['valid']:
         st.error(sim_results['message'])
-        return
+        return 
     
     track_simulation_pnl(sim_results, initial_bankroll)
     
@@ -234,37 +231,43 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: int):
     total_pnl = sim_results['total_pnl']
     skipped = sim_results['skipped']
     
-    # 🔥 REAL BANKROLL (expired positions already excluded from sim)
-    current_bankroll = get_realized_bankroll(initial_bankroll, sim_df)  # Only realized from past expiries
-    bankroll_change = current_bankroll - initial_bankroll
+    # 🔥 PERFECT BANKROLL: initial + CLOSED TRADES (your existing API!)
+    closed_pnl_data = get_closed_trades_pnl(TRADER)
+    cumulative_realized_pnl = closed_pnl_data['total']
+    current_bankroll = initial_bankroll + cumulative_realized_pnl
+    bankroll_change = cumulative_realized_pnl
     
-    # Header metrics
-    col1, col2, col3, col4 = st.columns(4)
+    # Header metrics - 5 columns
+    col1, col2, col3, col4, col5 = st.columns(5)
     with col1:
         st.metric("🏦 Your Bankroll", f"${current_bankroll:,.0f}", f"${bankroll_change:+,.0f}")
     with col2:
-        usage_pct = (total_cost / initial_bankroll * 100) if initial_bankroll > 0 else 0
+        usage_pct = (total_cost / current_bankroll * 100) if current_bankroll > 0 else 0
         usage_color = "🟢" if usage_pct <= 50 else "🟡" if usage_pct <= 80 else "🔴"
-        st.metric("💼 Capital Used", f"{usage_color}${total_cost:,.0f}", 
-                  f"{usage_pct:.0f}% of ${initial_bankroll:,.0f}")
+        st.metric("💼 Capital Used", f"{usage_color}${total_cost:,.0f}", f"{usage_pct:.0f}%")
     with col3:
         st.metric("📈 Unrealized PnL", f"${total_pnl:+,.0f}")
     with col4:
+        st.metric("💰 Realized PnL", f"${cumulative_realized_pnl:+,.0f}")
+    with col5:
         total_positions = len(sim_df) + skipped
-        st.metric("📊 Simulated", f"{len(sim_df)}/{total_positions} ({skipped} skipped)")
+        st.metric("📊 Simulated", f"{len(sim_df)}/{total_positions}")
     
     runtime_min = (time.time() - st.session_state.sim_start_time) / 60
     st.caption(f"⏱️ {runtime_min:.1f}min | 1:{copy_ratio} | "
-               f"🔄 LIVE only ({len(sim_df)} positions) | "
-               f"💼 ${total_cost:,.0f} used ({usage_pct:.0f}%) | "
-               f"Past expiries → realized PnL")
+               f"🔄 LIVE only ({len(sim_df)} pos) | "
+               f"💰 Realized from closed trades | "
+               f"Auto-excludes expired")
     
-    # Hedge marker (unchanged)
+    # 👇 HEDGE MARKER
     market_groups = sim_df.groupby('Market')
-    hedge_markets = [m for m, g in market_groups if len(g) >= 2 and g['UP/DOWN'].str.contains('UP').any()]
+    hedge_markets = []
+    for market, group in market_groups:
+        if len(group) >= 2 and any('UP' in str(updown) for updown in group['UP/DOWN']):
+            hedge_markets.append(market)
     sim_df['Hedge?'] = sim_df['Market'].apply(lambda x: '🛡️ Hedge' if x in hedge_markets else '')
     
-    # History charts (unchanged)
+    # History chart
     if len(st.session_state.sim_pnl_history) > 1:
         hist_df = pd.DataFrame(st.session_state.sim_pnl_history)
         hist_df['Time'] = hist_df['time'].apply(lambda x: f"{int(x):.0f}m")
@@ -274,7 +277,7 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: int):
         with col_chart2:
             st.line_chart(hist_df.set_index('Time')['realized_pnl'], height=200)
     
-    # Table (unchanged highlighting)
+    # Table with Status highlighting
     sim_cols = ['Market', 'UP/DOWN', 'Status', 'Shares', 'Your Shares', 'Your Cost', 'Your PnL', 'Hedge?']
     recent_mask = sim_df['age_sec'] <= 300
     def highlight_recent(row):
@@ -286,15 +289,16 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: int):
     
     styled_sim = sim_df[sim_cols].style.apply(highlight_recent, axis=1)
     st.dataframe(styled_sim, use_container_width=True, height=350, hide_index=True)
-    
-    # Skipped bets table (unchanged)
+   
+    # 👇 SKIPPED BETS TABLE
     if skipped > 0:
         st.markdown("---")
         st.subheader(f"⏭️ Skipped Bets ({skipped} < 5 shares)")
+
         all_pos_df = get_open_positions(TRADER)
         all_pos_df['Your Shares'] = (all_pos_df['Shares'].astype(float) / copy_ratio).round(1)
         skipped_df = all_pos_df[all_pos_df['Your Shares'] < 5].copy()
-        
+
         skip_cols = ['Market', 'UP/DOWN', 'Shares', 'Your Shares', 'AvgPrice', 'Status']
         if not skipped_df.empty:
             st.dataframe(skipped_df[skip_cols], use_container_width=True, height=200, hide_index=True,
