@@ -233,6 +233,14 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: int):
     
     # 🔥 FIXED BANKROLL: initial + realized from EXPIRED positions
     all_pos_df = get_open_positions(TRADER)
+
+    # 🔥🔍 DEBUG - ADD THESE 5 LINES 👇👇👇
+    st.markdown("### 🔍 DEBUG Positions")
+    st.caption(f"**Columns:** {list(all_pos_df.columns)}")
+    st.caption(f"**Statuses:** {sorted(all_pos_df['Status'].unique())}")
+    st.caption(f"**Expired count:** {len(all_pos_df[all_pos_df['Status'].str.contains('expired|settled|closed', case=False, na=False)])}")
+    st.caption(f"**PnL sample:** {all_pos_df['PnL'].head().tolist() if 'PnL' in all_pos_df.columns else 'No PnL column'}")
+
     current_bankroll = get_realized_bankroll(initial_bankroll, all_pos_df)
     bankroll_change = current_bankroll - initial_bankroll
     
