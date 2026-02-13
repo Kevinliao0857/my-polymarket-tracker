@@ -38,7 +38,7 @@ def run_position_simulator(pos_df: pd.DataFrame, initial_bankroll: float, copy_r
     
     if len(sim_df) == 0:
         return {'valid': False, 'message': "No valid positions (hedge/single)"}
-    
+
     # 🔥 FIXED PRICE CLEANING
     def clean_price(col):
         return pd.to_numeric(
@@ -47,10 +47,10 @@ def run_position_simulator(pos_df: pd.DataFrame, initial_bankroll: float, copy_r
             .str.strip(), 
             errors='coerce'
         ).fillna(0.0)
-    
+
     avg_price = clean_price(sim_df['AvgPrice'])
     cur_price = clean_price(sim_df['CurPrice'])
-    
+
     sim_df['Your Avg'] = sim_df['AvgPrice']
     sim_df['Your Cost'] = (sim_df['Your Shares'] * avg_price).round(2)
     sim_df['Your PnL'] = sim_df['Your Shares'] * (cur_price - avg_price).round(2)
