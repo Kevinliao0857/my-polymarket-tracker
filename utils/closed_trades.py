@@ -12,9 +12,6 @@ def get_closed_trades_pnl(address: str) -> dict:
             timeout=10
         ).json()
         
-        # 👈 DEBUG:
-        st.write(f"🔍 trades={len(trades)} settled={settled_count} crypto={crypto_count}")
-        
         total_profit = 0
         crypto_count = 0
         settled_count = 0
@@ -31,6 +28,9 @@ def get_closed_trades_pnl(address: str) -> dict:
                 if pnl != 0 and any(ticker in title for ticker in TICKERS + FULL_NAMES):
                     total_profit += pnl
                     crypto_count += 1
+        
+        # 👈 DEBUG AFTER loop:
+        st.write(f"🔍 trades={len(trades)} settled={settled_count} crypto={crypto_count} total=${total_profit}")
         
         return {
             'total': total_profit,
