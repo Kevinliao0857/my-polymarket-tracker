@@ -236,12 +236,13 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: int):
     current_bankroll = get_realized_bankroll(initial_bankroll, all_pos_df)
     bankroll_change = current_bankroll - initial_bankroll
     
-    # 🔥 DEBUG - Add these 3 lines temporarily:
-    debug_expired = all_pos_df[all_pos_df['Status'].str.contains('expired|settled|closed|finished', case=False, na=False)]
-    st.caption(f"🔍 DEBUG: {len(debug_expired)} expired found | "
-               f"PnL sum: ${debug_expired['Your PnL'].sum():.2f} | "
-               f"Status sample: {debug_expired['Status'].tolist()[:2]}")
-
+    # 🔥🔍 FULL DEBUG - Use this instead:
+    all_pos_df = get_open_positions(TRADER)
+    status_counts = all_pos_df['Status'].value_counts()
+    st.caption(f"🔍 DEBUG: {len(all_pos_df)} total pos | "
+               f"Statuses: {dict(status_counts)} | "
+               f"Columns: {list(all_pos_df.columns)}")
+    current_bankroll = get_realized_bankroll(initial_bankroll, all_pos_df)
 
     # Header metrics
     col1, col2, col3, col4, col5 = st.columns(5)
