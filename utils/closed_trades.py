@@ -3,7 +3,7 @@ import requests
 from typing import Dict
 from .config import TICKERS, FULL_NAMES
 
-@st.cache_data(ttl=2)
+@st.cache_data(ttl=10)
 def get_closed_trades_pnl(address: str) -> dict:
     """Sum P&L from closed SETTLED crypto trades"""
     try:
