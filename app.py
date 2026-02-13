@@ -263,7 +263,7 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: int):
         st.metric("📊 Simulated", f"{len(sim_df)}/{len(sim_df)+skipped}")
     
     runtime_min = (time.time() - st.session_state.sim_start_time) / 60
-    st.caption(f"⏱️ {runtime_min:.1f}min | 1:{copy_ratio}")
+    st.caption(f"⏱️ {runtime_min:.1f}min | {allocation_pct:.0f}% alloc")  # 👈 Clean!
     
     # Hedge marker
     market_groups = sim_df.groupby('Market')
@@ -314,24 +314,26 @@ with st.expander("🤖 Position Simulator", expanded=False):
     with col1:
         initial_bankroll = st.number_input("💰 Starting Bankroll", value=1000.0, step=100.0)
     with col2:
-        copy_ratio = st.number_input("⚖️ Copy Ratio", value=10, step=5, min_value=1)
+        allocation_pct = st.number_input("⚖️ Allocation %", value=10.0, min_value=1.0, max_value=100.0, step=1.0, 
+                                        help="10% = copy 10% of trader's shares (equiv 1:10)")
     
     col_btn1, col_btn2 = st.columns(2)
     with col_btn1:
         if col_btn1.button("🚀 Start Sim", type="primary", use_container_width=True):
             st.session_state.initial_bankroll = initial_bankroll
-            st.session_state.copy_ratio = copy_ratio
+            st.session_state.allocation_pct = allocation_pct  # 👈 Changed key
             if st.session_state.sim_start_time is None:
                 st.session_state.sim_start_time = time.time()
                 st.session_state.sim_pnl_history = []
             st.rerun()
     with col_btn2:
         if col_btn2.button("🛑 Reset", use_container_width=True):
-            for key in ['sim_start_time', 'sim_pnl_history', 'initial_bankroll', 'copy_ratio']:
+            for key in ['sim_start_time', 'sim_pnl_history', 'initial_bankroll', 'allocation_pct']:  # 👈 Updated
                 st.session_state.pop(key, None)
             st.rerun()
     
     if st.session_state.sim_start_time:
         initial_bankroll = st.session_state.get('initial_bankroll', 1000.0)
-        copy_ratio = st.session_state.get('copy_ratio', 10)
+        allocation_pct = st.session_state.get('allocation_pct', 10.0)
+        copy_ratio = 100 / allocation_pct  # 👈 10% → copy_ratio=10 (1:10)
         render_real_bankroll_simulator(initial_bankroll, copy_ratio)
