@@ -255,7 +255,7 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: int):
     with col3:
         st.metric("📈 Unrealized PnL", f"${total_pnl:+,.0f}")
     with col4:
-        realized_pnl = current_bankroll - initial_bankroll - total_pnl
+        realized_pnl = (current_bankroll - initial_bankroll) - total_pnl
         st.metric("💰 Realized PnL", f"${realized_pnl:+,.0f}")
     with col5:
         total_positions = len(sim_df) + skipped
