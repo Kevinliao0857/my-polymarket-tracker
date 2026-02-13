@@ -236,8 +236,15 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: int):
     current_bankroll = get_realized_bankroll(initial_bankroll, all_pos_df)
     bankroll_change = current_bankroll - initial_bankroll
     
+    # 🔥 DEBUG - Add these 3 lines temporarily:
+    debug_expired = all_pos_df[all_pos_df['Status'].str.contains('expired|settled|closed|finished', case=False, na=False)]
+    st.caption(f"🔍 DEBUG: {len(debug_expired)} expired found | "
+               f"PnL sum: ${debug_expired['Your PnL'].sum():.2f} | "
+               f"Status sample: {debug_expired['Status'].tolist()[:2]}")
+
+
     # Header metrics
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4, col5 = st.columns(5)
     with col1:
         st.metric("🏦 Your Bankroll", f"${current_bankroll:,.0f}", f"${bankroll_change:+,.0f}")
     with col2:
@@ -247,6 +254,9 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: int):
     with col3:
         st.metric("📈 Unrealized PnL", f"${total_pnl:+,.0f}")
     with col4:
+        realized_pnl = current_bankroll - initial_bankroll - total_pnl
+        st.metric("💰 Realized PnL", f"${realized_pnl:+,.0f}")
+    with col5:
         total_positions = len(sim_df) + skipped
         st.metric("📊 Simulated", f"{len(sim_df)}/{total_positions}")
     
