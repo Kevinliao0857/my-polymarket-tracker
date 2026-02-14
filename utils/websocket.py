@@ -19,12 +19,12 @@ def rtds_listener():
     def process_trade(raw_data):
         """🛡️ 100% CRASH-PROOF - handles malformed data."""
         try:
-            print(f"📥 RAW TYPE: {type(raw_data)} | LEN: {len(str(raw_data))}")
-            
+            # print(f"📥 RAW TYPE: {type(raw_data)} | LEN: {len(str(raw_data))}")
+
             # Handle ping
             if isinstance(raw_data, str) and raw_data.strip() == "ping":
                 return
-            
+
             # Try JSON parse FIRST
             if isinstance(raw_data, str):
                 try:
@@ -34,25 +34,25 @@ def rtds_listener():
                     return
             else:
                 data = raw_data
-            
+
             # Must be dict
             if not isinstance(data, dict):
                 print(f"⚠️ Not dict: {type(data)}")
                 return
-            
+
             # Trade check
             event_type = data.get('event_type', 'unknown')
             if event_type not in ('trade', 'last_trade_price'):
                 return
-            
+
             # Extract (safe)
             size = data.get('size') or data.get('amount') or 0
             price = data.get('price') or 0  
             asset_id = data.get('asset_id') or data.get('asset') or data.get('assetId') or 'N/A'
-            
+
             # PRINT FIRST (before any complex logic)
             print(f"🧑‍💻 TRADE: {event_type} | Asset: {asset_id[:16]}... | Size: {size} | Price: {price}")
-            
+
             # Build & append
             trade_data = {
                 'event_type': event_type, 'asset_id': asset_id, 'size': float(size),
@@ -61,7 +61,7 @@ def rtds_listener():
             }
             live_trades.append(trade_data)
             print(f"✅ ADDED #{len(live_trades)}")
-            
+
         except Exception as e:
             print(f"⚠️ process_trade CRASH: {e} | INPUT: {str(raw_data)[:50]}...")
             # STILL WORKS - just logs
