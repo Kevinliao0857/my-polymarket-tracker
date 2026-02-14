@@ -14,23 +14,24 @@ def start_listener():
     return True
 
 def show_websocket_status():
-    """Dynamic 🟢/🔴 expander + status."""
-    # Check status FIRST (for expander title)
+    """🟢/🔴 expander tied to buffer > 0."""
+    # Safe top-level status check
     try:
         count = get_live_trades_count()
         recent = len(get_recent_trader_trades(300))
-        is_active = count > 0 or recent > 0
-        status_emoji = "🟢" if is_active else "🔴"
+        has_streaming = count > 0
+        status_emoji = "🟢" if has_streaming else "🔴"
     except:
         status_emoji = "🔴"
-        is_active = False
+        has_streaming = False
     
-    # 🟢/🔴 DYNAMIC EXPANDER
+    # Dynamic expander title
     with st.sidebar.expander(f"{status_emoji} Live WS", expanded=False):
+        # Controls
         col1, col2 = st.columns([3,1])
         with col1:
             if st.button(f"{status_emoji} Start", 
-                        type="primary" if not is_active else "secondary", 
+                        type="secondary" if has_streaming else "primary", 
                         use_container_width=True):
                 start_listener()
                 st.rerun()
@@ -39,12 +40,11 @@ def show_websocket_status():
                 st.cache_resource.clear()
                 st.rerun()
         
+        # Metrics + status (protected)
         try:
-            count = get_live_trades_count()
-            recent = len(get_recent_trader_trades(300))
             c1, c2 = st.columns(2)
             with c1: st.metric("Buffer", count)
             with c2: st.metric("5m", recent)
-            st.success("✅ Streaming!") if is_active else st.warning("⚠️ Start listener")
+            st.success("✅ Streaming!") if has_streaming else st.warning("⚠️ Start listener")
         except Exception as e:
             st.error(f"❌ {e}")
