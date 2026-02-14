@@ -8,7 +8,7 @@ from .data import safe_fetch
 from .config import TRADER
 
 # Global live trades buffer - accessible everywhere
-live_trades: deque = deque(maxlen=2000)
+live_trades: deque = deque(maxlen=5000)
 
 def rtds_listener():
     """🆕 BULLETPROOF WS listener - handles raw strings + fixes assets scope."""

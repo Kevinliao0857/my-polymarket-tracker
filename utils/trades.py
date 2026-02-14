@@ -101,9 +101,6 @@ def track_0x8dxd(minutes_back: int) -> pd.DataFrame:
     
     unique_combined.sort(key=lambda x: x.get('timestamp', 0) or x.get('updatedAt', 0) or 0, reverse=True)
     max_items = max(200, minutes_back * 15)
-
-    # OLD (broken)
-    # filtered_data = [item for item in unique_combined if is_crypto(item)][:max_items]
     
     # NEW (test)
     filtered_data = []
@@ -172,6 +169,12 @@ def track_0x8dxd(minutes_back: int) -> pd.DataFrame:
             'price_num': price_num  # 👈 For future grouping
         })
     
+    if int(time.time()) % 60 == 0:
+        cutoff = time.time() - 24*3600  # 24h
+        while live_trades and live_trades[0].get('timestamp', 0) < cutoff:
+            live_trades.popleft()
+            print(f"🧹 Trimmed old trade, buffer: {len(live_trades)}")
+
     df = pd.DataFrame(df_data)
     if df.empty: 
         return df
