@@ -50,11 +50,6 @@ with col4:
 with col5:
     st.metric("Settled Trades", closed_pnl['crypto_count'])
 
-# 👈 MAIN CONTENT PAGES (default MINUTES_BACK)
-trades.show_trades(MINUTES_BACK)
-positions.show_positions(TRADER)
-simulator.show_simulator()
-
 # CLEAN SIDEBAR (all controls)
 st.sidebar.title("⚙️ Settings")
 
@@ -78,3 +73,8 @@ if st.sidebar.button("🔄 Force Refresh", type="primary"):
     st.rerun()
 
 st.sidebar.markdown("---")
+
+# 👈 MAIN CONTENT PAGES (default MINUTES_BACK)
+trades.show_trades(MINUTES_BACK)
+positions.show_positions(TRADER)
+simulator.show_simulator()
