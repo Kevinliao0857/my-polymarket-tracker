@@ -145,3 +145,4 @@ def format_display_time(decimal_h: float) -> str:
     minute = int((decimal_h % 1) * 60)
     ampm = 'PM' if decimal_h >= 12 else 'AM'
     return f"{hour}:{minute:02d} {ampm}" if minute else f"{hour} {ampm}"
+ 
