@@ -19,6 +19,14 @@ if 'ws_started' not in st.session_state:
     threading.Thread(target=rtds_listener, daemon=True).start()
     st.session_state.ws_started = True
 
+def normalize_trade_item(item: Any, now_ts: int) -> str:
+    """Safe wrapper for WS + REST trades"""
+    if isinstance(item, str) or (isinstance(item, dict) and 'asset_id' in item):
+        asset = item if isinstance(item, str) else item.get('asset_id', '')
+        if asset:
+            # Use asset as conditionId + try to get title from live_trades context if needed
+            item = {'conditionId': asset, 'marketId': asset, 'title': str(item.get('title', ''))}
+    return get_status_hybrid(item, now_ts)
 
 @st.cache_data(ttl=30)
 def get_latest_bets(address: str, limit: int = 200) -> List[dict]:
@@ -132,7 +140,7 @@ def track_0x8dxd(minutes_back: int) -> pd.DataFrame:
             ts = now_ts
         update_str = datetime.fromtimestamp(ts, EST).strftime('%I:%M:%S %p ET')
         
-        status_str = get_status_hybrid(item, now_ts)
+        status_str = normalize_trade_item(item, now_ts)
         age_sec = now_ts - ts
         
         df_data.append({
