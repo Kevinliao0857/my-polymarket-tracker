@@ -5,34 +5,32 @@ from utils.websocket import rtds_listener, get_live_trades_count, get_recent_tra
 
 @st.cache_resource
 def start_listener():
-    """Start RTDS listener once."""
     if not any(t.name == 'rtds_listener' for t in threading.enumerate()):
         thread = threading.Thread(target=rtds_listener, daemon=True, name='rtds_listener')
         thread.start()
-        st.success("🚀 WebSocket listener started!")
+        st.success("🚀 Started!")
         time.sleep(2)
     return True
 
 def show_websocket_status():
-    """Sidebar + metrics for WS."""
-    st.markdown("### 🔴 Live WebSocket")
-    
-    if st.button("🚀 Start Listener", type="primary"):
-        start_listener()
-        st.rerun()
-    
-    try:
-        count = get_live_trades_count()
-        recent = len(get_recent_trader_trades(300))
-        col1, col2 = st.columns(2)
+    """Compact sidebar WS - auto-collapses."""
+    with st.sidebar.expander("🔴 Live WS", expanded=False):
+        col1, col2 = st.columns([3,1])
         with col1:
-            st.metric("Buffer", f"{count:,}")
+            if st.button("🚀 Start", type="primary", use_container_width=True):
+                start_listener()
+                st.rerun()
         with col2:
-            st.metric("Trader 5m", recent)
-        st.success("✅ Live trades streaming!")
-    except Exception as e:
-        st.warning(f"⚠️ Connect listener first: {e}")
-    
-    if st.button("🔄 Restart WS"):
-        st.cache_resource.clear()
-        st.rerun()
+            if st.button("🔄", key="restart"):
+                st.cache_resource.clear()
+                st.rerun()
+        
+        try:
+            count = get_live_trades_count()
+            recent = len(get_recent_trader_trades(300))
+            c1, c2 = st.columns(2)
+            with c1: st.metric("Buffer", count)
+            with c2: st.metric("5m", recent)
+            st.success("✅ Streaming")
+        except Exception as e:
+            st.warning(f"⚠️ {e}")
