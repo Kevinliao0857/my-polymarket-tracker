@@ -53,7 +53,7 @@ def get_latest_bets(address: str, limit: int = 200) -> List[dict]:
     return []
 
 
-@st.cache_data(ttl=2)  # Live data - short cache
+@st.cache_data(ttl=10)  # Live data - short cache
 def track_0x8dxd(minutes_back: int) -> pd.DataFrame:
     now_ts = int(time.time())
     ago_ts = now_ts - (minutes_back * 60)
