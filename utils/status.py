@@ -34,31 +34,26 @@ def get_status_hybrid(item: Dict[str, Any], now_ts: int) -> str:
                 return f"🟢 ACTIVE (til ~{format_display_time(end_h)})"
             return "⚫ EXPIRED"
     
-    # 2.5 DATE + TIME: "Feb 12 3AM" / "February 12 3AM"
+    # 2.5 DATE + TIME → Named groups (bulletproof)
     date_match = re.search(
-        r'\b('
-        r'jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|'
-        r'jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?'
-        r')\s+(\d{1,2})\s+(\d{1,2}(?::?\d{2})?[ap]m)',
-        title
+        r'(?P<month>\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|'
+        r'jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b)'
+        r'\s+(?P<day>\d{1,2})\s+(?P<time>\d{1,2}(?::?\d{2})?[ap]m)', title
     )
     if date_match:
-        mon_str = date_match.group(1).lower()
-        day_str = date_match.group(2)
-        time_str = date_match.group(3)
+        mon_str = date_match.group('month').lower()
+        day_str = date_match.group('day')
+        time_str = date_match.group('time')
         
         mon = MONTHS_MAP.get(mon_str)
-        if mon is not None and day_str and time_str:
+        if mon and day_str.isdigit():
             day = int(day_str)
             event_hour = parse_time_to_decimal(time_str)
             if event_hour is not None:
-                event_dt = now_est.replace(
-                    month=mon, day=day,
-                    hour=int(event_hour),
-                    minute=int((event_hour % 1) * 60),
-                    second=0, microsecond=0
-                )
-                
+                event_dt = now_est.replace(month=mon, day=day,
+                                         hour=int(event_hour),
+                                         minute=int((event_hour % 1)*60),
+                                         second=0, microsecond=0)
                 if now_est < event_dt:
                     return f"🟢 ACTIVE (til {event_dt.strftime('%b %d %I:%M %p ET')})"
                 return "⚫ EXPIRED"
