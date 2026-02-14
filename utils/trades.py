@@ -55,7 +55,10 @@ def track_0x8dxd(minutes_back: int) -> pd.DataFrame:
     ws_count = len(recent_live)
     
     if ws_count > 0:
-        st.sidebar.success(f"🚀 LIVE TRADES: {ws_count} (WS working!)")
+        #st.sidebar.success(f"🚀 LIVE TRADES: {ws_count} (WS working!)")
+        recent_live = [t for t in live_trades if (t.get('timestamp') or 0) >= ago_ts]
+        st.sidebar.success(f"🚀 LIVE TRADES: {ws_count} total | {len(recent_live)} recent | Trader: {TRADER}")
+        st.sidebar.json(dict(list(recent_live)[-3:]))
     else:
         st.sidebar.warning("⚠️ No live trades yet—WS warming up...")
     
