@@ -4,6 +4,8 @@ import pandas as pd
 from utils.config import TRADER
 from utils.api import get_open_positions, get_closed_trades_pnl
 from utils.simulator import run_position_simulator, track_simulation_pnl
+from utils.websocket import get_recent_trader_trades
+recent_trades = get_recent_trader_trades(300) 
 
 # =====================================================
 # 🤖 SIMULATOR (COLLAPSIBLE) - REAL BANKROLL TRACKING

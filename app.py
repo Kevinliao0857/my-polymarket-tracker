@@ -14,7 +14,7 @@ st.set_page_config(layout="wide")
 # ✅ CLEAN IMPORTS
 from utils.api import get_open_positions, track_0x8dxd, get_profile_name, get_trader_pnl, get_closed_trades_pnl 
 from utils.config import EST, TRADER
-from pages import trades, positions, simulator
+from pages import trades, positions, simulator, websocket  # 👈 WS included
 
 if 'refresh_count' not in st.session_state:
     st.session_state.refresh_count = 0
@@ -50,8 +50,18 @@ with col4:
 with col5:
     st.metric("Settled Trades", closed_pnl['crypto_count'])
 
-# CLEAN SIDEBAR
+# 👈 MAIN CONTENT PAGES (default MINUTES_BACK)
+trades.show_trades(30)
+positions.show_positions(TRADER)
+simulator.show_simulator()
+
+# CLEAN SIDEBAR (all controls)
 st.sidebar.title("⚙️ Settings")
+
+# 👈 WS CONTROLS (top priority)
+websocket.show_websocket_status()
+
+st.sidebar.markdown("---")
 
 # 👤 TRADER PROFILE
 try:
@@ -68,8 +78,3 @@ if st.sidebar.button("🔄 Force Refresh", type="primary"):
     st.rerun()
 
 st.sidebar.markdown("---")
-
-from pages import trades, positions, simulator  # 👈 Import pages
-trades.show_trades(MINUTES_BACK)                # 👈 Live trades
-positions.show_positions(TRADER)                # 👈 Open positions  
-simulator.show_simulator()                      # 👈 Simulator expander
