@@ -40,6 +40,16 @@ def show_websocket_status():
                 st.cache_resource.clear()
                 st.rerun()
         
+        # 🐛 TEMP DEBUG (remove later)
+        try:
+            threads = [t.name for t in threading.enumerate()]
+            st.caption(f"Threads: {threads}")
+        except:
+            st.caption("No threads")
+        
+        # Raw buffer check
+        st.caption(f"Raw WS buffer: {count}")
+
         # Metrics + status (protected)
         try:
             c1, c2 = st.columns(2)
