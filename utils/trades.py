@@ -116,7 +116,9 @@ def track_0x8dxd(minutes_back: int) -> pd.DataFrame:
     
     rest_count = len(latest_bets)
     st.sidebar.info(f"📊 REST: {rest_count} total | WS: {ws_count} live")
-    st.sidebar.success(f"✅ {len(filtered_data)} crypto trades | {minutes_back}min")
+    
+    if st.sidebar.checkbox("✅ Show trades summary", value=True):
+        st.sidebar.markdown(f"✅ {trade_count} crypto trades | {minutes_back}min")
     
     if not filtered_data:
         return pd.DataFrame()
