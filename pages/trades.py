@@ -2,8 +2,6 @@ import streamlit as st
 from utils.api import track_0x8dxd
 
 def show_trades(minutes_back):
-    st.rerun()
-    
     df = track_0x8dxd(minutes_back)
 
     if df.empty:
