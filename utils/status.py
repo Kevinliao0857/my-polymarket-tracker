@@ -23,7 +23,7 @@ def get_status_hybrid(item: Dict[str, Any], now_ts: int) -> str:
     
     title = str(item.get('title') or item.get('question') or '').lower()
     
-    # 2. RANGE: "6PM-7PM"
+    # 2. RANGE: 
     range_match = re.search(r'(\d{1,2}:?\d{2}?[ap]m)\s*-\s*(\d{1,2}:?\d{2}?[ap]m)', title)
     if range_match:
         start_str, end_str = range_match.groups()
@@ -34,9 +34,10 @@ def get_status_hybrid(item: Dict[str, Any], now_ts: int) -> str:
                 return f"🟢 ACTIVE (til ~{format_display_time(end_h)})"
             return "⚫ EXPIRED"
     
-    # 2.6 NEW: IMPLICIT 1HR RANGE "Feb 13, 8PM ET" → 8PM→9PM
+    # 2.4 IMPLICIT 1HR → SAME REGEX AS DATE+TIME
     implicit_match = re.search(
-        r'(?P<month>\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\b)'
+        r'(?P<month>\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|'
+        r'jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b)'
         r'[^\d]*?(?P<day>\d{1,2})[^\d]*?(?P<start_time>\d{1,2}(?::?\d{2})?[ap]m)',
         title
     )
