@@ -16,56 +16,56 @@ def rtds_listener():
     ping_interval = 10
     ws_base_url = "wss://ws-subscriptions-clob.polymarket.com"
 
-    def process_trade(raw_data):  # 🆕 FIXED: Bulletproof str/dict handling
-        """Parse single trade safely - auto-handles strings."""
+    def process_trade(raw_data):
+        """🛡️ 100% CRASH-PROOF - handles malformed data."""
         try:
+            print(f"📥 RAW TYPE: {type(raw_data)} | LEN: {len(str(raw_data))}")
+            
             # Handle ping
             if isinstance(raw_data, str) and raw_data.strip() == "ping":
                 return
             
-            # PARSE JSON strings → dict
+            # Try JSON parse FIRST
             if isinstance(raw_data, str):
-                data = json.loads(raw_data)
+                try:
+                    data = json.loads(raw_data)
+                except json.JSONDecodeError:
+                    print(f"⚠️ BAD JSON: {raw_data[:100]}...")
+                    return
             else:
                 data = raw_data
-
+            
+            # Must be dict
             if not isinstance(data, dict):
-                print(f"⚠️ SKIP: Not dict: {type(data)}")
+                print(f"⚠️ Not dict: {type(data)}")
                 return
-
+            
+            # Trade check
             event_type = data.get('event_type', 'unknown')
             if event_type not in ('trade', 'last_trade_price'):
                 return
-
-            size = data.get('size') or data.get('amount') or data.get('sizeMatched') or 0
-            price = data.get('price') or data.get('last_price') or data.get('price', {}).get('value') or 0
+            
+            # Extract (safe)
+            size = data.get('size') or data.get('amount') or 0
+            price = data.get('price') or 0  
             asset_id = data.get('asset_id') or data.get('asset') or data.get('assetId') or 'N/A'
-
+            
+            # PRINT FIRST (before any complex logic)
             print(f"🧑‍💻 TRADE: {event_type} | Asset: {asset_id[:16]}... | Size: {size} | Price: {price}")
-
+            
+            # Build & append
             trade_data = {
-                'event_type': event_type,
-                'asset_id': asset_id,
-                'size': float(size),
-                'price': float(price),
-                'timestamp': data.get('timestamp', time.time()),
-                'market': data.get('market'),
-                'proxyWallet': data.get('maker', TRADER),
-                'title': data.get('question') or data.get('market', {}).get('question', f"Asset {asset_id[:16]} Trade"),
-                'up_down': (
-                    'UP' if any(x in str(asset_id).lower() for x in ['yes', 'true', 'up']) 
-                    else 'DOWN' if any(x in str(asset_id).lower() for x in ['no', 'false', 'down']) 
-                    else 'UNKNOWN'
-                )
+                'event_type': event_type, 'asset_id': asset_id, 'size': float(size),
+                'price': float(price), 'timestamp': time.time(),
+                'title': data.get('question', f"Asset {asset_id[:12]}...")
             }
-
             live_trades.append(trade_data)
-            print(f"✅ TRADE ADDED #{len(live_trades)} | Size: {size} Price: ${price:.3f}")
-
-        except json.JSONDecodeError:
-            print(f"⚠️ Invalid JSON: {str(raw_data)[:50]}...")
+            print(f"✅ ADDED #{len(live_trades)}")
+            
         except Exception as e:
-            print(f"⚠️ process_trade ERROR: {e} | Type: {type(raw_data)}")
+            print(f"⚠️ process_trade CRASH: {e} | INPUT: {str(raw_data)[:50]}...")
+            # STILL WORKS - just logs
+
 
     def on_message(ws, msg):
         process_trade(msg)
