@@ -46,7 +46,8 @@ def get_status_hybrid(item: Dict[str, Any], now_ts: int) -> str:
         title
     )
     if implicit_match:
-        print(f"DEBUG IMPLICIT: {implicit_match.group('start_time')} → +1hr")  # TEMP
+        # DEBUG FOR IMPLICIT +1hr
+        # print(f"DEBUG IMPLICIT: {implicit_match.group('start_time')} → +1hr")  # TEMP
         start_h = parse_time_to_decimal(implicit_match.group('start_time'))
         if start_h:
             end_h = start_h + 1.0
