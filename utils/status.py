@@ -7,6 +7,10 @@ from .config import EST, MONTHS_MAP
 
 
 def get_status_hybrid(item: Dict[str, Any], now_ts: int) -> str:
+    # FIX: Handle raw asset ID strings from websocket trades (e.g., '3193427675614570...')
+    if isinstance(item, str):
+        item = {'conditionId': item, 'marketId': item}  # Fallback: treat asset as conditionId
+    
     now_est = datetime.fromtimestamp(now_ts, EST)
     now_decimal = now_est.hour + now_est.minute / 60.0
     
@@ -75,9 +79,9 @@ def get_status_hybrid(item: Dict[str, Any], now_ts: int) -> str:
             event_hour = parse_time_to_decimal(time_str)
             if event_hour is not None:
                 event_dt = now_est.replace(month=mon, day=day,
-                                         hour=int(event_hour),
-                                         minute=int((event_hour % 1)*60),
-                                         second=0, microsecond=0)
+                                           hour=int(event_hour),
+                                           minute=int((event_hour % 1)*60),
+                                           second=0, microsecond=0)
                 print(f"  → COMPARE: now={now_est.strftime('%b %d %I:%M')} vs event={event_dt.strftime('%b %d %I:%M')}")
                 if now_est < event_dt:
                     print(f"  → RETURNING ACTIVE")
@@ -95,8 +99,8 @@ def get_status_hybrid(item: Dict[str, Any], now_ts: int) -> str:
         event_hour = parse_time_to_decimal(time_match.group(1))
         if event_hour is not None:
             today_event = now_est.replace(hour=int(event_hour), 
-                                        minute=int((event_hour%1)*60), 
-                                        second=0, microsecond=0)
+                                          minute=int((event_hour%1)*60), 
+                                          second=0, microsecond=0)
             if now_est > today_event:
                 today_event += timedelta(days=1)
             if now_est < today_event:
@@ -145,4 +149,3 @@ def format_display_time(decimal_h: float) -> str:
     minute = int((decimal_h % 1) * 60)
     ampm = 'PM' if decimal_h >= 12 else 'AM'
     return f"{hour}:{minute:02d} {ampm}" if minute else f"{hour} {ampm}"
- 
