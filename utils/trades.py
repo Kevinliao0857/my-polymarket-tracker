@@ -13,18 +13,17 @@ from .status import get_status_hybrid
 from .websocket import rtds_listener, live_trades
 from .shared import parse_usd
 
-_ws_lock = threading.Lock()
-_ws_thread = None
 
+# 🛡️ CLOUD-SAFE WS (restarts if dead)
 def ensure_live_ws():
-    global _ws_thread
-    with _ws_lock:
-        if _ws_thread is None or not _ws_thread.is_alive():
-            from .websocket import rtds_listener
-            _ws_thread = threading.Thread(target=rtds_listener, name='rtds_listener', daemon=True)
-            _ws_thread.start()
-            print("🔌 WS SINGLETON STARTED")
-            time.sleep(1)
+    # Check if WS thread alive
+    ws_threads = [t for t in threading.enumerate() 
+                  if 'rtds_listener' in str(t.name).lower()]
+    if not ws_threads:
+        t = threading.Thread(target=rtds_listener, name='rtds_listener', daemon=True)
+        t.start()
+        print("🔌 WS RESTARTED")
+        time.sleep(1)  # Connect time
 
 ensure_live_ws()  # Run every page load (safe!)
 
@@ -54,7 +53,7 @@ def get_latest_bets(address: str, limit: int = 200) -> List[dict]:
     return []
 
 
-@st.cache_data(ttl=2)  # Live data - short cache
+@st.cache_data(ttl=10)  # Live data - short cache
 def track_0x8dxd(minutes_back: int) -> pd.DataFrame:
     now_ts = int(time.time())
     ago_ts = now_ts - (minutes_back * 60)
@@ -69,12 +68,11 @@ def track_0x8dxd(minutes_back: int) -> pd.DataFrame:
               and t.get('proxyWallet') == TRADER]
         st.sidebar.success(f"🚀 LIVE TRADES: {len(live_trades)} total | {len(recent_live)} recent")
 
-        # ✅ FIXED: Show last 3 as list of dicts DEBUGGING FOR RAW TRADE DATA
+        # ✅ FIXED: Show last 3 as list of dicts DEBUGGING
         if recent_live:
             st.sidebar.json(list(recent_live)[-3:])
         else:
             st.sidebar.info("No recent trades in window")
-
     else:
         st.sidebar.warning("⚠️ No live trades yet—WS warming up...")
     
