@@ -36,10 +36,11 @@ def get_status_hybrid(item: Dict[str, Any], now_ts: int) -> str:
     
     # 2.5 DATE + TIME → Named groups (bulletproof)
     date_match = re.search(
-        r'(?P<month>\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|'
-        r'jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b)'
-        r'\s+(?P<day>\d{1,2})(?:st|nd|rd|th|\.)?\s+(?P<time>\d{1,2}(?::?\d{2})?[ap]m)', title
-    )
+    r'(?P<month>\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|'
+    r'jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b)'
+    r'[^\d]*?(?P<day>\d{1,2})(?:st|nd|rd|th|\.|,)?[^\d]*?(?P<time>\d{1,2}(?::?\d{2})?[ap]m)',
+    title
+)
 
     print(f"DEBUG now_est={now_est.strftime('%Y-%m-%d %H:%M ET')}")  # Show current time
     if date_match:
