@@ -69,10 +69,10 @@ def track_0x8dxd(minutes_back: int) -> pd.DataFrame:
         st.sidebar.success(f"🚀 LIVE TRADES: {len(live_trades)} total | {len(recent_live)} recent")
 
         # ✅ FIXED: Show last 3 as list of dicts DEBUGGING
-        if recent_live:
-            st.sidebar.json(list(recent_live)[-3:])
-        else:
-            st.sidebar.info("No recent trades in window")
+        # if recent_live:
+        #     st.sidebar.json(list(recent_live)[-3:])
+        # else:
+        #     st.sidebar.info("No recent trades in window")
     else:
         st.sidebar.warning("⚠️ No live trades yet—WS warming up...")
     
