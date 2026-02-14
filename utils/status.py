@@ -34,14 +34,29 @@ def get_status_hybrid(item: Dict[str, Any], now_ts: int) -> str:
                 return f"🟢 ACTIVE (til ~{format_display_time(end_h)})"
             return "⚫ EXPIRED"
     
-    # 2.5 DATE + TIME → Named groups (bulletproof)
+    # 2.6 NEW: IMPLICIT 1HR RANGE "Feb 13, 8PM ET" → 8PM→9PM
+    implicit_match = re.search(
+        r'(?P<month>\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\b)'
+        r'[^\d]*?(?P<day>\d{1,2})[^\d]*?(?P<start_time>\d{1,2}(?::?\d{2})?[ap]m)',
+        title
+    )
+    if implicit_match:
+        print(f"DEBUG IMPLICIT: {implicit_match.group('start_time')} → +1hr")  # TEMP
+        start_h = parse_time_to_decimal(implicit_match.group('start_time'))
+        if start_h:
+            end_h = start_h + 1.0
+            if now_decimal >= start_h and now_decimal < end_h:
+                return f"🟢 ACTIVE (til ~{format_display_time(end_h)})"
+            return "⚫ EXPIRED"
+    
+    # 2.5 DATE + TIME → Named groups (handles commas/dots)
     date_match = re.search(
-    r'(?P<month>\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|'
-    r'jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b)'
-    r'[^\d]*?(?P<day>\d{1,2})(?:st|nd|rd|th|\.|,)?[^\d]*?(?P<time>\d{1,2}(?::?\d{2})?[ap]m)',
-    title
-)
-
+        r'(?P<month>\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|'
+        r'jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b)'
+        r'[^\d]*?(?P<day>\d{1,2})(?:st|nd|rd|th|\.|,)?[^\d]*?(?P<time>\d{1,2}(?::?\d{2})?[ap]m)',
+        title
+    )
+    
     print(f"DEBUG now_est={now_est.strftime('%Y-%m-%d %H:%M ET')}")  # Show current time
     if date_match:
         print(f"  → DATE MATCH: '{date_match.group(0)}'")
@@ -72,7 +87,6 @@ def get_status_hybrid(item: Dict[str, Any], now_ts: int) -> str:
         print("  → MISSING DATA, falling through")
     else:
         print("  → NO DATE MATCH, falling through")
-
     
     # 3. SINGLE TIME → Next occurrence
     time_match = re.search(r'(\d{1,2}:?\d{2}?[ap]m)', title)
