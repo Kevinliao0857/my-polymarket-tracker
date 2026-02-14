@@ -51,7 +51,7 @@ with col5:
     st.metric("Settled Trades", closed_pnl['crypto_count'])
 
 # 👈 MAIN CONTENT PAGES (default MINUTES_BACK)
-trades.show_trades(30)
+trades.show_trades(MINUTES_BACK)
 positions.show_positions(TRADER)
 simulator.show_simulator()
 
