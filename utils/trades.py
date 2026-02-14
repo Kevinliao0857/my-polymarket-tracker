@@ -14,10 +14,18 @@ from .websocket import rtds_listener, live_trades
 from .shared import parse_usd
 
 
-# WS startup (unchanged)
-if 'ws_started' not in st.session_state:
-    threading.Thread(target=rtds_listener, daemon=True).start()
-    st.session_state.ws_started = True
+# 🛡️ CLOUD-SAFE WS (restarts if dead)
+def ensure_live_ws():
+    # Check if WS thread alive
+    ws_threads = [t for t in threading.enumerate() 
+                  if 'rtds_listener' in str(t.name).lower()]
+    if not ws_threads:
+        t = threading.Thread(target=rtds_listener, name='rtds_listener', daemon=True)
+        t.start()
+        print("🔌 WS RESTARTED")
+        time.sleep(1)  # Connect time
+
+ensure_live_ws()  # Run every page load (safe!)
 
 def normalize_trade_item(item: Any, now_ts: int) -> str:
     """Safe wrapper for WS + REST trades"""
