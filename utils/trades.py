@@ -55,14 +55,16 @@ def track_0x8dxd(minutes_back: int) -> pd.DataFrame:
     ws_count = len(recent_live)
     
     if ws_count > 0:
-        recent_live = [t for t in live_trades if (t.get('timestamp') or 0) >= ago_ts]
+        recent_live = [t for t in live_trades 
+              if (t.get('timestamp') or 0) >= ago_ts 
+              and t.get('proxyWallet') == TRADER]
         st.sidebar.success(f"🚀 LIVE TRADES: {len(live_trades)} total | {len(recent_live)} recent")
-        
-        # ✅ FIXED: Show last 3 as list of dicts
-        if recent_live:
-            st.sidebar.json(list(recent_live)[-3:])
-        else:
-            st.sidebar.info("No recent trades in window")
+
+        # ✅ FIXED: Show last 3 as list of dicts DEBUGGING
+        # if recent_live:
+        #     st.sidebar.json(list(recent_live)[-3:])
+        # else:
+        #     st.sidebar.info("No recent trades in window")
     else:
         st.sidebar.warning("⚠️ No live trades yet—WS warming up...")
     
