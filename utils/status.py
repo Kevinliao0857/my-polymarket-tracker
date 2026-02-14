@@ -38,21 +38,21 @@ def get_status_hybrid(item: Dict[str, Any], now_ts: int) -> str:
     date_match = re.search(
         r'(?P<month>\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|'
         r'jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b)'
-        r'\s+(?P<day>\d{1,2})\s+(?P<time>\d{1,2}(?::?\d{2})?[ap]m)', title
+        r'\s+(?P<day>\d{1,2})(?:st|nd|rd|th|\.)?\s+(?P<time>\d{1,2}(?::?\d{2})?[ap]m)', title
     )
-    
+
     print(f"DEBUG now_est={now_est.strftime('%Y-%m-%d %H:%M ET')}")  # Show current time
     if date_match:
         print(f"  → DATE MATCH: '{date_match.group(0)}'")
         print(f"  → RAW: mon='{date_match.group('month')}', day='{date_match.group('day')}', time='{date_match.group('time')}'")
-        
+
         mon_str = date_match.group('month').lower()
         day_str = date_match.group('day')
         time_str = date_match.group('time')
-        
+
         mon = MONTHS_MAP.get(mon_str)
         print(f"  → PARSED: mon={mon} ({mon_str}), day={day_str}, time={time_str}")
-        
+
         if mon and day_str.isdigit():
             day = int(day_str)
             event_hour = parse_time_to_decimal(time_str)
