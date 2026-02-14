@@ -7,6 +7,7 @@ from collections import deque
 from .data import safe_fetch
 from .config import TRADER
 
+# Global live trades buffer - accessible everywhere
 live_trades: deque = deque(maxlen=2000)
 
 def rtds_listener():
@@ -53,39 +54,70 @@ def rtds_listener():
             trade_data = {
                 'event_type': event_type,
                 'asset_id': asset_id,
-                'size': size,
-                'price': price,
+                'size': float(size),
+                'price': float(price),
                 'timestamp': data.get('timestamp', time.time()),
                 'market': data.get('market'),
-                'proxyWallet': TRADER,
+                'proxyWallet': data.get('maker', TRADER),  # 👈 FIXED: trader who made trade
                 'title': (
                     data.get('question') or 
                     data.get('market', {}).get('question', f"Asset {asset_id[:16]} Trade")
                 ),
+                # 👈 NEW: Better UP/DOWN detection
+                'up_down': (
+                    'UP' if any(x in str(asset_id).lower() for x in ['yes', 'true', 'up']) 
+                    else 'DOWN' if any(x in str(asset_id).lower() for x in ['no', 'false', 'down']) 
+                    else 'UNKNOWN'
+                )
             }
 
             live_trades.append(trade_data)
-            print(f"✅ TRADE ADDED #{len(live_trades)} | Size: {size} Price: ${price:.3f}")
+            print(f"✅ TRADE ADDED #{len(live_trades)} | Size: {size} Price: ${price:.3f} | {trade_data['up_down']}")
 
         except Exception as e:
             print(f"⚠️ process_trade failed: {e} | Type: {type(raw_data)}")
 
     def on_message(ws, msg):
         if msg.strip() == "ping":
-            ws.send("PING")
+            ws.send("pong")  # 👈 FIXED: proper pong
             print("🏓 PONG")
             return
         process_trade(msg)  # 🆕 Single bulletproof call
 
     def on_open(ws):
-        # 🆕 assets now guaranteed to exist (moved scope)
-        ws.send(json.dumps({"type": "market", "assets_ids": assets}))
-        print(f"📡 SUBSCRIBED to {len(assets)} assets")
+        def send_subscribe():
+            # 🆕 Get trader-relevant assets FIRST
+            recent_trades = safe_fetch(f"https://data-api.polymarket.com/trades?user={TRADER}&limit=200")
+            assets = list(set(item.get('asset') for item in recent_trades if item.get('asset')))[:20]
 
+            if not assets:
+                print("⚠️ No trader assets—fetching popular crypto...")
+                popular = safe_fetch("https://gamma-api.polymarket.com/markets?active=true&category=crypto&limit=20")
+                assets = []
+                for m in popular or []:
+                    tokens = m.get('tokens', [])
+                    if tokens:
+                        assets.append(tokens[0].get('id') or tokens[0].get('token_id'))
+                assets = assets[:20]
+
+            print(f"🚀 SUBSCRIBED to {len(assets)} assets: {assets[:3] if assets else 'NONE'}...")
+            
+            if assets:
+                subscribe_msg = {
+                    "type": "market",
+                    "assets_ids": assets
+                }
+                ws.send(json.dumps(subscribe_msg))
+            else:
+                print("⚠️ No assets to subscribe")
+
+        send_subscribe()
+
+        # Ping loop
         def ping_loop():
             while ws.sock and ws.sock.connected:
                 try:
-                    ws.send("PING")
+                    ws.send("ping")
                     print("🏓 PING")
                 except:
                     break
@@ -102,41 +134,34 @@ def rtds_listener():
         print(f"🔌 CLOSED: {code} - {reason}")
 
     while True:  # Reconnect loop
-        # 🆕 Get assets FIRST
-        recent_trades = safe_fetch(f"https://data-api.polymarket.com/trades?user={TRADER}&limit=200")
-        assets = list(set(item.get('asset') for item in recent_trades if item.get('asset')))[:20]
-
-        if not assets:
-            print("⚠️ No trader assets—fetching popular crypto...")
-            popular = safe_fetch("https://gamma-api.polymarket.com/markets?active=true&category=crypto&limit=20")
-            assets = []
-            for m in popular:
-                tokens = m.get('tokens', [])
-                if tokens:
-                    assets.append(tokens[0].get('id') or tokens[0].get('token_id'))
-            assets = assets[:20]
-
-        print(f"🚀 ASSETS ({len(assets)}): {assets[:3] if assets else 'NONE'}...")
-
-        if not assets:
-            print("⚠️ No assets—retry in 30s")
-            time.sleep(30)
-            continue
-
-        # 🆕 Now assets exists in scope for on_open()
-        ws_url = f"{ws_base_url}/ws/market"
-        ws = websocket.WebSocketApp(
-            ws_url,
-            on_message=on_message,
-            on_open=on_open,
-            on_error=on_error,
-            on_close=on_close,
-        )
-
         try:
+            ws_url = f"{ws_base_url}/ws/market"
+            ws = websocket.WebSocketApp(
+                ws_url,
+                on_message=on_message,
+                on_open=on_open,
+                on_error=on_error,
+                on_close=on_close,
+            )
             ws.run_forever(ping_interval=0, ping_timeout=None)
         except KeyboardInterrupt:
+            print("🛑 Listener stopped by user")
             break
         except Exception as e:
             print(f"❌ Run error: {e}")
             time.sleep(reconnect_delay)
+
+# Convenience functions for simulator
+def get_recent_trader_trades(seconds: int = 300) -> list:
+    """Get trader's recent trades from buffer."""
+    cutoff = time.time() - seconds
+    return [t for t in live_trades if 
+            t.get('proxyWallet') == TRADER and t['timestamp'] > cutoff]
+
+def get_live_trades_count() -> int:
+    """Debug: Current buffer size."""
+    return len(live_trades)
+
+if __name__ == "__main__":
+    print("🚀 Starting Polymarket RTDS listener...")
+    rtds_listener()
