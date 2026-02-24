@@ -205,14 +205,14 @@ def track_0x8dxd(
 
     # 6. Trim old WS trades occasionally (safe since WS disabled)
     if int(time.time()) % 60 == 0:
-        try:  # 👈 ADD THIS
+        try:
             cutoff = time.time() - 24 * 3600  # 24h
             while live_trades and live_trades[0].get('timestamp', 0) < cutoff:
                 live_trades.popleft()
                 print(f"🧹 Trimmed old trade, buffer: {len(live_trades)}")
-        except:  # 👈 AND THIS
+        except:
             pass
-        
+    
     df = pd.DataFrame(df_data)
     if df.empty:
         return df
