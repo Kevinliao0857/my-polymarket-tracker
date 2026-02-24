@@ -60,7 +60,7 @@ def rtds_listener():
                 market_info = safe_fetch(f"https://gamma-api.polymarket.com/markets?tokenIds={asset_id}")
                 if market_info:
                     title = market_info[0].get('question', title)
-            
+
             trade_data = {
                 'event_type': event_type,
                 'asset_id': asset_id,
@@ -143,10 +143,12 @@ def rtds_listener():
             print(f"❌ Run error: {e}")
             time.sleep(reconnect_delay)
 
-# Convenience functions
-def get_recent_trader_trades(seconds: int = 300) -> list:
-    cutoff = time.time() - seconds
-    return [t for t in live_trades if t.get('proxyWallet') == TRADER and t['timestamp'] > cutoff]
+recent_live: List[Dict] = [] 
+
+def get_recent_live_trades(minutes: int = 30) -> List[Dict]:
+    cutoff = time.time() - minutes * 60
+    recent_live[:] = [t for t in live_trades if t.get('timestamp', 0) > cutoff]
+    return recent_live
 
 def get_live_trades_count() -> int:
     return len(live_trades)

@@ -12,6 +12,12 @@ from .data import safe_fetch
 from .status import get_status_hybrid
 from .shared import parse_usd
 
+try:
+    from .websocket import rtds_listener, live_trades, get_recent_live_trades
+except ImportError:
+    pass
+
+
 # 🛡️ CLOUD-SAFE WS (restarts if dead)
 def ensure_live_ws():
     if DISABLE_WS_LIVE:
@@ -24,7 +30,7 @@ def ensure_live_ws():
         print("🔌 WS RESTARTED")
         time.sleep(1)
 
-# ensure_live_ws()
+ensure_live_ws()
 
 def normalize_trade_item(item: Any, now_ts: int) -> str:
     if isinstance(item, str) or (isinstance(item, dict) and 'asset_id' in item):
@@ -70,8 +76,20 @@ def track_0x8dxd(minutes_back: int, include_5m: bool | None = None, _cache_buste
         if ts >= ago_ts:
             rest_recent.append(item)
 
-    # 3. REST only - NO WS DEPENDENCIES
-    combined = rest_recent
+    # 3. WS + REST (SAFE)
+    try:
+        from .websocket import get_recent_live_trades, recent_live  # 👈 SAFE IMPORT
+        
+        # Get recent WS trades
+        recent_live_trades = get_recent_live_trades(minutes_back)
+        combined = recent_live_trades + rest_recent
+        print(f"🔌 WS+REST: {len(recent_live_trades)} live + {len(rest_recent)} rest = {len(combined)} total")
+        
+    except ImportError:
+        # Fallback: REST only
+        combined = rest_recent
+        print(f"📊 REST ONLY: {len(rest_recent)} trades")
+    
     seen_tx = set()
     unique_combined = []
     for item in combined:
