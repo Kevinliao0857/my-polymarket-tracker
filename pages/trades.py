@@ -1,18 +1,20 @@
 import streamlit as st
 from utils.api import track_0x8dxd
 
-
-def show_trades(minutes_back, include_5m: bool = True):
-    # 👈 CACHE BUSTER - forces refresh
-    cache_buster = st.sidebar.slider("🔄 Cache Refresh", 0, 100, 0, key="cache_buster")
+def show_trades(minutes_back, include_5m: bool = False):  # Default OFF
+    # User toggle for 5m markets
+    include_5m = st.sidebar.checkbox("Include 5-minute markets", value=include_5m)
     
-    df = track_0x8dxd(minutes_back, include_5m=include_5m, _cache_buster=cache_buster)
+    df = track_0x8dxd(minutes_back, include_5m=include_5m)
 
-    # 👈 SIDEBAR STATS (scoped to trades page)
+    # Dynamic sidebar stats
     rest_count = len(df)
-    # ws_count from websocket or filter df - adjust as needed
-    ws_count = 0  # Placeholder - replace with your WS logic
-    st.sidebar.info(f"📊 REST: {rest_count} total | WS: {ws_count} live")
+    try:
+        from utils.websocket import get_live_trades_count
+        ws_count = get_live_trades_count()
+        st.sidebar.success(f"🚀 {rest_count} tracked | {ws_count} live WS")
+    except:
+        st.sidebar.info(f"📊 {rest_count} tracked trades")
 
     if df.empty:
         st.info("No crypto trades found")
