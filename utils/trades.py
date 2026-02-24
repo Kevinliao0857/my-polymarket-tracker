@@ -6,8 +6,8 @@ import time
 from datetime import datetime
 from typing import Any, List
 
-from .config import EST, TRADER
-from .filters import is_crypto, get_up_down
+from .config import EST, TRADER, ALLOW_5M_MARKETS
+from .filters import is_crypto, get_up_down, is_5m_market
 from .data import safe_fetch
 from .status import get_status_hybrid
 from .websocket import rtds_listener, live_trades
@@ -53,30 +53,42 @@ def get_latest_bets(address: str, limit: int = 200) -> List[dict]:
     return []
 
 @st.cache_data(ttl=10)  # Live data - short cache
-def track_0x8dxd(minutes_back: int) -> pd.DataFrame:
+def track_0x8dxd(
+    minutes_back: int,
+    include_5m: bool | None = None,
+) -> pd.DataFrame:
+    """
+    Track trader's recent crypto trades.
+
+    include_5m:
+      - True  -> include 5-minute markets
+      - False -> exclude 5-minute markets
+      - None  -> follow global config (ALLOW_5M_MARKETS)
+    """
+    if include_5m is None:
+        include_5m = ALLOW_5M_MARKETS
+
     now_ts = int(time.time())
     ago_ts = now_ts - (minutes_back * 60)
-    
-    # 1. Live WS (unchanged)
+
+    # 1. Live WS
     recent_live = [t for t in live_trades if (t.get('timestamp') or 0) >= ago_ts]
     ws_count = len(recent_live)
-    
-    if ws_count > 0:
-        recent_live = [t for t in live_trades 
-              if (t.get('timestamp') or 0) >= ago_ts 
-              and t.get('proxyWallet') == TRADER]
-        st.sidebar.success(f"🚀 LIVE TRADES: {len(live_trades)} total | {len(recent_live)} recent")
 
-        # DEBUG Show last 3 as list of dicts DEBUGGING
-        # if recent_live:
-        #     st.sidebar.json(list(recent_live)[-3:])
-        # else:
-        #     st.sidebar.info("No recent trades in window")
+    if ws_count > 0:
+        recent_live = [
+            t for t in live_trades
+            if (t.get('timestamp') or 0) >= ago_ts
+            and t.get('proxyWallet') == TRADER
+        ]
+        st.sidebar.success(
+            f"🚀 LIVE TRADES: {len(live_trades)} total | {len(recent_live)} recent"
+        )
     else:
         st.sidebar.warning("⚠️ No live trades yet—WS warming up...")
-    
-    # 2. NEW: Activity endpoint (much better than /trades)
-    latest_bets = get_latest_bets(TRADER, limit=500)  # Single call, no pagination needed
+
+    # 2. Activity endpoint (REST)
+    latest_bets = get_latest_bets(TRADER, limit=500)  # Single call
     rest_recent = []
     for item in latest_bets:
         ts_field = item.get('timestamp') or item.get('updatedAt') or item.get('createdAt')
@@ -84,11 +96,11 @@ def track_0x8dxd(minutes_back: int) -> pd.DataFrame:
             ts = int(float(ts_field)) if ts_field else now_ts
         except (ValueError, TypeError):
             continue
-        
+
         if ts >= ago_ts:
             rest_recent.append(item)
-    
-    # 3. Combine + dedupe (unchanged)
+
+    # 3. Combine + dedupe
     combined = recent_live + rest_recent
     seen_tx = set()
     unique_combined = []
@@ -97,84 +109,100 @@ def track_0x8dxd(minutes_back: int) -> pd.DataFrame:
         if tx_hash not in seen_tx:
             seen_tx.add(tx_hash)
             unique_combined.append(item)
-    
-    unique_combined.sort(key=lambda x: x.get('timestamp', 0) or x.get('updatedAt', 0) or 0, reverse=True)
+
+    unique_combined.sort(
+        key=lambda x: x.get('timestamp', 0) or x.get('updatedAt', 0) or 0,
+        reverse=True,
+    )
     max_items = max(200, minutes_back * 15)
-    
-    # NEW (test)
+
+    # 4. Filter: crypto + 5-minute toggle
     filtered_data = []
     for item in unique_combined:
-        if is_crypto(item):  # Keep your filter
-            # 🆕 Normalize REST data to WS format
-            if 'type' in item and item.get('type') == 'TRADE':  # REST format
-                item['event_type'] = 'trade'
-                item['asset_id'] = item.get('asset', item.get('assetId', 'N/A'))
-            filtered_data.append(item)
+        if not is_crypto(item):
+            continue
+
+        # 5-minute filter using title/question
+        title_for_filter = str(item.get('title') or item.get('question') or '')
+        if not include_5m and is_5m_market(title_for_filter):
+            continue
+
+        # Normalize REST data to WS format
+        if item.get('type') == 'TRADE':  # REST format
+            item['event_type'] = 'trade'
+            item['asset_id'] = item.get('asset', item.get('assetId', 'N/A'))
+
+        filtered_data.append(item)
+
         if len(filtered_data) >= max_items:
             break
-    
 
     if not filtered_data:
         return pd.DataFrame()
-    
-    # 4. 👇 IMPROVED: Build DF with avg price in UP/DOWN + price_num for grouping
+
+    # 5. Build DataFrame
     df_data = []
     for item in filtered_data:
         updown = get_up_down(item)
         title = str(item.get('title') or item.get('question') or '-')
         short_title = (title[:85] + '...') if len(title) > 90 else title
-        
+
         size_raw = item.get('size', 0)
         try:
             size_val = float(str(size_raw).replace('$', '').replace(',', ''))
         except (ValueError, TypeError):
             size_val = 0.0
-        
-        price_raw = item.get('price') or item.get('curPrice', '-')  # 👈 Prefer 'price' for activity
+
+        price_raw = item.get('price') or item.get('curPrice', '-')  # prefer 'price'
         price_num = parse_usd(price_raw) or 0.50
-        
+
         if isinstance(price_raw, (int, float)):
             price_val = f"${price_raw:.2f}"
             avg_price_str = f"@ ${price_num:.2f}"
         else:
             price_val = str(price_raw)
             avg_price_str = ""
-        
-        updown_price = f"{updown} {avg_price_str}".strip()  # 👈 "🟢 UP @ $0.52"
+
+        updown_price = f"{updown} {avg_price_str}".strip()
         amount = size_val * price_num
 
-        ts_field = item.get('timestamp') or item.get('updatedAt') or item.get('createdAt') or now_ts
+        ts_field = (
+            item.get('timestamp')
+            or item.get('updatedAt')
+            or item.get('createdAt')
+            or now_ts
+        )
         try:
             ts = int(float(ts_field))
         except (ValueError, TypeError):
             ts = now_ts
         update_str = datetime.fromtimestamp(ts, EST).strftime('%I:%M:%S %p ET')
-        
+
         status_str = normalize_trade_item(item, now_ts)
         age_sec = now_ts - ts
-        
+
         df_data.append({
-            'Market': short_title, 
+            'Market': short_title,
             'UP/DOWN': updown_price,
             'Shares': f"{size_val:.1f}",
-            'Price': price_val, 
-            'Amount': f"${amount:.2f}", 
-            'Status': status_str, 
-            'Updated': update_str, 
+            'Price': price_val,
+            'Amount': f"${amount:.2f}",
+            'Status': status_str,
+            'Updated': update_str,
             'age_sec': age_sec,
-            'price_num': price_num  # 👈 For future grouping
+            'price_num': price_num,
         })
-    
+
+    # 6. Trim old WS trades occasionally
     if int(time.time()) % 60 == 0:
-        cutoff = time.time() - 24*3600  # 24h
+        cutoff = time.time() - 24 * 3600  # 24h
         while live_trades and live_trades[0].get('timestamp', 0) < cutoff:
             live_trades.popleft()
             print(f"🧹 Trimmed old trade, buffer: {len(live_trades)}")
 
     df = pd.DataFrame(df_data)
-    if df.empty: 
+    if df.empty:
         return df
-    
+
     df = df.sort_values('age_sec')  # Newest first
     return df
-

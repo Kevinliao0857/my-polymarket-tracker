@@ -17,3 +17,6 @@ MONTHS_MAP = {
     'may':5,'jun':6,'june':6,'jul':7,'july':7,'aug':8,'august':8,'sep':9,'sept':9,
     'september':9,'oct':10,'october':10,'nov':11,'november':11,'dec':12,'december':12
 }
+
+# NEW: toggle for ultra-short-term crypto markets (5-minute windows etc.)
+ALLOW_5M_MARKETS: bool = False

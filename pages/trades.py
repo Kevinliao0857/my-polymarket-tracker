@@ -2,8 +2,8 @@ import streamlit as st
 from utils.api import track_0x8dxd
 
 
-def show_trades(minutes_back):
-    df = track_0x8dxd(minutes_back)
+def show_trades(minutes_back, include_5m: bool = True):
+    df = track_0x8dxd(minutes_back, include_5m=include_5m)
 
     # 👈 SIDEBAR STATS (scoped to trades page)
     rest_count = len(df)

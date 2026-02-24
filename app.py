@@ -58,6 +58,18 @@ websocket.show_websocket_status()
 
 st.sidebar.markdown("---")
 
+if 'include_5m' not in st.session_state:
+    st.session_state.include_5m = False
+
+st.sidebar.checkbox(
+    "🔄 Include 5-minute markets",
+    value=st.session_state.include_5m,
+    key="include_5m",
+    help="Unchecked = skip 5-minute crypto window trades"
+)
+
+st.sidebar.markdown("---")
+
 # 👤 TRADER PROFILE
 try:
     profile_name = get_profile_name(TRADER)
@@ -75,6 +87,6 @@ if st.sidebar.button("🔄 Force Refresh", type="primary"):
 st.sidebar.markdown("---")
 
 # 👈 MAIN CONTENT PAGES (default MINUTES_BACK)
-trades.show_trades(MINUTES_BACK)
+trades.show_trades(MINUTES_BACK, include_5m=st.session_state.include_5m)
 positions.show_positions(TRADER)
 simulator.show_simulator()

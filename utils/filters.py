@@ -43,3 +43,48 @@ def get_up_down(item: Dict[str, Any]) -> str:
         else: return "🔴 DOWN"
     
     return "➖ ?"
+
+# NEW: pattern like "5:40AM-5:45AM" or "5:40 AM - 5:45 AM"
+_TIME_RANGE_PATTERN = re.compile(
+    r'(\d{1,2}:\d{2}\s?(?:AM|PM))\s*[-–]\s*(\d{1,2}:\d{2}\s?(?:AM|PM))',
+    re.IGNORECASE,
+)
+
+
+def extract_time_range_minutes(title: str) -> int | None:
+    """
+    Parse a 'HH:MM AM - HH:MM AM' (or PM) style window from the title and
+    return its duration in minutes. Returns None if not present or parse fails.
+    """
+    if not title:
+        return None
+
+    m = _TIME_RANGE_PATTERN.search(title)
+    if not m:
+        return None
+
+    start_str, end_str = m.group(1).upper(), m.group(2).upper()
+    fmt = "%I:%M %p"
+
+    try:
+        today = datetime.now(EST).date()
+        start_dt = datetime.strptime(start_str, fmt).replace(
+            year=today.year, month=today.month, day=today.day, tzinfo=EST
+        )
+        end_dt = datetime.strptime(end_str, fmt).replace(
+            year=today.year, month=today.month, day=today.day, tzinfo=EST
+        )
+        # handle wrap around, e.g. 11:55PM-12:00AM
+        if end_dt < start_dt:
+            end_dt = end_dt + timedelta(days=1)
+        return int((end_dt - start_dt).total_seconds() // 60)
+    except Exception:
+        return None
+
+
+def is_5m_market(title: str, cutoff: int = 5) -> bool:
+    """
+    Return True if the market title looks like a <=5-minute window market.
+    """
+    dur = extract_time_range_minutes(title or "")
+    return dur is not None and dur <= cutoff
