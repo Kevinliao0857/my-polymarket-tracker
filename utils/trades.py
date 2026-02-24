@@ -60,8 +60,8 @@ def track_0x8dxd(
     include_5m: bool | None = None,
 ) -> pd.DataFrame:
     # ✅ TEMP: force REST-only + no 5m markets
-    include_5m = False      # always exclude 5m
-    recent_live = []        # ignore websocket data entirely
+    # include_5m = False      # always exclude 5m
+    # recent_live = []        # ignore websocket data entirely
 
     """
     Track trader's recent crypto trades.
@@ -73,8 +73,8 @@ def track_0x8dxd(
     """
 
     # 👇 REMOVE this block while testing
-    # if include_5m is None:
-    #     include_5m = ALLOW_5M_MARKETS
+    if include_5m is None:
+        include_5m = ALLOW_5M_MARKETS
 
     now_ts = int(time.time())
     ago_ts = now_ts - (minutes_back * 60)

@@ -53,23 +53,22 @@ def rtds_listener():
             # PRINT FIRST (before any complex logic)
             print(f"🧑‍💻 TRADE: {event_type} | Asset: {asset_id[:16]}... | Size: {size} | Price: {price}")
 
-            # Build & append - FIXED VERSION
-            title = data.get('question') or ''  # 👈 Start with question
-            
-            # Quick asset lookup ONLY if no question
-            if not title and asset_id != 'N/A':
+            # Build & append - FULL TITLES
+            title = data.get('question') or ''
+            if asset_id != 'N/A' and not title:
+                # Fast market title lookup
                 market_info = safe_fetch(f"https://gamma-api.polymarket.com/markets?tokenIds={asset_id}")
-                if market_info and isinstance(market_info, list) and market_info:
+                if market_info:
                     title = market_info[0].get('question', title)
             
             trade_data = {
-                'event_type': event_type, 
-                'asset_id': asset_id, 
+                'event_type': event_type,
+                'asset_id': asset_id,
                 'size': float(size),
-                'price': float(price), 
+                'price': float(price),
                 'timestamp': time.time(),
-                'title': title or f"Asset {asset_id[:12]}...",  # 👈 Full title or fallback
-                'proxyWallet': TRADER  # 👈 Bonus: easier filtering
+                'title': title or f"Asset {asset_id[:12]}...",  # Full title!
+                'proxyWallet': TRADER
             }
             live_trades.append(trade_data)
             print(f"✅ ADDED #{len(live_trades)} | Title: {trade_data['title'][:50]}...")
