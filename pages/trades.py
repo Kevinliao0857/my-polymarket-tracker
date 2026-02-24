@@ -2,8 +2,8 @@ import streamlit as st
 from utils.api import track_0x8dxd
 
 def show_trades(minutes_back, include_5m: bool = False):  # Default OFF
-    # User toggle for 5m markets
-    include_5m = st.sidebar.checkbox("Include 5-minute markets", value=include_5m)
+    # User toggle for 5m markets "extra toggle"
+    # include_5m = st.sidebar.checkbox("Include 5-minute markets", value=include_5m)
     
     df = track_0x8dxd(minutes_back, include_5m=include_5m)
 
