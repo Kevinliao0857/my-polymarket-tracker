@@ -90,3 +90,5 @@ st.sidebar.markdown("---")
 trades.show_trades(MINUTES_BACK, include_5m=st.session_state.include_5m)
 positions.show_positions(TRADER)
 simulator.show_simulator()
+
+# 02/23/2026 in working state
