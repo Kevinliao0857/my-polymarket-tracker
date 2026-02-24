@@ -75,10 +75,10 @@ def track_0x8dxd(
     ago_ts = now_ts - (minutes_back * 60)
 
     # 1. Live WS is now disabled by recent_live = []
-    ws_count = len(recent_live)
+    ws_count = getattr(globals().get('recent_live', []), 'len', lambda: 0)() or 0
     if ws_count > 0:
         st.sidebar.success(
-            f"🚀 LIVE TRADES: {len(live_trades)} total | {len(recent_live)} recent"
+            f"🚀 LIVE TRADES: {len(live_trades)} total | {ws_count} recent"
         )
     else:
         st.sidebar.warning("⚠️ No live trades yet—WS warming up...")
