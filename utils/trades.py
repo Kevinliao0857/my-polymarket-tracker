@@ -13,7 +13,6 @@ from .status import get_status_hybrid
 from .websocket import rtds_listener, live_trades
 from .shared import parse_usd
 
-
 # 🛡️ CLOUD-SAFE WS (restarts if dead)
 def ensure_live_ws():
     # Check if WS thread alive
@@ -59,10 +58,6 @@ def track_0x8dxd(
     minutes_back: int,
     include_5m: bool | None = None,
 ) -> pd.DataFrame:
-    # ✅ TEMP: force REST-only + no 5m markets
-    # include_5m = False      # always exclude 5m
-    # recent_live = []        # ignore websocket data entirely
-
     """
     Track trader's recent crypto trades.
 
@@ -119,22 +114,24 @@ def track_0x8dxd(
 
     # 4. Filter: crypto + 5-minute toggle
     filtered_data = []
+    five_min_count = 0  # 👈 NEW counter
+    total_crypto_count = 0  # 👈 NEW counter
+
     for item in unique_combined:
         if not is_crypto(item):
             continue
+        total_crypto_count += 1  # 👈 Count ALL crypto
 
-        # 5-minute filter using title/question
         title_for_filter = str(item.get('title') or item.get('question') or '')
         
-        # TEMP DEBUG - remove after testing
-        if "11:05PM" in title_for_filter:
-            print(f"DEBUG: Title='{title_for_filter}' | is_5m={is_5m_market(title_for_filter)} | include_5m={include_5m}")
+        # 👈 ULTRA DEBUG - count + print ALL 5-min detections
+        if is_5m_market(title_for_filter):
+            five_min_count += 1
+            print(f"🚫 5M DETECTED #{five_min_count}: '{title_for_filter[:60]}...' | include_5m={include_5m}")
         
         if not include_5m and is_5m_market(title_for_filter):
             print(f"DEBUG: FILTERED OUT: {title_for_filter}")
-            continue
-
-        # Removed duplicate filter block
+            continue  # 👈 This should skip them!
 
         # Normalize REST data to WS format
         if item.get('type') == 'TRADE':  # REST format
@@ -213,6 +210,15 @@ def track_0x8dxd(
     df = pd.DataFrame(df_data)
     if df.empty:
         return df
+
+    # 👈 TABLE DEBUG - before return
+    print(f"🔍 FINAL STATS: {len(filtered_data)} trades | {five_min_count} 5m detected | {total_crypto_count} total crypto | include_5m={include_5m}")
+    
+    # Show first few titles in table for verification
+    if not df.empty and five_min_count > 0:
+        print("FIRST 3 TITLES:")
+        for i, row in df.head(3).iterrows():
+            print(f"  📋 '{row['Market']}'")
 
     df = df.sort_values('age_sec')  # Newest first
     return df
