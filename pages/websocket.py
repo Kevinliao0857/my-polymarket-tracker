@@ -40,11 +40,12 @@ def show_websocket_status():
                 st.cache_resource.clear()
                 st.rerun()
         with col3:
-            if st.button("⛔", key="disable_ws_btn"):  # Fixed key
-                # Clear WS buffer
+            if st.button("⛔ Disable WS", key="disable_ws_global"):
+                from utils.config import DISABLE_WS_LIVE
+                DISABLE_WS_LIVE = True  # Global disable
                 from utils.websocket import live_trades
                 live_trades.clear()
-                st.success("⛔ WS buffer cleared!")
+                st.success("⛔ WS globally disabled!")
                 st.rerun()
 
         # # 🐛 TEMP DEBUG (remove later)

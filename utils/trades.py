@@ -6,7 +6,7 @@ import time
 from datetime import datetime
 from typing import Any, List
 
-from .config import EST, TRADER, ALLOW_5M_MARKETS
+from .config import EST, TRADER, ALLOW_5M_MARKETS, DISABLE_WS_LIVE
 from .filters import is_crypto, get_up_down, is_5m_market
 from .data import safe_fetch
 from .status import get_status_hybrid
@@ -17,6 +17,8 @@ from .shared import parse_usd
 # 🛡️ CLOUD-SAFE WS (restarts if dead)
 def ensure_live_ws():
     # Check if WS thread alive
+    if DISABLE_WS_LIVE:  # 👈 Respect global flag
+        return
     ws_threads = [t for t in threading.enumerate() 
                   if 'rtds_listener' in str(t.name).lower()]
     if not ws_threads:
@@ -57,6 +59,10 @@ def track_0x8dxd(
     minutes_back: int,
     include_5m: bool | None = None,
 ) -> pd.DataFrame:
+    # ✅ TEMP: force REST-only + no 5m markets
+    include_5m = False      # always exclude 5m
+    recent_live = []        # ignore websocket data entirely
+
     """
     Track trader's recent crypto trades.
 
@@ -65,22 +71,17 @@ def track_0x8dxd(
       - False -> exclude 5-minute markets
       - None  -> follow global config (ALLOW_5M_MARKETS)
     """
-    if include_5m is None:
-        include_5m = ALLOW_5M_MARKETS
+
+    # 👇 REMOVE this block while testing
+    # if include_5m is None:
+    #     include_5m = ALLOW_5M_MARKETS
 
     now_ts = int(time.time())
     ago_ts = now_ts - (minutes_back * 60)
 
-    # 1. Live WS
-    recent_live = [t for t in live_trades if (t.get('timestamp') or 0) >= ago_ts]
+    # 1. Live WS is now disabled by recent_live = []
     ws_count = len(recent_live)
-
     if ws_count > 0:
-        recent_live = [
-            t for t in live_trades
-            if (t.get('timestamp') or 0) >= ago_ts
-            and t.get('proxyWallet') == TRADER
-        ]
         st.sidebar.success(
             f"🚀 LIVE TRADES: {len(live_trades)} total | {len(recent_live)} recent"
         )
@@ -100,7 +101,7 @@ def track_0x8dxd(
         if ts >= ago_ts:
             rest_recent.append(item)
 
-    # 3. Combine + dedupe
+    # 3. Combine + dedupe (recent_live is empty)
     combined = recent_live + rest_recent
     seen_tx = set()
     unique_combined = []
@@ -133,9 +134,7 @@ def track_0x8dxd(
             print(f"DEBUG: FILTERED OUT: {title_for_filter}")
             continue
 
-
-        if not include_5m and is_5m_market(title_for_filter):
-            continue
+        # Removed duplicate filter block
 
         # Normalize REST data to WS format
         if item.get('type') == 'TRADE':  # REST format
@@ -147,6 +146,7 @@ def track_0x8dxd(
         if len(filtered_data) >= max_items:
             break
 
+    # Rest of function unchanged...
     if not filtered_data:
         return pd.DataFrame()
 
@@ -203,7 +203,7 @@ def track_0x8dxd(
             'price_num': price_num,
         })
 
-    # 6. Trim old WS trades occasionally
+    # 6. Trim old WS trades occasionally (safe since WS disabled)
     if int(time.time()) % 60 == 0:
         cutoff = time.time() - 24 * 3600  # 24h
         while live_trades and live_trades[0].get('timestamp', 0) < cutoff:
