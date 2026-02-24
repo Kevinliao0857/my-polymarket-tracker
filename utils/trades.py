@@ -124,6 +124,16 @@ def track_0x8dxd(
 
         # 5-minute filter using title/question
         title_for_filter = str(item.get('title') or item.get('question') or '')
+        
+        # TEMP DEBUG - remove after testing
+        if "11:05PM" in title_for_filter:
+            print(f"DEBUG: Title='{title_for_filter}' | is_5m={is_5m_market(title_for_filter)} | include_5m={include_5m}")
+        
+        if not include_5m and is_5m_market(title_for_filter):
+            print(f"DEBUG: FILTERED OUT: {title_for_filter}")
+            continue
+
+
         if not include_5m and is_5m_market(title_for_filter):
             continue
 
