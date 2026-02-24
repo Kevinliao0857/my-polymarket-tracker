@@ -20,3 +20,5 @@ MONTHS_MAP = {
 
 # NEW: toggle for ultra-short-term crypto markets (5-minute windows etc.)
 ALLOW_5M_MARKETS: bool = False
+
+DISABLE_WS_LIVE: bool = False
