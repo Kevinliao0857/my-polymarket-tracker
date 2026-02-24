@@ -153,6 +153,12 @@ def get_recent_live_trades(minutes: int = 30) -> List[Dict]:
 def get_live_trades_count() -> int:
     return len(live_trades)
 
+# BACKWARD COMPATIBILITY (for simulator.py)
+def get_recent_trader_trades(seconds: int = 300) -> list:
+    """Legacy function for simulator.py"""
+    cutoff = time.time() - seconds
+    return [t for t in live_trades if t.get('proxyWallet') == TRADER and t.get('timestamp', 0) > cutoff]
+
 if __name__ == "__main__":
     print("🚀 Starting Polymarket RTDS listener...")
     rtds_listener()
