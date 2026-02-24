@@ -62,7 +62,15 @@ def track_0x8dxd(minutes_back: int, include_5m: bool | None = None, _cache_buste
     ago_ts = now_ts - (minutes_back * 60)
 
     # 🔍 DEBUG MODE - REST ONLY (no WS crashes)
-    st.sidebar.info("🔍 DEBUG: REST trades + 5m filter testing")
+    # st.sidebar.info("🔍 DEBUG: REST trades + 5m filter testing")
+
+    try:
+        from .websocket import live_trades, get_recent_live_trades
+        recent_live_trades = get_recent_live_trades(minutes_back)
+        ws_count = len(recent_live_trades)
+        st.sidebar.success(f"🚀 LIVE: {len(live_trades)} total | {ws_count} recent")
+    except:
+        st.sidebar.info("📊 REST trades (WS disabled)")
 
     # 2. Activity endpoint (REST)
     latest_bets = get_latest_bets(TRADER, limit=500)
