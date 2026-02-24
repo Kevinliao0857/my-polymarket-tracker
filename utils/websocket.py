@@ -53,14 +53,26 @@ def rtds_listener():
             # PRINT FIRST (before any complex logic)
             print(f"🧑‍💻 TRADE: {event_type} | Asset: {asset_id[:16]}... | Size: {size} | Price: {price}")
 
-            # Build & append
+            # Build & append - FIXED VERSION
+            title = data.get('question') or ''  # 👈 Start with question
+            
+            # Quick asset lookup ONLY if no question
+            if not title and asset_id != 'N/A':
+                market_info = safe_fetch(f"https://gamma-api.polymarket.com/markets?tokenIds={asset_id}")
+                if market_info and isinstance(market_info, list) and market_info:
+                    title = market_info[0].get('question', title)
+            
             trade_data = {
-                'event_type': event_type, 'asset_id': asset_id, 'size': float(size),
-                'price': float(price), 'timestamp': time.time(),
-                'title': data.get('question', f"Asset {asset_id[:12]}...")
+                'event_type': event_type, 
+                'asset_id': asset_id, 
+                'size': float(size),
+                'price': float(price), 
+                'timestamp': time.time(),
+                'title': title or f"Asset {asset_id[:12]}...",  # 👈 Full title or fallback
+                'proxyWallet': TRADER  # 👈 Bonus: easier filtering
             }
             live_trades.append(trade_data)
-            print(f"✅ ADDED #{len(live_trades)}")
+            print(f"✅ ADDED #{len(live_trades)} | Title: {trade_data['title'][:50]}...")
 
         except Exception as e:
             print(f"⚠️ process_trade CRASH: {e} | INPUT: {str(raw_data)[:50]}...")
