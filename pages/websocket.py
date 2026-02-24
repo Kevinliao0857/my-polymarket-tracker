@@ -28,7 +28,7 @@ def show_websocket_status():
     # Dynamic expander title
     with st.sidebar.expander(f"{status_emoji} Live WS", expanded=False):
         # Controls
-        col1, col2, col3 = st.columns([2, 2, 1])
+        col1, col2, col3 = st.columns([3, 2, 1])
         with col1:
             if st.button(f"{status_emoji} Start", 
                         type="secondary" if has_streaming else "primary", 
@@ -36,18 +36,17 @@ def show_websocket_status():
                 start_listener()
                 st.rerun()
         with col2:
-            if st.button("🔄 Restart", key="restart_ws"):
+            if st.button("🔄", key="restart_ws"):
                 st.cache_resource.clear()
                 st.rerun()
         with col3:
-            if st.button("⛔ Disable WS", key="disable_ws"):  # 👈 NEW
-                # Clear WS buffer + flag
+            if st.button("⛔", key="disable_ws_btn"):  # Fixed key
+                # Clear WS buffer
                 from utils.websocket import live_trades
                 live_trades.clear()
-                st.session_state.disable_ws = True
-                st.success("⛔ WS Disabled!")
+                st.success("⛔ WS buffer cleared!")
                 st.rerun()
-        
+
         # # 🐛 TEMP DEBUG (remove later)
         # try:
         #     threads = [t.name for t in threading.enumerate()]
