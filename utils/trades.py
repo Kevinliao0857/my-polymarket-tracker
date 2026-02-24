@@ -48,7 +48,7 @@ def get_latest_bets(address: str, limit: int = 200) -> List[dict]:
     return []
 
 @st.cache_data(ttl=10)
-def track_0x8dxd(minutes_back: int, include_5m: bool | None = None) -> pd.DataFrame:
+def track_0x8dxd(minutes_back: int, include_5m: bool | None = None, _cache_buster: int = 0) -> pd.DataFrame:
     if include_5m is None:
         include_5m = ALLOW_5M_MARKETS
 

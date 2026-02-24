@@ -3,7 +3,10 @@ from utils.api import track_0x8dxd
 
 
 def show_trades(minutes_back, include_5m: bool = True):
-    df = track_0x8dxd(minutes_back, include_5m=include_5m)
+    # 👈 CACHE BUSTER - forces refresh
+    cache_buster = st.sidebar.slider("🔄 Cache Refresh", 0, 100, 0, key="cache_buster")
+    
+    df = track_0x8dxd(minutes_back, include_5m=include_5m, _cache_buster=cache_buster)
 
     # 👈 SIDEBAR STATS (scoped to trades page)
     rest_count = len(df)

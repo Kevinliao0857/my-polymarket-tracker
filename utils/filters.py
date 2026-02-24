@@ -98,32 +98,37 @@ def is_5m_market(title: str, cutoff: int = 5) -> bool:
 
 def parse_time_diff_minutes(title: str) -> int:
     """
-    Parse ANY "HH:MM-HH:MM" → numeric minutes diff (no regex needed).
-    Returns 999 if can't parse.
+    Parse ANY "HH:MM-HH:MM" → numeric minutes diff.
+    Handles single-digit hours: "12:55AM-1:00AM" → 5min
     """
-    # Find any "12:20AM-12:25AM" or "12:20-12:25" pattern
-    time_pattern = r'(\d{1,2}:\d{2})(?:\s*[AP]M)?[-–]\s*(\d{1,2}:\d{2})(?:\s*[AP]M)?'
+    # Find "12:55AM-1:00AM" or "12:55-1:00" or "12:55PM-1:00PM"
+    time_pattern = r'(\d{1,2}:\d{2}[AP]M?)\s*[-–]\s*(\d{1,2}:\d{2}[AP]M?)'
     match = re.search(time_pattern, title, re.IGNORECASE)
     
     if not match:
-        return 999  # Not a time window
+        return 999
     
     try:
-        start_time = match.group(1)  # "12:20"
-        end_time = match.group(2)    # "12:25"
+        start_str, end_str = match.groups()
         
-        # Parse as 24h → diff
-        start_h, start_m = map(int, start_time.split(':'))
-        end_h, end_m = map(int, end_time.split(':'))
+        # Parse with %I:%M%p format (handles 1:00AM → 01:00AM)
+        fmt = "%I:%M%p"
+        start_time = datetime.strptime(start_str.replace(' ', ''), fmt).time()
+        end_time = datetime.strptime(end_str.replace(' ', ''), fmt).time()
         
-        start_min = start_h * 60 + start_m
-        end_min = end_h * 60 + end_m
+        # Convert to minutes
+        start_min = start_time.hour * 60 + start_time.minute
+        end_min = end_time.hour * 60 + end_time.minute
         
-        # Handle wrap-around (23:55 → 00:00 = 5min)
+        # Duration (handle overnight)
         duration = end_min - start_min
         if duration < 0:
             duration += 24 * 60
             
+        print(f"⏱️ TIME DEBUG: '{start_str}'→{start_min}m to '{end_str}'→{end_min}m = {duration}min")  # 👈 TEMP DEBUG
         return duration
-    except:
+        
+    except Exception as e:
+        print(f"⏱️ PARSE FAIL: {e} | '{match.groups()}'")
         return 999
+
