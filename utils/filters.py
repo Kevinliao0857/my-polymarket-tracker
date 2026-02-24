@@ -47,7 +47,7 @@ def get_up_down(item: Dict[str, Any]) -> str:
 
 # NEW: pattern like "5:40AM-5:45AM" or "5:40 AM - 5:45 AM"
 _TIME_RANGE_PATTERN = re.compile(
-    r'(\d{1,2}:\d{2}\s?(?:AM|PM))\s*[-–]\s*(\d{1,2}:\d{2}\s?(?:AM|PM))',
+    r'(\d{1,2}:\d{2}\s?(?:AM|PM))[-–]\s*(\d{1,2}:\d{2}\s?(?:AM|PM))',
     re.IGNORECASE,
 )
 
