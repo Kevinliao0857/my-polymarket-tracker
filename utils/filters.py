@@ -85,7 +85,45 @@ def extract_time_range_minutes(title: str) -> int | None:
 
 def is_5m_market(title: str, cutoff: int = 5) -> bool:
     """
-    Return True if the market title looks like a <=5-minute window market.
+    Detect 5-minute markets by regex OR numeric time diff.
     """
-    dur = extract_time_range_minutes(title or "")
-    return dur is not None and dur <= cutoff
+    # Method 1: Regex (your current logic)
+    dur_regex = extract_time_range_minutes(title or "")
+    if dur_regex is not None and dur_regex <= cutoff:
+        return True
+
+    # Method 2: Numeric time parsing (bulletproof backup)
+    return parse_time_diff_minutes(title or "") <= cutoff
+
+
+def parse_time_diff_minutes(title: str) -> int:
+    """
+    Parse ANY "HH:MM-HH:MM" → numeric minutes diff (no regex needed).
+    Returns 999 if can't parse.
+    """
+    # Find any "12:20AM-12:25AM" or "12:20-12:25" pattern
+    time_pattern = r'(\d{1,2}:\d{2})(?:\s*[AP]M)?[-–]\s*(\d{1,2}:\d{2})(?:\s*[AP]M)?'
+    match = re.search(time_pattern, title, re.IGNORECASE)
+    
+    if not match:
+        return 999  # Not a time window
+    
+    try:
+        start_time = match.group(1)  # "12:20"
+        end_time = match.group(2)    # "12:25"
+        
+        # Parse as 24h → diff
+        start_h, start_m = map(int, start_time.split(':'))
+        end_h, end_m = map(int, end_time.split(':'))
+        
+        start_min = start_h * 60 + start_m
+        end_min = end_h * 60 + end_m
+        
+        # Handle wrap-around (23:55 → 00:00 = 5min)
+        duration = end_min - start_min
+        if duration < 0:
+            duration += 24 * 60
+            
+        return duration
+    except:
+        return 999
