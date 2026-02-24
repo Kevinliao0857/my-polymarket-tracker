@@ -24,7 +24,7 @@ def ensure_live_ws():
         print("🔌 WS RESTARTED")
         time.sleep(1)
 
-ensure_live_ws()
+# ensure_live_ws()
 
 def normalize_trade_item(item: Any, now_ts: int) -> str:
     if isinstance(item, str) or (isinstance(item, dict) and 'asset_id' in item):
