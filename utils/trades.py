@@ -10,13 +10,11 @@ from .config import EST, TRADER, ALLOW_5M_MARKETS, DISABLE_WS_LIVE
 from .filters import is_crypto, get_up_down, is_5m_market
 from .data import safe_fetch
 from .status import get_status_hybrid
-from .websocket import rtds_listener, live_trades
 from .shared import parse_usd
 
 # 🛡️ CLOUD-SAFE WS (restarts if dead)
 def ensure_live_ws():
-    # Check if WS thread alive
-    if DISABLE_WS_LIVE:  # 👈 Respect global flag
+    if DISABLE_WS_LIVE:
         return
     ws_threads = [t for t in threading.enumerate() 
                   if 'rtds_listener' in str(t.name).lower()]
@@ -24,28 +22,24 @@ def ensure_live_ws():
         t = threading.Thread(target=rtds_listener, name='rtds_listener', daemon=True)
         t.start()
         print("🔌 WS RESTARTED")
-        time.sleep(1)  # Connect time
+        time.sleep(1)
 
-ensure_live_ws()  # Run every page load (safe!)
+ensure_live_ws()
 
 def normalize_trade_item(item: Any, now_ts: int) -> str:
-    """Safe wrapper for WS + REST trades"""
     if isinstance(item, str) or (isinstance(item, dict) and 'asset_id' in item):
         asset = item if isinstance(item, str) else item.get('asset_id', '')
         if asset:
-            # Use asset as conditionId + try to get title from live_trades context if needed
             item = {'conditionId': asset, 'marketId': asset, 'title': str(item.get('title', ''))}
     return get_status_hybrid(item, now_ts)
 
 @st.cache_data(ttl=30)
 def get_latest_bets(address: str, limit: int = 200) -> List[dict]:
-    """Get trader's latest BUY trades from /activity endpoint"""
     try:
         url = f"https://data-api.polymarket.com/activity?user={address}&limit={limit}"
         response = requests.get(url, timeout=10)
         if response.status_code == 200:
             activities = response.json()
-            # Filter TRADE + BUY only (copy-trading focus)
             buy_trades = [a for a in activities 
                          if a.get("type") == "TRADE" and a.get("side") == "BUY"]
             return buy_trades
@@ -53,38 +47,19 @@ def get_latest_bets(address: str, limit: int = 200) -> List[dict]:
         pass
     return []
 
-@st.cache_data(ttl=10)  # Live data - short cache
-def track_0x8dxd(
-    minutes_back: int,
-    include_5m: bool | None = None,
-) -> pd.DataFrame:
-    """
-    Track trader's recent crypto trades.
-
-    include_5m:
-      - True  -> include 5-minute markets
-      - False -> exclude 5-minute markets
-      - None  -> follow global config (ALLOW_5M_MARKETS)
-    """
-
-    # 👇 REMOVE this block while testing
+@st.cache_data(ttl=10)
+def track_0x8dxd(minutes_back: int, include_5m: bool | None = None) -> pd.DataFrame:
     if include_5m is None:
         include_5m = ALLOW_5M_MARKETS
 
     now_ts = int(time.time())
     ago_ts = now_ts - (minutes_back * 60)
 
-    # 1. Live WS is now disabled by recent_live = []
-    ws_count = getattr(globals().get('recent_live', []), 'len', lambda: 0)() or 0
-    if ws_count > 0:
-        st.sidebar.success(
-            f"🚀 LIVE TRADES: {len(live_trades)} total | {ws_count} recent"
-        )
-    else:
-        st.sidebar.warning("⚠️ No live trades yet—WS warming up...")
+    # 🔍 DEBUG MODE - REST ONLY (no WS crashes)
+    st.sidebar.info("🔍 DEBUG: REST trades + 5m filter testing")
 
     # 2. Activity endpoint (REST)
-    latest_bets = get_latest_bets(TRADER, limit=500)  # Single call
+    latest_bets = get_latest_bets(TRADER, limit=500)
     rest_recent = []
     for item in latest_bets:
         ts_field = item.get('timestamp') or item.get('updatedAt') or item.get('createdAt')
@@ -92,15 +67,11 @@ def track_0x8dxd(
             ts = int(float(ts_field)) if ts_field else now_ts
         except (ValueError, TypeError):
             continue
-
         if ts >= ago_ts:
             rest_recent.append(item)
 
-    # 3. Combine + dedupe (recent_live is empty)
-    try:
-        combined = recent_live + rest_recent
-    except NameError:
-        combined = rest_recent 
+    # 3. REST only - NO WS DEPENDENCIES
+    combined = rest_recent
     seen_tx = set()
     unique_combined = []
     for item in combined:
@@ -115,38 +86,36 @@ def track_0x8dxd(
     )
     max_items = max(200, minutes_back * 15)
 
-    # 4. Filter: crypto + 5-minute toggle
+    # 4. Filter: crypto + 5-minute toggle ★ DEBUG ACTIVE ★
     filtered_data = []
-    five_min_count = 0  # 👈 NEW counter
-    total_crypto_count = 0  # 👈 NEW counter
+    five_min_count = 0
+    total_crypto_count = 0
 
     for item in unique_combined:
         if not is_crypto(item):
             continue
-        total_crypto_count += 1  # 👈 Count ALL crypto
+        total_crypto_count += 1
 
         title_for_filter = str(item.get('title') or item.get('question') or '')
         
-        # 👈 ULTRA DEBUG - count + print ALL 5-min detections
+        # ULTRA DEBUG
         if is_5m_market(title_for_filter):
             five_min_count += 1
             print(f"🚫 5M DETECTED #{five_min_count}: '{title_for_filter[:60]}...' | include_5m={include_5m}")
         
         if not include_5m and is_5m_market(title_for_filter):
             print(f"DEBUG: FILTERED OUT: {title_for_filter}")
-            continue  # 👈 This should skip them!
+            continue
 
-        # Normalize REST data to WS format
-        if item.get('type') == 'TRADE':  # REST format
+        # Normalize REST data
+        if item.get('type') == 'TRADE':
             item['event_type'] = 'trade'
             item['asset_id'] = item.get('asset', item.get('assetId', 'N/A'))
 
         filtered_data.append(item)
-
         if len(filtered_data) >= max_items:
             break
 
-    # Rest of function unchanged...
     if not filtered_data:
         return pd.DataFrame()
 
@@ -163,7 +132,7 @@ def track_0x8dxd(
         except (ValueError, TypeError):
             size_val = 0.0
 
-        price_raw = item.get('price') or item.get('curPrice', '-')  # prefer 'price'
+        price_raw = item.get('price') or item.get('curPrice', '-')
         price_num = parse_usd(price_raw) or 0.50
 
         if isinstance(price_raw, (int, float)):
@@ -176,12 +145,7 @@ def track_0x8dxd(
         updown_price = f"{updown} {avg_price_str}".strip()
         amount = size_val * price_num
 
-        ts_field = (
-            item.get('timestamp')
-            or item.get('updatedAt')
-            or item.get('createdAt')
-            or now_ts
-        )
+        ts_field = item.get('timestamp') or item.get('updatedAt') or item.get('createdAt') or now_ts
         try:
             ts = int(float(ts_field))
         except (ValueError, TypeError):
@@ -203,28 +167,16 @@ def track_0x8dxd(
             'price_num': price_num,
         })
 
-    # 6. Trim old WS trades occasionally (safe since WS disabled)
-    if int(time.time()) % 60 == 0:
-        try:
-            cutoff = time.time() - 24 * 3600  # 24h
-            while live_trades and live_trades[0].get('timestamp', 0) < cutoff:
-                live_trades.popleft()
-                print(f"🧹 Trimmed old trade, buffer: {len(live_trades)}")
-        except:
-            pass
-    
     df = pd.DataFrame(df_data)
     if df.empty:
         return df
 
-    # 👈 TABLE DEBUG - before return
+    # 🔍 FINAL DEBUG OUTPUT
     print(f"🔍 FINAL STATS: {len(filtered_data)} trades | {five_min_count} 5m detected | {total_crypto_count} total crypto | include_5m={include_5m}")
-    
-    # Show first few titles in table for verification
     if not df.empty and five_min_count > 0:
         print("FIRST 3 TITLES:")
         for i, row in df.head(3).iterrows():
             print(f"  📋 '{row['Market']}'")
 
-    df = df.sort_values('age_sec')  # Newest first
+    df = df.sort_values('age_sec')
     return df
