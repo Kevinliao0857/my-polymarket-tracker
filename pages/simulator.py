@@ -5,9 +5,52 @@ from utils.config import TRADER
 from utils.api import get_open_positions, get_closed_trades_pnl
 from utils.simulator import run_position_simulator, track_simulation_pnl
 from utils.websocket import get_recent_trader_trades
+from utils.copy_trader import get_latest_trader_activity, detect_new_trades, build_copy_signal
 
 recent_trades = get_recent_trader_trades(300)
 
+def show_copy_signals(copy_ratio: float, bankroll: float):
+    """Live copy signal feed — shows new trader buys as actionable cards"""
+    st.subheader("⚡ Live Copy Signals")
+
+    raw_trades = get_latest_trader_activity(TRADER, limit=10)
+    new_trades = detect_new_trades(raw_trades)
+
+    if 'copy_queue' not in st.session_state:
+        st.session_state.copy_queue = []
+
+    for trade in new_trades:
+        signal = build_copy_signal(trade, copy_ratio)
+        if signal:
+            st.session_state.copy_queue.insert(0, signal)
+
+    st.session_state.copy_queue = st.session_state.copy_queue[:20]
+
+    if not st.session_state.copy_queue:
+        st.info("👂 Listening for new trades...")
+        return
+
+    for i, sig in enumerate(st.session_state.copy_queue):
+        age_sec = int(time.time() - sig['detected_at'])
+        is_fresh = age_sec < 60
+        is_copied = sig.get('status') == 'COPIED'
+
+        with st.container(border=True):
+            col1, col2, col3, col4 = st.columns([3, 1, 1, 1])
+            with col1:
+                freshness = "🔴 NEW" if is_fresh else f"⏱️ {age_sec}s ago"
+                label = "~~" if is_copied else ""  # strikethrough if copied
+                st.markdown(f"**{freshness}** {sig['updown']} {label}`{sig['market'][:60]}`{label}")
+            with col2:
+                st.metric("Your Shares", sig['your_shares'])
+            with col3:
+                st.metric("Your Cost", f"${sig['your_cost']:.2f}")
+            with col4:
+                if is_copied:
+                    st.success("✅ Done")
+                elif st.button("✅ Copied", key=f"copied_{i}_{sig['tx_hash']}"):
+                    st.session_state.copy_queue[i]['status'] = 'COPIED'
+                    st.rerun()
 
 def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float):
     pos_df = get_open_positions(TRADER)
@@ -205,5 +248,11 @@ def show_simulator():
         if st.session_state.sim_start_time:
             render_real_bankroll_simulator(
                 st.session_state.get('initial_bankroll', 1000.0),
-                100 / st.session_state.get('allocation_pct', 10.0),  # ✅ Always consistent
+                100 / st.session_state.get('allocation_pct', 10.0),
             )
+            st.markdown("---")
+            show_copy_signals(
+                copy_ratio=100 / st.session_state.get('allocation_pct', 10.0),
+                bankroll=st.session_state.get('initial_bankroll', 1000.0),
+            )
+
