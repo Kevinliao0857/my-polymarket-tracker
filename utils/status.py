@@ -63,12 +63,11 @@ def get_status_hybrid(item: Dict[str, Any], now_ts: int) -> str:
         mon = MONTHS_MAP.get(date_match.group('month').lower())
         day_str = date_match.group('day')
         time_str = date_match.group('time')
-
+    
         if mon and day_str.isdigit():
             day = int(day_str)
             event_hour = parse_time_to_decimal(time_str)
             if event_hour is not None:
-                # ✅ Handle year boundary: if month already passed this year, try next year
                 year = now_est.year
                 try:
                     event_dt = now_est.replace(
@@ -77,15 +76,21 @@ def get_status_hybrid(item: Dict[str, Any], now_ts: int) -> str:
                         minute=int((event_hour % 1) * 60),
                         second=0, microsecond=0
                     )
-                    # If the date is in the past by more than 1 day, try next year
                     if (now_est - event_dt).days > 1:
                         event_dt = event_dt.replace(year=year + 1)
                 except ValueError:
                     pass
                 else:
+                    end_dt = event_dt + timedelta(hours=1)  # ✅ Always assume 1hr window
+    
                     if now_est < event_dt:
+                        # Before window opens
                         return f"🟢 ACTIVE (til {event_dt.strftime('%b %d %I:%M %p ET')})"
-                    return "⚫ EXPIRED"
+                    elif now_est < end_dt:
+                        # Inside the 1-hour window ✅
+                        return f"🟢 ACTIVE (til {end_dt.strftime('%b %d %I:%M %p ET')})"
+                    else:
+                        return "⚫ EXPIRED"
 
     # 4. Implicit 1hr: "Mar 6pm" (month + time, no day) — fallback after date_match
     implicit_match = _IMPLICIT_RE.search(title)
