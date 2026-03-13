@@ -19,7 +19,7 @@ from utils.config import EST, TRADER
 # ✅ Explicit page imports — avoids shadowing utils.websocket
 from pages.trades import show_trades
 from pages.positions import show_positions
-from pages.simulators import show_simulator
+from pages.simulator import show_simulator
 from pages.websocket import show_websocket_status
 
 if 'refresh_count' not in st.session_state:
