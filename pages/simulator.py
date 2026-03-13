@@ -3,7 +3,7 @@ import time
 import pandas as pd
 from utils.config import TRADER
 from utils.api import get_open_positions, get_closed_trades_pnl
-from utils.simulator import run_position_simulator, track_simulation_pnl
+from utils.simulator import run_position_simulator, track_simulation_pnl, calculate_simulated_realized, tag_realized_rows
 from utils.websocket import get_recent_trader_trades
 from utils.copy_trader import get_latest_trader_activity, detect_new_trades, build_copy_signal
 
@@ -74,9 +74,13 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float):
     total_pnl = sim_results['total_pnl']
     skipped = sim_results['skipped']
 
-    closed_data = get_closed_trades_pnl(TRADER)  # ✅ Single call, reuse below
-    simulated_realized_pnl = closed_data['total'] / copy_ratio
+    simulated_realized_pnl = calculate_simulated_realized(sim_df, copy_ratio)
+    closed_data = get_closed_trades_pnl(TRADER)
+    api_realized = closed_data['total'] / copy_ratio
+    simulated_realized_pnl = max(simulated_realized_pnl, api_realized)
     current_bankroll = initial_bankroll + simulated_realized_pnl
+    sim_df = tag_realized_rows(sim_df)
+
 
     col1, col2, col3, col4, col5 = st.columns(5)
     with col1:
@@ -114,7 +118,7 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float):
         with col_chart2:
             st.line_chart(hist_df.set_index('Time')['pnl'], height=200)
 
-    sim_cols = ['Market', 'UP/DOWN', 'Status', 'Your Shares', 'Your Cost', 'Your PnL', 'Hedge?']
+    sim_cols = ['Market', 'UP/DOWN', 'Status', 'Your Shares', 'Your Cost', 'Your PnL', 'Realized?', 'Hedge?']
     recent_mask = sim_df['age_sec'] <= 300
 
     def highlight_recent(row):

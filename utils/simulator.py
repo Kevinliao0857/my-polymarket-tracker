@@ -71,23 +71,6 @@ def run_position_simulator(pos_df: pd.DataFrame, initial_bankroll: float, copy_r
     }
 
 
-def get_realized_bankroll(initial_bankroll: float, sim_df: pd.DataFrame) -> float:
-    """
-    Calculate realized bankroll from ALREADY SIMULATED expired rows.
-    Expects sim_df to have 'Your PnL' and 'Status' columns.
-    """
-    if 'Status' not in sim_df.columns or 'Your PnL' not in sim_df.columns:
-        return float(initial_bankroll)
-
-    expired_mask = sim_df['Status'].str.contains(
-        'expired|settled|closed|finished', case=False, na=False
-    )
-    expired_pnl = pd.to_numeric(
-        sim_df.loc[expired_mask, 'Your PnL'], errors='coerce'
-    ).sum()
-
-    return round(float(initial_bankroll) + expired_pnl, 2)
-
 
 def track_simulation_pnl(sim_results: Dict, initial_bankroll: float) -> None:
     """Track bankroll/PnL history snapshots over session runtime"""
@@ -131,3 +114,45 @@ def get_simulated_realized_pnl(pos_df: pd.DataFrame, copy_ratio: float, initial_
     your_pnl = (per_share_pnl * expired_df['Your Shares']).fillna(0.0)
 
     return round(your_pnl.sum(), 2)
+
+def calculate_simulated_realized(sim_df: pd.DataFrame, copy_ratio: float) -> float:
+    """
+    Realize PnL based on price thresholds — don't wait for API settlement.
+    - CurPrice >= 0.95 → treat as WIN (resolved YES)
+    - CurPrice <= 0.05 → treat as LOSS (resolved NO)
+    """
+    if sim_df.empty:
+        return 0.0
+
+    cur_price = pd.to_numeric(sim_df['CurPrice'], errors='coerce').fillna(0.0)
+    avg_price = pd.to_numeric(sim_df['AvgPrice'], errors='coerce').fillna(0.0)
+    your_shares = pd.to_numeric(sim_df['Your Shares'], errors='coerce').fillna(0.0)
+
+    # Win: price resolved to ~$1.00
+    win_mask = cur_price >= 0.95
+    # Loss: price resolved to ~$0.00
+    loss_mask = cur_price <= 0.05
+    realized_mask = win_mask | loss_mask
+
+    if not realized_mask.any():
+        return 0.0
+
+    realized_pnl = (your_shares[realized_mask] * (cur_price[realized_mask] - avg_price[realized_mask])).sum()
+    return round(float(realized_pnl), 2)
+
+def get_realized_bankroll(initial_bankroll: float, sim_df: pd.DataFrame) -> float:
+    """
+    Calculate realized bankroll from ALREADY SIMULATED expired rows.
+    Expects sim_df to have 'Your PnL' and 'Status' columns.
+    """
+    if 'Status' not in sim_df.columns or 'Your PnL' not in sim_df.columns:
+        return float(initial_bankroll)
+
+    expired_mask = sim_df['Status'].str.contains(
+        'expired|settled|closed|finished', case=False, na=False
+    )
+    expired_pnl = pd.to_numeric(
+        sim_df.loc[expired_mask, 'Your PnL'], errors='coerce'
+    ).sum()
+
+    return round(float(initial_bankroll) + expired_pnl, 2)
