@@ -184,7 +184,7 @@ def track_0x8dxd(minutes_back: int, include_5m: bool | None = None, _cache_buste
         df_data.append({
             'Market': short_title,
             'UP/DOWN': updown_price,
-            'Shares': f"{size_val:.1f}",
+            'Shares': round(size_val, 1),
             'Price': price_val,
             'Amount': f"${amount:.2f}",
             'Status': status_str,

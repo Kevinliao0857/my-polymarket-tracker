@@ -1,38 +1,40 @@
 import streamlit as st
 import threading
 import time
-from utils.websocket import rtds_listener, get_live_trades_count, get_recent_trader_trades
+import utils.config as config  # ✅ Module reference, not value import
+from utils.websocket import rtds_listener, get_live_trades_count, get_recent_trader_trades, live_trades
+
 
 @st.cache_resource
 def start_listener():
-    """Start RTDS listener once."""
+    """Start RTDS listener once — cache_resource ensures single execution."""
     if not any(t.name == 'rtds_listener' for t in threading.enumerate()):
         thread = threading.Thread(target=rtds_listener, daemon=True, name='rtds_listener')
         thread.start()
-        st.success("🚀 Started!")
         time.sleep(2)
     return True
 
+
 def show_websocket_status():
-    """🟢/🔴 expander tied to buffer > 0."""
-    # Safe top-level status check
     try:
         count = get_live_trades_count()
         recent = len(get_recent_trader_trades(300))
         has_streaming = count > 0
         status_emoji = "🟢" if has_streaming else "🔴"
-    except:
+    except Exception:
         status_emoji = "🔴"
         has_streaming = False
-    
-    # Dynamic expander title
+        count = 0
+        recent = 0
+
     with st.sidebar.expander(f"{status_emoji} Live WS", expanded=False):
-        # Controls
         col1, col2, col3 = st.columns([3, 2, 1])
         with col1:
-            if st.button(f"{status_emoji} Start", 
-                        type="secondary" if has_streaming else "primary", 
-                        use_container_width=True):
+            if st.button(
+                f"{status_emoji} Start",
+                type="secondary" if has_streaming else "primary",
+                use_container_width=True
+            ):
                 start_listener()
                 st.rerun()
         with col2:
@@ -40,29 +42,22 @@ def show_websocket_status():
                 st.cache_resource.clear()
                 st.rerun()
         with col3:
-            if st.button("⛔ Disable WS", key="disable_ws_global"):
-                from utils.config import DISABLE_WS_LIVE
-                DISABLE_WS_LIVE = True  # Global disable
-                from utils.websocket import live_trades
+            if st.button("⛔ Stop", key="disable_ws_global"):
+                # ✅ Mutate the module attribute — affects all importers
+                config.DISABLE_WS_LIVE = True
                 live_trades.clear()
-                st.success("⛔ WS globally disabled!")
+                st.success("⛔ WS disabled")
                 st.rerun()
 
-        # # 🐛 TEMP DEBUG (remove later)
-        # try:
-        #     threads = [t.name for t in threading.enumerate()]
-        #     st.caption(f"Threads: {threads}")
-        # except:
-        #     st.caption("No threads")
-        # 
-        # # Raw buffer check
-        # st.caption(f"Raw WS buffer: {count}")
-
-        # Metrics + status (protected)
         try:
             c1, c2 = st.columns(2)
-            with c1: st.metric("Buffer", count)
-            with c2: st.metric("5m", recent)
-            st.success("✅ Streaming!") if has_streaming else st.warning("⚠️ Start listener")
+            with c1:
+                st.metric("Buffer", count)
+            with c2:
+                st.metric("5m trades", recent)
+            if has_streaming:
+                st.success("✅ Streaming!")
+            else:
+                st.warning("⚠️ Start listener")
         except Exception as e:
             st.error(f"❌ {e}")
