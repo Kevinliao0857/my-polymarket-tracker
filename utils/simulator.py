@@ -140,6 +140,16 @@ def calculate_simulated_realized(sim_df: pd.DataFrame, copy_ratio: float) -> flo
     realized_pnl = (your_shares[realized_mask] * (cur_price[realized_mask] - avg_price[realized_mask])).sum()
     return round(float(realized_pnl), 2)
 
+def tag_realized_rows(sim_df: pd.DataFrame) -> pd.DataFrame:
+    """Add 'Realized?' column for display — price-based, not API status"""
+    cur_price = pd.to_numeric(sim_df['CurPrice'], errors='coerce').fillna(0.0)
+    sim_df = sim_df.copy()
+    sim_df['Realized?'] = ''
+    sim_df.loc[cur_price >= 0.95, 'Realized?'] = '✅ WIN'
+    sim_df.loc[cur_price <= 0.05, 'Realized?'] = '❌ LOSS'
+    return sim_df
+
+
 def get_realized_bankroll(initial_bankroll: float, sim_df: pd.DataFrame) -> float:
     """
     Calculate realized bankroll from ALREADY SIMULATED expired rows.
