@@ -70,8 +70,6 @@ def run_position_simulator(pos_df: pd.DataFrame, initial_bankroll: float, copy_r
         'hedge_pairs': hedge_pair_count,  # ✅ Fixed
     }
 
-
-
 def track_simulation_pnl(sim_results: Dict, initial_bankroll: float) -> None:
     """Track bankroll/PnL history snapshots over session runtime"""
     if not st.session_state.get('sim_start_time'):
@@ -93,7 +91,6 @@ def track_simulation_pnl(sim_results: Dict, initial_bankroll: float) -> None:
     if 'sim_pnl_history' not in st.session_state:
         st.session_state.sim_pnl_history = []
     st.session_state.sim_pnl_history.append(snapshot)
-
 
 def get_simulated_realized_pnl(pos_df: pd.DataFrame, copy_ratio: float, initial_bankroll: float) -> float:
     """Calculate proportional realized PnL from trader's closed positions"""
@@ -148,7 +145,6 @@ def tag_realized_rows(sim_df: pd.DataFrame) -> pd.DataFrame:
     sim_df.loc[cur_price >= 0.95, 'Realized?'] = '✅ WIN'
     sim_df.loc[cur_price <= 0.05, 'Realized?'] = '❌ LOSS'
     return sim_df
-
 
 def get_realized_bankroll(initial_bankroll: float, sim_df: pd.DataFrame) -> float:
     """
