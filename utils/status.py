@@ -97,7 +97,7 @@ def get_status_hybrid(item: Dict[str, Any], now_ts: int) -> str:
                 return f"🟢 ACTIVE (til ~{format_display_time(end_h)})"
             return "⚫ EXPIRED"
 
-    # 5. Single time — only valid if it hasn't expired today
+    # Step 5. Single time → treat as 1-hour window from that time
     time_match = _SINGLE_TIME_RE.search(title)
     if time_match:
         event_hour = parse_time_to_decimal(time_match.group(1))
@@ -107,10 +107,17 @@ def get_status_hybrid(item: Dict[str, Any], now_ts: int) -> str:
                 minute=int((event_hour % 1) * 60),
                 second=0, microsecond=0
             )
-            # ✅ Don't wrap to tomorrow — if it's past, it's expired
+            end_event = today_event + timedelta(hours=1)  # ✅ 1-hour window
+
             if now_est < today_event:
+                # Before the window starts
                 return f"🟢 ACTIVE (til {today_event.strftime('%b %d %I:%M %p')})"
-            return "⚫ EXPIRED"
+            elif now_est < end_event:
+                # Inside the 1-hour window
+                return f"🟢 ACTIVE (til {end_event.strftime('%b %d %I:%M %p')})"
+            else:
+                # Past the 1-hour window
+                return "⚫ EXPIRED"
 
     # 6. Duration: "30min", "2hr"
     dur_match = _DURATION_RE.search(title)
