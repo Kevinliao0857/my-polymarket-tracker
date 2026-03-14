@@ -96,6 +96,14 @@ def track_simulation_pnl(sim_results: Dict, initial_bankroll: float) -> None:
         st.session_state.sim_pnl_history = []
     st.session_state.sim_pnl_history.append(snapshot)
 
+    # ✅ Thin out old entries — keep all recent (last 2hrs) but compress older ones
+    history = st.session_state.sim_pnl_history
+    # ✅ Only recompress when old portion has grown by 60+ new points (~5 min)
+    if len(history) > 1440 and len(history) % 60 == 0:
+        old = history[:-1440:6]
+        recent = history[-1440:]
+        st.session_state.sim_pnl_history = old + recent
+
 def get_simulated_realized_pnl(pos_df: pd.DataFrame, copy_ratio: float, initial_bankroll: float) -> float:
     """Calculate proportional realized PnL from trader's closed positions"""
     expired_mask = pos_df['Status'].str.contains(

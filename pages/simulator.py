@@ -243,15 +243,23 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float):
     }
     sim_df['Hedge?'] = sim_df['Market'].apply(lambda x: '🛡️ Hedge' if x in hedge_markets else '')
 
+
     if len(st.session_state.get('sim_pnl_history', [])) > 1:
         with st.expander("📈 PnL History Charts", expanded=False):
             hist_df = pd.DataFrame(st.session_state.sim_pnl_history)
             hist_df['Time'] = hist_df['time'].apply(lambda x: f"{int(x)}m")
+
+            # ✅ Adaptive downsample — always render max 200 points regardless of session length
+            if len(hist_df) > 200:
+                step = len(hist_df) // 200
+                hist_df = hist_df.iloc[::step]
+
             col_chart1, col_chart2 = st.columns(2)
             with col_chart1:
                 st.line_chart(hist_df.set_index('Time')['bankroll'], height=200)
             with col_chart2:
                 st.line_chart(hist_df.set_index('Time')['pnl'], height=200)
+
 
     sim_cols = ['Market', 'UP/DOWN', 'Status', 'Your Shares', 'Your Cost', 'Your PnL', 'Realized?', 'Hedge?']
     recent_mask = sim_df['age_sec'] <= 300
