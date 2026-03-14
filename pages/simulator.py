@@ -3,7 +3,8 @@ import time
 import pandas as pd
 from utils.config import TRADER
 from utils.api import get_open_positions, get_closed_trades_pnl
-from utils.simulator import run_position_simulator, track_simulation_pnl, calculate_simulated_realized, tag_realized_rows
+from utils.simulator import run_position_simulator, track_simulation_pnl, \
+    calculate_simulated_realized, tag_realized_rows, check_drawdown
 from utils.websocket import get_recent_trader_trades
 from utils.copy_trader import get_latest_trader_activity, detect_new_trades, build_copy_signal
 
@@ -115,6 +116,57 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float):
     # ✅ Unrealized PnL also reflected in bankroll so it can dip below starting
     current_bankroll = initial_bankroll + simulated_realized_pnl + total_pnl
     sim_df = tag_realized_rows(sim_df)
+
+    # ✅ DRAWDOWN CIRCUIT BREAKER
+    drawdown_threshold = st.session_state.get('drawdown_threshold', 10.0)
+    drawdown = check_drawdown(current_bankroll, initial_bankroll, drawdown_threshold)
+
+    if drawdown['triggered']:
+        # Check if user has already made a decision
+        dd_decision = st.session_state.get('drawdown_decision', None)
+
+        if dd_decision is None:
+            # ⛔ Pause and prompt — don't render the rest of the sim
+            st.error(
+                f"🚨 **DRAWDOWN ALERT** — Bankroll dropped "
+                f"${drawdown['drawdown_amt']:,.2f} "
+                f"({drawdown['drawdown_pct']:.1f}%) below starting bankroll. "
+                f"Simulation paused."
+            )
+            st.warning(
+                f"Started: ${initial_bankroll:,.2f} → "
+                f"Current: ${current_bankroll:,.2f}"
+            )
+
+            col_dd1, col_dd2 = st.columns(2)
+            with col_dd1:
+                if st.button("⚠️ Continue Anyway", type="secondary", use_container_width=True):
+                    st.session_state.drawdown_decision = 'continue'
+                    st.rerun()
+            with col_dd2:
+                if st.button("🛑 Stop Simulation", type="primary", use_container_width=True):
+                    st.session_state.drawdown_decision = 'stop'
+                    st.rerun()
+            return  # ← pauses rendering below this point
+
+        elif dd_decision == 'stop':
+            st.error("🛑 Simulation stopped due to drawdown limit.")
+            st.metric("Final Bankroll", f"${current_bankroll:,.2f}",
+                      f"-${drawdown['drawdown_amt']:,.2f} ({drawdown['drawdown_pct']:.1f}%)")
+            if st.button("🔄 Reset & Start Fresh"):
+                for key in ['sim_start_time', 'sim_pnl_history', 'drawdown_decision',
+                            'initial_bankroll', 'allocation_pct']:
+                    st.session_state.pop(key, None)
+                st.rerun()
+            return  # ← stops all rendering
+
+        elif dd_decision == 'continue':
+            # Show a persistent but non-blocking warning
+            st.warning(
+                f"⚠️ Running with {drawdown['drawdown_pct']:.1f}% drawdown "
+                f"(${drawdown['drawdown_amt']:,.2f} below start) — "
+                f"monitor closely."
+            )
 
     col1, col2, col3, col4, col5 = st.columns(5)
     with col1:
@@ -255,7 +307,7 @@ def show_simulator():
         if 'sim_pnl_history' not in st.session_state:
             st.session_state.sim_pnl_history = []
 
-        col1, col2 = st.columns(2)
+        col1, col2, col3 = st.columns(3)
         with col1:
             initial_bankroll = st.number_input("💰 Starting Bankroll", value=1000.0, step=100.0)
         with col2:
@@ -263,6 +315,12 @@ def show_simulator():
                 "⚖️ Allocation %", value=10.0, min_value=1.0, max_value=100.0, step=1.0,
                 help="10% = copy 10% of trader's shares (equiv 1:10)"
             )
+        with col3:
+            drawdown_threshold = st.number_input(
+                "🛑 Drawdown %", value=10.0, min_value=1.0, max_value=50.0, step=1.0,
+                help="Pause sim if bankroll drops by this % from start"
+            )
+        st.session_state.drawdown_threshold = drawdown_threshold
 
         copy_ratio = 100 / allocation_pct
 
@@ -336,7 +394,7 @@ def show_simulator():
                 st.rerun()
         with col_btn2:
             if col_btn2.button("🛑 Reset", use_container_width=True):
-                for key in ['sim_start_time', 'sim_pnl_history', 'initial_bankroll', 'allocation_pct']:
+                for key in ['sim_start_time', 'sim_pnl_history', 'initial_bankroll', 'allocation_pct', 'drawdown_decision']:
                     st.session_state.pop(key, None)
                 st.rerun()
 
