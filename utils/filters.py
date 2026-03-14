@@ -47,17 +47,12 @@ def get_up_down(item: Dict[str, Any]) -> str:
 
 # ✅ Single canonical time-range regex — used by both functions below
 _TIME_RANGE_RE = re.compile(
-    r'(\d{1,2}:\d{2}\s*[AP]M?)\s*[-–]\s*(\d{1,2}:\d{2}\s*[AP]M?)',
+    r'(\d{1,2}:\d{2}\s*[AP]M)\s*[-–]\s*(\d{1,2}:\d{2}\s*[AP]M)',
     re.IGNORECASE
 )
 
 
 def _parse_time_range_minutes(title: str) -> int | None:
-    """
-    Parse 'HH:MMam - HH:MMam' from title → duration in minutes.
-    Returns None if no match or parse fails.
-    Single implementation used by both is_5m_market and extract_time_range_minutes.
-    """
     if not title:
         return None
 
@@ -65,10 +60,10 @@ def _parse_time_range_minutes(title: str) -> int | None:
     if not m:
         return None
 
+    # ✅ Strip all spaces before parsing so "10:30 PM" and "10:30PM" both work
     start_str = m.group(1).replace(' ', '').upper()
     end_str = m.group(2).replace(' ', '').upper()
 
-    # Normalise: ensure AM/PM suffix exists (e.g. "12:55" → keep as-is, will fail gracefully)
     fmt = "%I:%M%p"
     try:
         start_t = datetime.strptime(start_str, fmt).time()
@@ -80,9 +75,10 @@ def _parse_time_range_minutes(title: str) -> int | None:
     end_min = end_t.hour * 60 + end_t.minute
     duration = end_min - start_min
     if duration < 0:
-        duration += 24 * 60  # overnight wrap
+        duration += 24 * 60
 
     return duration
+
 
 
 def extract_time_range_minutes(title: str) -> int | None:

@@ -2,7 +2,7 @@ import streamlit as st
 import requests
 import time
 from .config import TRADER
-from .filters import is_crypto, get_up_down
+from .filters import is_crypto, get_up_down, is_5m_market
 from .shared import parse_usd
 
 
@@ -37,12 +37,11 @@ def detect_new_trades(current_trades: list) -> list:
     return new_trades
 
 
-def build_copy_signal(trade: dict, copy_ratio: float) -> dict | None:
-    """
-    Convert a raw trader trade into a copy signal.
-    Returns None if trade doesn't meet copy criteria.
-    """
+def build_copy_signal(trade: dict, copy_ratio: float, include_5m: bool = False) -> dict | None:
     if not is_crypto(trade):
+        return None
+    title = str(trade.get('title') or trade.get('question') or '')
+    if not include_5m and is_5m_market(title):
         return None
 
     trader_shares = float(trade.get('size') or 0)

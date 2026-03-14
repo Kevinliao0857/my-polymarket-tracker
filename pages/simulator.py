@@ -9,7 +9,7 @@ from utils.copy_trader import get_latest_trader_activity, detect_new_trades, bui
 
 recent_trades = get_recent_trader_trades(300)
 
-def show_copy_signals(copy_ratio: float, bankroll: float):
+def show_copy_signals(copy_ratio: float, bankroll: float, include_5m: bool = False):
     """Live copy signal feed — shows new trader buys as actionable cards"""
     raw_trades = get_latest_trader_activity(TRADER, limit=10)
     new_trades = detect_new_trades(raw_trades)
@@ -18,7 +18,7 @@ def show_copy_signals(copy_ratio: float, bankroll: float):
         st.session_state.copy_queue = []
 
     for trade in new_trades:
-        signal = build_copy_signal(trade, copy_ratio)
+        signal = build_copy_signal(trade, copy_ratio, include_5m=include_5m)
         if signal:
             st.session_state.copy_queue.insert(0, signal)
 
@@ -259,6 +259,7 @@ def show_simulator():
                 st.rerun()
 
         if st.session_state.sim_start_time:
+            include_5m = st.session_state.get('include_5m', False)  # ✅ read toggle
             render_real_bankroll_simulator(
                 st.session_state.get('initial_bankroll', 1000.0),
                 100 / st.session_state.get('allocation_pct', 10.0),
@@ -267,5 +268,6 @@ def show_simulator():
             show_copy_signals(
                 copy_ratio=100 / st.session_state.get('allocation_pct', 10.0),
                 bankroll=st.session_state.get('initial_bankroll', 1000.0),
+                include_5m=include_5m,  # ✅ pass through
             )
 
