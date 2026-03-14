@@ -302,8 +302,6 @@ def render_simulator():
         st.error(sim_results['message'])
         return
 
-    track_simulation_pnl(sim_results, saved_bankroll)
-
     sim_df = sim_results['sim_df']
     total_cost = sim_results['total_cost']
     total_pnl = sim_results['total_pnl']
@@ -332,6 +330,12 @@ def render_simulator():
             try:
                 hist_df = pd.DataFrame(st.session_state.sim_pnl_history)
                 hist_df['Time'] = hist_df['time'].apply(lambda x: f"{int(x)}m")
+
+                # ✅ Same adaptive downsample as render_real_bankroll_simulator
+                if len(hist_df) > 200:
+                    step = len(hist_df) // 200
+                    hist_df = hist_df.iloc[::step]
+
                 st.line_chart(hist_df.set_index('Time')['pnl'], height=200)
             except Exception:
                 pass
