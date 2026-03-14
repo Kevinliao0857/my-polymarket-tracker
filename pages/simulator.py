@@ -114,9 +114,7 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float, s
     # ✅ Use whichever has greater magnitude (handles both wins AND losses)
     simulated_realized_pnl = price_realized if abs(price_realized) >= abs(api_realized) else api_realized
 
-    # ✅ Apply Polymarket 2% fee on winning realized PnL only
-    if simulated_realized_pnl > 0:
-        simulated_realized_pnl = simulated_realized_pnl * 0.98
+    # No fee on winnings — taker fees (short-term markets only) approximated via slippage slider
 
     # ✅ Unrealized PnL also reflected in bankroll so it can dip below starting
     pnl_baseline = st.session_state.get('pnl_baseline', 0.0)
