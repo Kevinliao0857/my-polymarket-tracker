@@ -11,8 +11,6 @@ recent_trades = get_recent_trader_trades(300)
 
 def show_copy_signals(copy_ratio: float, bankroll: float):
     """Live copy signal feed — shows new trader buys as actionable cards"""
-    st.subheader("⚡ Live Copy Signals")
-
     raw_trades = get_latest_trader_activity(TRADER, limit=10)
     new_trades = detect_new_trades(raw_trades)
 
@@ -30,27 +28,35 @@ def show_copy_signals(copy_ratio: float, bankroll: float):
         st.info("👂 Listening for new trades...")
         return
 
-    for i, sig in enumerate(st.session_state.copy_queue):
-        age_sec = int(time.time() - sig['detected_at'])
-        is_fresh = age_sec < 60
-        is_copied = sig.get('status') == 'COPIED'
+    with st.expander(f"⚡ Signals ({len(st.session_state.copy_queue)})", expanded=True):
+        display_queue = st.session_state.copy_queue[:5]
 
-        with st.container(border=True):
-            col1, col2, col3, col4 = st.columns([3, 1, 1, 1])
-            with col1:
-                freshness = "🔴 NEW" if is_fresh else f"⏱️ {age_sec}s ago"
-                label = "~~" if is_copied else ""  # strikethrough if copied
-                st.markdown(f"**{freshness}** {sig['updown']} {label}`{sig['market'][:60]}`{label}")
-            with col2:
-                st.metric("Your Shares", sig['your_shares'])
-            with col3:
-                st.metric("Your Cost", f"${sig['your_cost']:.2f}")
-            with col4:
-                if is_copied:
-                    st.success("✅ Done")
-                elif st.button("✅ Copied", key=f"copied_{i}_{sig['tx_hash']}"):
-                    st.session_state.copy_queue[i]['status'] = 'COPIED'
-                    st.rerun()
+        for display_i, sig in enumerate(display_queue):
+            full_i = st.session_state.copy_queue.index(sig)
+            age_sec = int(time.time() - sig['detected_at'])
+            is_fresh = age_sec < 60
+            is_copied = sig.get('status') == 'COPIED'
+
+            with st.container(border=True):
+                col1, col2, col3, col4 = st.columns([3, 1, 1, 1])
+                with col1:
+                    freshness = "🔴 NEW" if is_fresh else f"⏱️ {age_sec}s ago"
+                    label = "~~" if is_copied else ""
+                    st.markdown(f"**{freshness}** {sig['updown']} {label}`{sig['market'][:60]}`{label}")
+                with col2:
+                    st.metric("Your Shares", sig['your_shares'])
+                with col3:
+                    st.metric("Your Cost", f"${sig['your_cost']:.2f}")
+                with col4:
+                    if is_copied:
+                        st.success("✅ Done")
+                    elif st.button("✅ Copied", key=f"copied_{sig['tx_hash']}"):
+                        st.session_state.copy_queue[full_i]['status'] = 'COPIED'
+                        st.rerun()
+
+        if len(st.session_state.copy_queue) > 5:
+            st.caption(f"Showing 5 of {len(st.session_state.copy_queue)} signals")
+
 
 def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float):
     pos_df = get_open_positions(TRADER)
