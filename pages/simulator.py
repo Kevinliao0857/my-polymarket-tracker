@@ -133,14 +133,15 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float):
 
     if skipped > 0:
         st.markdown("---")
-        skipped_df = pos_df.copy()
-        skipped_df['Your Shares'] = (skipped_df['Shares'].astype(float) / copy_ratio).round(1)
-        skipped_df = skipped_df[skipped_df['Your Shares'] < 5]
-        if not skipped_df.empty:
-            st.dataframe(
-                skipped_df[['Market', 'UP/DOWN', 'Shares', 'Your Shares']],
-                use_container_width=True
-            )
+        with st.expander(f"⏭️ Skipped Positions ({skipped})", expanded=False):
+            skipped_df = pos_df.copy()
+            skipped_df['Your Shares'] = (skipped_df['Shares'].astype(float) / copy_ratio).round(1)
+            skipped_df = skipped_df[skipped_df['Your Shares'] < 5]
+            if not skipped_df.empty:
+                st.dataframe(
+                    skipped_df[['Market', 'UP/DOWN', 'Shares', 'Your Shares']],
+                    use_container_width=True
+                )
 
 
 def render_simulator():
@@ -185,12 +186,13 @@ def render_simulator():
         )
 
     if len(st.session_state.get('sim_pnl_history', [])) > 1:
-        try:
-            hist_df = pd.DataFrame(st.session_state.sim_pnl_history)
-            hist_df['Time'] = hist_df['time'].apply(lambda x: f"{int(x)}m")
-            st.line_chart(hist_df.set_index('Time')['pnl'], height=200)
-        except Exception:
-            pass
+        with st.expander("📈 PnL History", expanded=False):
+            try:
+                hist_df = pd.DataFrame(st.session_state.sim_pnl_history)
+                hist_df['Time'] = hist_df['time'].apply(lambda x: f"{int(x)}m")
+                st.line_chart(hist_df.set_index('Time')['pnl'], height=200)
+            except Exception:
+                pass
 
     sim_cols = ['Market', 'UP/DOWN', 'Your Shares', 'Your Cost', 'Your PnL', 'Status']
     recent_mask = sim_df['age_sec'] <= 300
