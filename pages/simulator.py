@@ -114,7 +114,12 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float):
     simulated_realized_pnl = price_realized if abs(price_realized) >= abs(api_realized) else api_realized
 
     # ✅ Unrealized PnL also reflected in bankroll so it can dip below starting
-    current_bankroll = initial_bankroll + simulated_realized_pnl + total_pnl
+    pnl_baseline = st.session_state.get('pnl_baseline', 0.0)
+    realized_baseline = st.session_state.get('realized_baseline', 0.0)
+    adjusted_pnl = total_pnl - pnl_baseline
+    adjusted_realized = simulated_realized_pnl - realized_baseline
+    current_bankroll = initial_bankroll + adjusted_realized + adjusted_pnl
+
     sim_df = tag_realized_rows(sim_df)
 
     # ✅ DRAWDOWN CIRCUIT BREAKER
@@ -154,8 +159,9 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float):
             st.metric("Final Bankroll", f"${current_bankroll:,.2f}",
                       f"-${drawdown['drawdown_amt']:,.2f} ({drawdown['drawdown_pct']:.1f}%)")
             if st.button("🔄 Reset & Start Fresh"):
-                for key in ['sim_start_time', 'sim_pnl_history', 'drawdown_decision',
-                            'initial_bankroll', 'allocation_pct']:
+                for key in ['sim_start_time', 'sim_pnl_history', 'overexposure_decision',
+                            'initial_bankroll', 'allocation_pct', 'drawdown_decision',
+                            'pnl_baseline', 'realized_baseline']:
                     st.session_state.pop(key, None)
                 st.rerun()
             return  # ← stops all rendering
@@ -170,7 +176,7 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float):
 
     col1, col2, col3, col4, col5 = st.columns(5)
     with col1:
-        st.metric("🏦 Simulated Bankroll", f"${current_bankroll:,.0f}", f"${simulated_realized_pnl:+,.0f}")
+        st.metric("🏦 Simulated Bankroll", f"${current_bankroll:,.0f}", f"${adjusted_realized:+,.0f}")
     with col2:
         usage_pct = (total_cost / current_bankroll * 100) if current_bankroll > 0 else 0
         usage_color = "🟢" if usage_pct <= 50 else "🟡" if usage_pct <= 80 else "🔴"
@@ -217,8 +223,9 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float):
             st.metric("Final Bankroll", f"${current_bankroll:,.2f}",
                       f"-${over_amt:,.2f} over budget")
             if st.button("🔄 Reset & Start Fresh", key="oe_reset"):
-                for key in ['sim_start_time', 'sim_pnl_history', 'overexposure_decision',
-                            'initial_bankroll', 'allocation_pct', 'drawdown_decision']:
+                for key in ['sim_start_time', 'sim_pnl_history', 'drawdown_decision',
+                            'overexposure_decision', 'initial_bankroll', 'allocation_pct',
+                            'pnl_baseline', 'realized_baseline']:
                     st.session_state.pop(key, None)
                 st.rerun()
             return
@@ -452,10 +459,20 @@ def show_simulator():
                 if st.session_state.sim_start_time is None:
                     st.session_state.sim_start_time = time.time()
                     st.session_state.sim_pnl_history = []
+
+                    # ✅ Capture baseline at start so pre-existing PnL is excluded
+                    sim_results = run_position_simulator(pos_df, initial_bankroll, copy_ratio)
+                    st.session_state.pnl_baseline = sim_results['total_pnl']
+                    st.session_state.realized_baseline = calculate_simulated_realized(
+                        sim_results['sim_df'], copy_ratio
+                    )
                 st.rerun()
+                
         with col_btn2:
             if col_btn2.button("🛑 Reset", use_container_width=True):
-                for key in ['sim_start_time', 'sim_pnl_history', 'initial_bankroll', 'allocation_pct', 'drawdown_decision', 'overexposure_decision']:
+                for key in ['sim_start_time', 'sim_pnl_history', 'drawdown_decision',
+                            'overexposure_decision', 'initial_bankroll', 'allocation_pct',
+                            'pnl_baseline', 'realized_baseline']:
                     st.session_state.pop(key, None)
                 st.rerun()
 
