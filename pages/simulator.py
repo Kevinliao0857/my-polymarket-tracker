@@ -216,7 +216,7 @@ def render_simulator():
 
 
 def show_simulator():
-    with st.expander("🤖 Position Simulator", expanded=False):
+    with st.expander("🤖 Position Simulator", expanded=True):
         if 'sim_start_time' not in st.session_state:
             st.session_state.sim_start_time = None
         if 'sim_pnl_history' not in st.session_state:
