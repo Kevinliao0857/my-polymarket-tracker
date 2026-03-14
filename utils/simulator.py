@@ -15,21 +15,25 @@ def run_position_simulator(pos_df: pd.DataFrame, initial_bankroll: float, copy_r
 
     for market, group in market_groups:
         group = group.reset_index(drop=True)
-
+    
         if len(group) == 2:
             up_mask = group['UP/DOWN'].str.contains('UP', na=False)
             down_mask = group['UP/DOWN'].str.contains('DOWN', na=False)
-
+    
             if up_mask.any() and down_mask.any():
+                # ✅ This is a hedge pair — ONLY include if BOTH pass threshold
+                # Never fall through to single logic regardless of outcome
                 up_row = group[up_mask].iloc[0]
                 down_row = group[down_mask].iloc[0]
-
+    
                 if up_row['Your Shares'] >= 5 and down_row['Your Shares'] >= 5:
                     paired_rows.append(up_row.to_dict())
                     paired_rows.append(down_row.to_dict())
-                    hedge_pair_count += 1  # ✅ Count here, not after loop
-                continue
-
+                    hedge_pair_count += 1
+                # ✅ No else — if either fails threshold, skip BOTH silently
+                continue  # ← always skip single logic for hedge markets
+            
+        # Only reaches here for non-hedge markets (len != 2, or no UP/DOWN pair)
         valid_rows = group[group['Your Shares'] >= 5].to_dict('records')
         paired_rows.extend(valid_rows)
 
