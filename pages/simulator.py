@@ -81,7 +81,7 @@ def show_copy_signals(copy_ratio: float, bankroll: float, include_5m: bool = Fal
         if len(st.session_state.copy_queue) > 5:
             st.caption(f"Showing 5 of {len(st.session_state.copy_queue)} signals")
 
-def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float):
+def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float, slippage_pct: float = 1.0):
     pos_df = get_open_positions(TRADER)
     if pos_df.empty:
         st.warning("No LIVE positions to simulate")
@@ -99,9 +99,10 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float):
     track_simulation_pnl(sim_results, initial_bankroll)
 
     sim_df = sim_results['sim_df']
-    total_cost = sim_results['total_cost']
     total_pnl = sim_results['total_pnl']
     skipped = sim_results['skipped']
+    slippage_factor = 1 + (slippage_pct / 100)
+    total_cost = sim_results['total_cost'] * slippage_factor
 
     # Price-threshold realized (positions fully resolved)
     price_realized = calculate_simulated_realized(sim_df, copy_ratio)
@@ -112,6 +113,10 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float):
 
     # ✅ Use whichever has greater magnitude (handles both wins AND losses)
     simulated_realized_pnl = price_realized if abs(price_realized) >= abs(api_realized) else api_realized
+
+    # ✅ Apply Polymarket 2% fee on winning realized PnL only
+    if simulated_realized_pnl > 0:
+        simulated_realized_pnl = simulated_realized_pnl * 0.98
 
     # ✅ Unrealized PnL also reflected in bankroll so it can dip below starting
     pnl_baseline = st.session_state.get('pnl_baseline', 0.0)
@@ -374,7 +379,7 @@ def show_simulator():
         if 'sim_pnl_history' not in st.session_state:
             st.session_state.sim_pnl_history = []
 
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3, col4 = st.columns(4)
         with col1:
             initial_bankroll = st.number_input("💰 Starting Bankroll", value=1000.0, step=100.0)
         with col2:
@@ -387,7 +392,16 @@ def show_simulator():
                 "🛑 Drawdown %", value=10.0, min_value=1.0, max_value=50.0, step=1.0,
                 help="Pause sim if bankroll drops by this % from start"
             )
+        
         st.session_state.drawdown_threshold = drawdown_threshold
+        
+        with col4:
+            slippage_pct = st.slider(
+                "📉 Slippage %", min_value=0.0, max_value=5.0, value=1.0, step=0.5,
+                help="Simulates price movement against you on entry. 0% = perfect fill."
+            )
+        st.session_state.slippage_pct = slippage_pct            
+
 
         copy_ratio = 100 / allocation_pct
 
@@ -481,6 +495,7 @@ def show_simulator():
             render_real_bankroll_simulator(
                 st.session_state.get('initial_bankroll', 1000.0),
                 100 / st.session_state.get('allocation_pct', 10.0),
+                st.session_state.get('slippage_pct', 1.0),
             )
             st.markdown("---")
             show_copy_signals(
