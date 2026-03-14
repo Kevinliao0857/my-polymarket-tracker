@@ -80,13 +80,19 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float):
     total_pnl = sim_results['total_pnl']
     skipped = sim_results['skipped']
 
-    simulated_realized_pnl = calculate_simulated_realized(sim_df, copy_ratio)
+    # Price-threshold realized (positions fully resolved)
+    price_realized = calculate_simulated_realized(sim_df, copy_ratio)
+
+    # API settled realized
     closed_data = get_closed_trades_pnl(TRADER)
     api_realized = closed_data['total'] / copy_ratio
-    simulated_realized_pnl = max(simulated_realized_pnl, api_realized)
-    current_bankroll = initial_bankroll + simulated_realized_pnl
-    sim_df = tag_realized_rows(sim_df)
 
+    # ✅ Use whichever has greater magnitude (handles both wins AND losses)
+    simulated_realized_pnl = price_realized if abs(price_realized) >= abs(api_realized) else api_realized
+
+    # ✅ Unrealized PnL also reflected in bankroll so it can dip below starting
+    current_bankroll = initial_bankroll + simulated_realized_pnl + total_pnl
+    sim_df = tag_realized_rows(sim_df)
 
     col1, col2, col3, col4, col5 = st.columns(5)
     with col1:
