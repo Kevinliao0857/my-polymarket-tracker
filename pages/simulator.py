@@ -9,6 +9,29 @@ from utils.copy_trader import get_latest_trader_activity, detect_new_trades, bui
 
 recent_trades = get_recent_trader_trades(300)
 
+def estimate_required_capital(pos_df: pd.DataFrame, copy_ratio: float) -> dict:
+    """
+    Pre-flight check: estimate how much capital is needed before starting sim.
+    Returns estimated cost, max single position, and whether it's safe.
+    """
+    if pos_df.empty:
+        return {'valid': True, 'estimated_cost': 0, 'max_position': 0, 'position_count': 0}
+
+    shares = pos_df['Shares'].astype(float) / copy_ratio
+    avg_prices = pd.to_numeric(pos_df['AvgPrice'], errors='coerce').fillna(0.0)
+    costs = (shares * avg_prices)
+
+    # Filter to only positions that would pass the >=5 share threshold
+    valid_mask = shares >= 5
+    valid_costs = costs[valid_mask]
+
+    return {
+        'estimated_cost':  round(valid_costs.sum(), 2),
+        'max_position':    round(valid_costs.max(), 2) if not valid_costs.empty else 0,
+        'position_count':  int(valid_mask.sum()),
+        'valid':           True
+    }
+
 def show_copy_signals(copy_ratio: float, bankroll: float, include_5m: bool = False):
     """Live copy signal feed — shows new trader buys as actionable cards"""
     raw_trades = get_latest_trader_activity(TRADER, limit=10)
@@ -56,7 +79,6 @@ def show_copy_signals(copy_ratio: float, bankroll: float, include_5m: bool = Fal
 
         if len(st.session_state.copy_queue) > 5:
             st.caption(f"Showing 5 of {len(st.session_state.copy_queue)} signals")
-
 
 def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float):
     pos_df = get_open_positions(TRADER)
@@ -156,7 +178,6 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float):
                     use_container_width=True
                 )
 
-
 def render_simulator():
     saved_bankroll = st.session_state.get('initial_bankroll', 1000.0)
     # ✅ Derive copy_ratio from stored allocation_pct, matching show_simulator()
@@ -227,7 +248,6 @@ def render_simulator():
     )
     st.caption("✅ Green rows = active <5min | Status shows expiry/active")
 
-
 def show_simulator():
     with st.expander("🤖 Position Simulator", expanded=False):
         if 'sim_start_time' not in st.session_state:
@@ -244,6 +264,55 @@ def show_simulator():
                 help="10% = copy 10% of trader's shares (equiv 1:10)"
             )
 
+        copy_ratio = 100 / allocation_pct
+
+        # ✅ PRE-FLIGHT CAPITAL CHECK
+        pos_df = get_open_positions(TRADER)
+        preflight = estimate_required_capital(pos_df, copy_ratio)
+        estimated_cost = preflight['estimated_cost']
+        max_position = preflight['max_position']
+        position_count = preflight['position_count']
+
+        # Safety checks
+        over_bankroll = estimated_cost > initial_bankroll
+        over_50pct = estimated_cost > (initial_bankroll * 0.50)
+        over_80pct = estimated_cost > (initial_bankroll * 0.80)
+
+        # Display pre-flight summary
+        st.markdown("#### 🛡️ Pre-Flight Check")
+        pf_col1, pf_col2, pf_col3 = st.columns(3)
+        with pf_col1:
+            st.metric("📊 Positions to Copy", position_count)
+        with pf_col2:
+            cost_color = "🔴" if over_bankroll else "🟡" if over_80pct else "🟢"
+            st.metric("💸 Estimated Cost", f"{cost_color} ${estimated_cost:,.2f}")
+        with pf_col3:
+            st.metric("📌 Largest Position", f"${max_position:,.2f}")
+
+        # Warnings
+        if over_bankroll:
+            st.error(
+                f"🚫 **Insufficient funds** — estimated cost ${estimated_cost:,.2f} "
+                f"exceeds bankroll ${initial_bankroll:,.2f}. "
+                f"Lower allocation % or increase bankroll."
+            )
+        elif over_80pct:
+            st.warning(
+                f"⚠️ **High exposure** — ${estimated_cost:,.2f} is "
+                f"{estimated_cost/initial_bankroll*100:.0f}% of your bankroll. "
+                f"Consider lowering allocation %."
+            )
+        elif over_50pct:
+            st.warning(
+                f"🟡 **Moderate exposure** — ${estimated_cost:,.2f} uses "
+                f"{estimated_cost/initial_bankroll*100:.0f}% of bankroll."
+            )
+        else:
+            st.success(
+                f"✅ **Safe to run** — ${estimated_cost:,.2f} uses "
+                f"{estimated_cost/initial_bankroll*100:.0f}% of bankroll."
+            )
+
         if st.button("🗑️ CLEAR CACHES", key="nuke_cache"):
             st.cache_data.clear()
             st.rerun()
@@ -251,9 +320,16 @@ def show_simulator():
 
         col_btn1, col_btn2 = st.columns(2)
         with col_btn1:
-            if col_btn1.button("🚀 Start Sim", type="primary", use_container_width=True):
+            # ✅ Disable Start button if over bankroll
+            start_disabled = over_bankroll
+            if col_btn1.button(
+                "🚀 Start Sim",
+                type="primary",
+                use_container_width=True,
+                disabled=start_disabled  
+            ):
                 st.session_state.initial_bankroll = initial_bankroll
-                st.session_state.allocation_pct = allocation_pct  # ✅ Used by both renderers
+                st.session_state.allocation_pct = allocation_pct
                 if st.session_state.sim_start_time is None:
                     st.session_state.sim_start_time = time.time()
                     st.session_state.sim_pnl_history = []
@@ -265,7 +341,7 @@ def show_simulator():
                 st.rerun()
 
         if st.session_state.sim_start_time:
-            include_5m = st.session_state.get('include_5m', False)  # ✅ read toggle
+            include_5m = st.session_state.get('include_5m', False)
             render_real_bankroll_simulator(
                 st.session_state.get('initial_bankroll', 1000.0),
                 100 / st.session_state.get('allocation_pct', 10.0),
@@ -274,6 +350,6 @@ def show_simulator():
             show_copy_signals(
                 copy_ratio=100 / st.session_state.get('allocation_pct', 10.0),
                 bankroll=st.session_state.get('initial_bankroll', 1000.0),
-                include_5m=include_5m,  # ✅ pass through
+                include_5m=include_5m,
             )
 
