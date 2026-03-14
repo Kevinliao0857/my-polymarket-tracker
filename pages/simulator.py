@@ -187,6 +187,24 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float):
     st.caption(f"⏱️ {runtime_min:.1f}min | {allocation_pct:.0f}% alloc | "
                f"🛡️ {sim_results['hedge_pairs']} hedge pairs")
 
+
+    # ✅ MID-SIM OVER-EXPOSURE GUARD
+    if total_cost > current_bankroll:
+        over_amt = total_cost - current_bankroll
+        over_pct = (over_amt / current_bankroll) * 100
+        st.error(
+            f"🚨 **OVER-EXPOSED** — Current positions cost ${total_cost:,.2f} "
+            f"but simulated bankroll is only ${current_bankroll:,.2f}. "
+            f"You are ${over_amt:,.2f} ({over_pct:.0f}%) over budget. "
+            f"Consider lowering allocation % or waiting for positions to resolve."
+        )
+    elif total_cost > current_bankroll * 0.80:
+        st.warning(
+            f"⚠️ **High exposure** — ${total_cost:,.2f} is "
+            f"{total_cost/current_bankroll*100:.0f}% of current bankroll ${current_bankroll:,.2f}."
+        )
+
+
     # Hedge marker
     market_groups = sim_df.groupby('Market')
     hedge_markets = {
@@ -368,7 +386,8 @@ def show_simulator():
         else:
             st.success(
                 f"✅ **Safe to run** — ${estimated_cost:,.2f} uses "
-                f"{estimated_cost/initial_bankroll*100:.0f}% of bankroll."
+                f"{estimated_cost/initial_bankroll*100:.0f}% of bankroll. "
+                f"Note: costs may increase if trader adds positions mid-session."
             )
 
         if st.button("🗑️ CLEAR CACHES", key="nuke_cache"):
