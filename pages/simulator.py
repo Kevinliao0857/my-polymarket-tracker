@@ -192,18 +192,48 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float):
     if total_cost > current_bankroll:
         over_amt = total_cost - current_bankroll
         over_pct = (over_amt / current_bankroll) * 100
-        st.error(
-            f"🚨 **OVER-EXPOSED** — Current positions cost ${total_cost:,.2f} "
-            f"but simulated bankroll is only ${current_bankroll:,.2f}. "
-            f"You are ${over_amt:,.2f} ({over_pct:.0f}%) over budget. "
-            f"Consider lowering allocation % or waiting for positions to resolve."
-        )
+
+        oe_decision = st.session_state.get('overexposure_decision', None)
+
+        if oe_decision is None:
+            st.error(
+                f"🚨 **OVER-EXPOSED** — Current positions cost ${total_cost:,.2f} "
+                f"but simulated bankroll is only ${current_bankroll:,.2f}. "
+                f"You are ${over_amt:,.2f} ({over_pct:.0f}%) over budget."
+            )
+            col_oe1, col_oe2 = st.columns(2)
+            with col_oe1:
+                if st.button("⚠️ Continue Anyway", key="oe_continue", type="secondary", use_container_width=True):
+                    st.session_state.overexposure_decision = 'continue'
+                    st.rerun()
+            with col_oe2:
+                if st.button("🛑 Stop Simulation", key="oe_stop", type="primary", use_container_width=True):
+                    st.session_state.overexposure_decision = 'stop'
+                    st.rerun()
+            return
+
+        elif oe_decision == 'stop':
+            st.error("🛑 Simulation stopped — over-exposure limit reached.")
+            st.metric("Final Bankroll", f"${current_bankroll:,.2f}",
+                      f"-${over_amt:,.2f} over budget")
+            if st.button("🔄 Reset & Start Fresh", key="oe_reset"):
+                for key in ['sim_start_time', 'sim_pnl_history', 'overexposure_decision',
+                            'initial_bankroll', 'allocation_pct', 'drawdown_decision']:
+                    st.session_state.pop(key, None)
+                st.rerun()
+            return
+
+        elif oe_decision == 'continue':
+            st.warning(
+                f"⚠️ Running over-exposed — ${over_amt:,.2f} ({over_pct:.0f}%) "
+                f"over current bankroll of ${current_bankroll:,.2f}."
+            )
+
     elif total_cost > current_bankroll * 0.80:
         st.warning(
             f"⚠️ **High exposure** — ${total_cost:,.2f} is "
             f"{total_cost/current_bankroll*100:.0f}% of current bankroll ${current_bankroll:,.2f}."
         )
-
 
     # Hedge marker
     market_groups = sim_df.groupby('Market')
@@ -413,7 +443,7 @@ def show_simulator():
                 st.rerun()
         with col_btn2:
             if col_btn2.button("🛑 Reset", use_container_width=True):
-                for key in ['sim_start_time', 'sim_pnl_history', 'initial_bankroll', 'allocation_pct', 'drawdown_decision']:
+                for key in ['sim_start_time', 'sim_pnl_history', 'initial_bankroll', 'allocation_pct', 'drawdown_decision', 'overexposure_decision']:
                     st.session_state.pop(key, None)
                 st.rerun()
 
