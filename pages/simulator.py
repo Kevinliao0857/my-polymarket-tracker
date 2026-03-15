@@ -416,7 +416,6 @@ def show_simulator():
         over_80pct = estimated_cost > (initial_bankroll * 0.80)
 
         # Display pre-flight summary
-        # ✅ Only show pre-flight when sim is NOT running
         if not st.session_state.sim_start_time:
             st.markdown("#### 🛡️ Pre-Flight Check")
             pf_col1, pf_col2, pf_col3 = st.columns(3)
@@ -427,31 +426,38 @@ def show_simulator():
                 st.metric("💸 Estimated Cost", f"{cost_color} ${estimated_cost:,.2f}")
             with pf_col3:
                 st.metric("📌 Largest Position", f"${max_position:,.2f}")
-
-        # Warnings
-        if over_bankroll:
-            st.error(
-                f"🚫 **Insufficient funds** — estimated cost ${estimated_cost:,.2f} "
-                f"exceeds bankroll ${initial_bankroll:,.2f}. "
-                f"Lower allocation % or increase bankroll."
-            )
-        elif over_80pct:
-            st.warning(
-                f"⚠️ **High exposure** — ${estimated_cost:,.2f} is "
-                f"{estimated_cost/initial_bankroll*100:.0f}% of your bankroll. "
-                f"Consider lowering allocation %."
-            )
-        elif over_50pct:
-            st.warning(
-                f"🟡 **Moderate exposure** — ${estimated_cost:,.2f} uses "
-                f"{estimated_cost/initial_bankroll*100:.0f}% of bankroll."
-            )
+        
+            # Warnings — inside the if block
+            if over_bankroll:
+                st.error(
+                    f"🚫 **Insufficient funds** — estimated cost ${estimated_cost:,.2f} "
+                    f"exceeds bankroll ${initial_bankroll:,.2f}. "
+                    f"Lower allocation % or increase bankroll."
+                )
+            elif over_80pct:
+                st.warning(
+                    f"⚠️ **High exposure** — ${estimated_cost:,.2f} is "
+                    f"{estimated_cost/initial_bankroll*100:.0f}% of your bankroll. "
+                    f"Consider lowering allocation %."
+                )
+            elif over_50pct:
+                st.warning(
+                    f"🟡 **Moderate exposure** — ${estimated_cost:,.2f} uses "
+                    f"{estimated_cost/initial_bankroll*100:.0f}% of bankroll."
+                )
+            else:
+                st.success(
+                    f"✅ **Safe to run** — ${estimated_cost:,.2f} uses "
+                    f"{estimated_cost/initial_bankroll*100:.0f}% of bankroll. "
+                    f"Note: costs may increase if trader adds positions mid-session."
+                )
+        
         else:
-            st.success(
-                f"✅ **Safe to run** — ${estimated_cost:,.2f} uses "
-                f"{estimated_cost/initial_bankroll*100:.0f}% of bankroll. "
-                f"Note: costs may increase if trader adds positions mid-session."
-            )
+            # ✅ Compact reminder while sim is running
+            st.caption(f"🛡️ Started with {position_count} positions | "
+                       f"Est. cost ${estimated_cost:,.2f} | "
+                       f"Slippage {slippage_pct:.1f}%")
+        
 
         if st.button("🗑️ CLEAR CACHES", key="nuke_cache"):
             st.cache_data.clear()
