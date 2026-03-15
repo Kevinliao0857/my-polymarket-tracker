@@ -164,7 +164,7 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float, s
             if st.button("🔄 Reset & Start Fresh"):
                 for key in ['sim_start_time', 'sim_pnl_history', 'overexposure_decision',
                             'initial_bankroll', 'allocation_pct', 'drawdown_decision',
-                            'pnl_baseline', 'realized_baseline']:
+                            'pnl_baseline', 'realized_baseline', 'seen_tx_hashes']:
                     st.session_state.pop(key, None)
                 st.rerun()
             return  # ← stops all rendering
@@ -228,7 +228,7 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float, s
             if st.button("🔄 Reset & Start Fresh", key="oe_reset"):
                 for key in ['sim_start_time', 'sim_pnl_history', 'drawdown_decision',
                             'overexposure_decision', 'initial_bankroll', 'allocation_pct',
-                            'pnl_baseline', 'realized_baseline']:
+                            'pnl_baseline', 'realized_baseline', 'seen_tx_hashes']:
                     st.session_state.pop(key, None)
                 st.rerun()
             return
@@ -426,7 +426,7 @@ def show_simulator():
                 st.metric("💸 Estimated Cost", f"{cost_color} ${estimated_cost:,.2f}")
             with pf_col3:
                 st.metric("📌 Largest Position", f"${max_position:,.2f}")
-        
+
             # Warnings — inside the if block
             if over_bankroll:
                 st.error(
@@ -451,13 +451,13 @@ def show_simulator():
                     f"{estimated_cost/initial_bankroll*100:.0f}% of bankroll. "
                     f"Note: costs may increase if trader adds positions mid-session."
                 )
-        
+
         else:
             # ✅ Compact reminder while sim is running
             st.caption(f"🛡️ Started with {position_count} positions | "
                        f"Est. cost ${estimated_cost:,.2f} | "
                        f"Slippage {slippage_pct:.1f}%")
-        
+
 
         if st.button("🗑️ CLEAR CACHES", key="nuke_cache"):
             st.cache_data.clear()
@@ -492,7 +492,7 @@ def show_simulator():
             if col_btn2.button("🛑 Reset", use_container_width=True):
                 for key in ['sim_start_time', 'sim_pnl_history', 'drawdown_decision',
                             'overexposure_decision', 'initial_bankroll', 'allocation_pct',
-                            'pnl_baseline', 'realized_baseline']:
+                            'pnl_baseline', 'realized_baseline', 'seen_tx_hashes']:
                     st.session_state.pop(key, None)
                 st.rerun()
 

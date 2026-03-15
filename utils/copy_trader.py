@@ -7,7 +7,7 @@ from .shared import parse_usd
 
 
 @st.cache_data(ttl=5)
-def get_latest_trader_activity(address: str, limit: int = 10) -> list:
+def get_latest_trader_activity(address: str, limit: int = 25) -> list:
     """Poll for the trader's most recent BUY actions"""
     try:
         resp = requests.get(
