@@ -416,15 +416,17 @@ def show_simulator():
         over_80pct = estimated_cost > (initial_bankroll * 0.80)
 
         # Display pre-flight summary
-        st.markdown("#### 🛡️ Pre-Flight Check")
-        pf_col1, pf_col2, pf_col3 = st.columns(3)
-        with pf_col1:
-            st.metric("📊 Positions to Copy", position_count)
-        with pf_col2:
-            cost_color = "🔴" if over_bankroll else "🟡" if over_80pct else "🟢"
-            st.metric("💸 Estimated Cost", f"{cost_color} ${estimated_cost:,.2f}")
-        with pf_col3:
-            st.metric("📌 Largest Position", f"${max_position:,.2f}")
+        # ✅ Only show pre-flight when sim is NOT running
+        if not st.session_state.sim_start_time:
+            st.markdown("#### 🛡️ Pre-Flight Check")
+            pf_col1, pf_col2, pf_col3 = st.columns(3)
+            with pf_col1:
+                st.metric("📊 Positions to Copy", position_count)
+            with pf_col2:
+                cost_color = "🔴" if over_bankroll else "🟡" if over_80pct else "🟢"
+                st.metric("💸 Estimated Cost", f"{cost_color} ${estimated_cost:,.2f}")
+            with pf_col3:
+                st.metric("📌 Largest Position", f"${max_position:,.2f}")
 
         # Warnings
         if over_bankroll:
