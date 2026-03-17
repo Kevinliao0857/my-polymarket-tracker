@@ -121,7 +121,7 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float, s
     realized_baseline = st.session_state.get('realized_baseline', 0.0)
     adjusted_pnl = total_pnl - pnl_baseline
     adjusted_realized = simulated_realized_pnl - realized_baseline
-    current_bankroll = initial_bankroll + adjusted_realized + adjusted_pnl
+    current_bankroll = initial_bankroll + adjusted_realized
 
     sim_df = tag_realized_rows(sim_df)
 
@@ -190,7 +190,8 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float, s
         usage_color = "🟢" if usage_pct <= 50 else "🟡" if usage_pct <= 80 else "🔴"
         st.metric("💼 Capital Used", f"{usage_color}${total_cost:,.0f}", f"{usage_pct:.0f}%")
     with col3:
-        st.metric("📈 Unrealized PnL", f"${total_pnl:+,.0f}")
+        st.metric("📈 Unrealized PnL", f"${adjusted_pnl:+,.0f}",
+              help="Live exposure only — not included in bankroll")
     with col4:
         st.metric("💰 Simulated Realized", f"${simulated_realized_pnl:+,.0f}")
     with col5:
