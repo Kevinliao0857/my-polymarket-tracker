@@ -162,9 +162,14 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float, s
             st.metric("Final Bankroll", f"${current_bankroll:,.2f}",
                       f"-${drawdown['drawdown_amt']:,.2f} ({drawdown['drawdown_pct']:.1f}%)")
             if st.button("🔄 Reset & Start Fresh"):
+                sim_results = run_position_simulator(pos_df, initial_bankroll, copy_ratio)
+                st.session_state.pnl_baseline = sim_results['total_pnl']
+                st.session_state.realized_baseline = calculate_simulated_realized(
+                    sim_results['sim_df'], copy_ratio
+                )
                 for key in ['sim_start_time', 'sim_pnl_history', 'overexposure_decision',
                             'initial_bankroll', 'allocation_pct', 'drawdown_decision',
-                            'pnl_baseline', 'realized_baseline', 'seen_tx_hashes']:
+                            'seen_tx_hashes']:
                     st.session_state.pop(key, None)
                 st.rerun()
             return  # ← stops all rendering
@@ -226,9 +231,14 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float, s
             st.metric("Final Bankroll", f"${current_bankroll:,.2f}",
                       f"-${over_amt:,.2f} over budget")
             if st.button("🔄 Reset & Start Fresh", key="oe_reset"):
+                sim_results = run_position_simulator(pos_df, initial_bankroll, copy_ratio)
+                st.session_state.pnl_baseline = sim_results['total_pnl']
+                st.session_state.realized_baseline = calculate_simulated_realized(
+                    sim_results['sim_df'], copy_ratio
+                )
                 for key in ['sim_start_time', 'sim_pnl_history', 'drawdown_decision',
                             'overexposure_decision', 'initial_bankroll', 'allocation_pct',
-                            'pnl_baseline', 'realized_baseline', 'seen_tx_hashes']:
+                            'seen_tx_hashes']:
                     st.session_state.pop(key, None)
                 st.rerun()
             return
@@ -490,11 +500,18 @@ def show_simulator():
                 
         with col_btn2:
             if col_btn2.button("🛑 Reset", use_container_width=True):
+                # ✅ Recapture baselines so PnL shows 0 on next render
+                sim_results = run_position_simulator(pos_df, initial_bankroll, copy_ratio)
+                st.session_state.pnl_baseline = sim_results['total_pnl']
+                st.session_state.realized_baseline = calculate_simulated_realized(
+                    sim_results['sim_df'], copy_ratio
+                )
                 for key in ['sim_start_time', 'sim_pnl_history', 'drawdown_decision',
                             'overexposure_decision', 'initial_bankroll', 'allocation_pct',
-                            'pnl_baseline', 'realized_baseline', 'seen_tx_hashes']:
+                            'seen_tx_hashes']:  # ✅ pnl_baseline & realized_baseline removed from this list
                     st.session_state.pop(key, None)
                 st.rerun()
+
 
         if st.session_state.sim_start_time:
             include_5m = st.session_state.get('include_5m', False)
