@@ -1,4 +1,5 @@
 import re
+import pandas as pd
 from typing import Dict, Any
 from datetime import datetime, timedelta
 from .config import TICKERS, FULL_NAMES, EST  # ✅ Added EST
@@ -79,8 +80,6 @@ def _parse_time_range_minutes(title: str) -> int | None:
 
     return duration
 
-
-
 def extract_time_range_minutes(title: str) -> int | None:
     """Public API: returns window duration in minutes, or None."""
     return _parse_time_range_minutes(title)
@@ -90,3 +89,8 @@ def is_5m_market(title: str, cutoff: int = 5) -> bool:
     """True if the market's time window is <= cutoff minutes (default 5)."""
     duration = _parse_time_range_minutes(title or "")
     return duration is not None and duration <= cutoff
+
+def filter_5m_markets(pos_df: pd.DataFrame, cutoff: int = 5) -> pd.DataFrame:
+    """Remove markets with a 5-minute or less time window."""
+    mask = pos_df['Market'].apply(lambda title: is_5m_market(str(title), cutoff=cutoff))
+    return pos_df[~mask]
