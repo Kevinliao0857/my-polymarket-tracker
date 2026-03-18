@@ -7,6 +7,7 @@ from utils.simulator import run_position_simulator, track_simulation_pnl, \
     calculate_simulated_realized, tag_realized_rows, check_drawdown
 from utils.websocket import get_recent_trader_trades
 from utils.copy_trader import get_latest_trader_activity, detect_new_trades, build_copy_signal
+from utils.filters import filter_5m_markets
 
 recent_trades = get_recent_trader_trades(300)
 
@@ -100,10 +101,7 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float, s
     # ✅ Filter out 5m markets if toggle is off
     include_5m = st.session_state.get('include_5m', False)
     if not include_5m:
-        five_min_mask = pos_df['Market'].str.contains(
-            r'\b5[- ]?m(in)?\b', case=False, regex=True, na=False
-        )
-        pos_df = pos_df[~five_min_mask]
+        pos_df = filter_5m_markets(pos_df)
 
     if pos_df.empty:
         st.warning("No LIVE positions to simulate (all filtered as 5m markets)")
@@ -447,6 +445,9 @@ def show_simulator():
 
         # ✅ PRE-FLIGHT CAPITAL CHECK
         pos_df = get_open_positions(TRADER)
+        include_5m = st.session_state.get('include_5m', False)
+        if not include_5m:
+            pos_df = filter_5m_markets(pos_df)
         preflight = estimate_required_capital(pos_df, copy_ratio)
         estimated_cost = preflight['estimated_cost']
         max_position = preflight['max_position']
