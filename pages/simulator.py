@@ -416,7 +416,7 @@ def show_simulator():
             )
         with col3:
             drawdown_threshold = st.number_input(
-                "🛑 Drawdown %", value=10.0, min_value=1.0, max_value=50.0, step=1.0,
+                "🛑 Drawdown %", value=25.0, min_value=1.0, max_value=50.0, step=1.0,
                 help="Pause sim if bankroll drops by this % from start"
             )
         
