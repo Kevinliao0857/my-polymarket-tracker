@@ -33,9 +33,12 @@ def run_position_simulator(pos_df: pd.DataFrame, initial_bankroll: float, copy_r
                 # ✅ No else — if either fails threshold, skip BOTH silently
                 continue  # ← always skip single logic for hedge markets
 
-        # Only reaches here for non-hedge markets (len != 2, or no UP/DOWN pair)
-        valid_rows = group[group['Your Shares'] >= 5].to_dict('records')
-        paired_rows.extend(valid_rows)
+        # Only reaches here for non-hedge markets (len != 2, or no UP/DOWN pair) OLD one that lets singular unhedge bets pass
+        # valid_rows = group[group['Your Shares'] >= 5].to_dict('records')
+        # paired_rows.extend(valid_rows)
+
+        # NEW Only reaches here for non-hedge markets — skip all unhedged single positions
+        pass
 
     if not paired_rows:
         return {'valid': False, 'message': "No valid positions (hedge/single)"}
