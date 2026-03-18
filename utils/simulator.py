@@ -11,6 +11,7 @@ def run_position_simulator(pos_df: pd.DataFrame, initial_bankroll: float, copy_r
 
     market_groups = sim_df.groupby('Market')
     paired_rows = []
+    skipped_rows = []  # ✅ NEW
     hedge_pair_count = 0
 
     for market, group in market_groups:
@@ -21,8 +22,6 @@ def run_position_simulator(pos_df: pd.DataFrame, initial_bankroll: float, copy_r
             down_mask = group['UP/DOWN'].str.contains('DOWN', na=False)
 
             if up_mask.any() and down_mask.any():
-                # ✅ This is a hedge pair — ONLY include if BOTH pass threshold
-                # Never fall through to single logic regardless of outcome
                 up_row = group[up_mask].iloc[0]
                 down_row = group[down_mask].iloc[0]
 
@@ -30,22 +29,25 @@ def run_position_simulator(pos_df: pd.DataFrame, initial_bankroll: float, copy_r
                     paired_rows.append(up_row.to_dict())
                     paired_rows.append(down_row.to_dict())
                     hedge_pair_count += 1
-                # ✅ No else — if either fails threshold, skip BOTH silently
-                continue  # ← always skip single logic for hedge markets
+                else:
+                    # ✅ Hedge pair exists but below threshold
+                    for _, row in group.iterrows():
+                        r = row.to_dict()
+                        r['Skip Reason'] = '⚖️ Hedge below threshold'
+                        skipped_rows.append(r)
+                continue
 
-        # Only reaches here for non-hedge markets (len != 2, or no UP/DOWN pair) OLD one that lets singular unhedge bets pass
-        # valid_rows = group[group['Your Shares'] >= 5].to_dict('records')
-        # paired_rows.extend(valid_rows)
-
-        # NEW Only reaches here for non-hedge markets — skip all unhedged single positions
-        pass
+        # ✅ Unhedged single position
+        for _, row in group.iterrows():
+            r = row.to_dict()
+            r['Skip Reason'] = '🚫 Unhedged'
+            skipped_rows.append(r)
 
     if not paired_rows:
         return {'valid': False, 'message': "No valid positions (hedge/single)"}
 
     sim_df = pd.DataFrame(paired_rows).reset_index(drop=True)
 
-    # Ensure age_sec exists to prevent KeyError in page renderers
     if 'age_sec' not in sim_df.columns:
         sim_df['age_sec'] = 9999
 
@@ -67,14 +69,17 @@ def run_position_simulator(pos_df: pd.DataFrame, initial_bankroll: float, copy_r
     total_cost = sim_df['Your Cost'].sum().round(2)
     total_pnl = sim_df['Your PnL'].sum().round(2)
 
+    skipped_df = pd.DataFrame(skipped_rows) if skipped_rows else pd.DataFrame()  # ✅ NEW
+
     return {
-        'valid': True,
-        'sim_df': sim_df,
-        'total_cost': total_cost,
-        'total_pnl': total_pnl,
-        'positions': len(sim_df),
-        'skipped': len(pos_df) - len(sim_df),
-        'hedge_pairs': hedge_pair_count,  # ✅ Fixed
+        'valid':       True,
+        'sim_df':      sim_df,
+        'total_cost':  total_cost,
+        'total_pnl':   total_pnl,
+        'positions':   len(sim_df),
+        'skipped':     len(skipped_rows),   # ✅ CHANGED — was len(pos_df) - len(sim_df)
+        'skipped_df':  skipped_df,          # ✅ NEW
+        'hedge_pairs': hedge_pair_count,
     }
 
 def track_simulation_pnl(sim_results: Dict, initial_bankroll: float) -> None:

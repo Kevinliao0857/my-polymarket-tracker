@@ -339,12 +339,11 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float, s
     if skipped > 0:
         st.markdown("---")
         with st.expander(f"⏭️ Skipped Positions ({skipped})", expanded=False):
-            skipped_df = pos_df.copy()
-            skipped_df['Your Shares'] = (skipped_df['Shares'].astype(float) / copy_ratio).round(1)
-            skipped_df = skipped_df[skipped_df['Your Shares'] < 5]
+            skipped_df = sim_results['skipped_df']   # ✅ Use pre-built df
             if not skipped_df.empty:
+                skipped_df['Your Shares'] = (skipped_df['Shares'].astype(float) / copy_ratio).round(1)
                 st.dataframe(
-                    skipped_df[['Market', 'UP/DOWN', 'Shares', 'Your Shares']],
+                    skipped_df[['Market', 'UP/DOWN', 'Shares', 'Your Shares', 'Skip Reason']],
                     use_container_width=True
                 )
 
