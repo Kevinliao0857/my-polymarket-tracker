@@ -41,9 +41,13 @@ closed_pnl = get_closed_trades_pnl(TRADER)
 
 col1, col2, col3 = st.columns(3)
 with col1:
-    pnl_color = "🟢" if pnl_data['total_pnl'] >= 0 else "🔴"
-    st.metric("Crypto P&L", f"{pnl_color}${abs(pnl_data['total_pnl']):,.0f}",
-              delta=pnl_data['total_pnl'])
+    pnl_val = pnl_data['total_pnl']
+    pnl_color = "🟢" if pnl_val >= 0 else "🔴"
+    st.metric(
+        "Crypto P&L",
+        f"{pnl_color}${pnl_val:+,.2f}",
+        delta=f"{pnl_val:+,.2f}"
+    )
 with col2:
     st.metric("Crypto Positions", pnl_data['crypto_count'])
 with col3:
