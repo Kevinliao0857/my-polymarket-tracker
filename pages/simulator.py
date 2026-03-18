@@ -97,7 +97,18 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float, s
     if pos_df.empty:
         st.warning("No LIVE positions to simulate")
         return
+    # ✅ Filter out 5m markets if toggle is off
+    include_5m = st.session_state.get('include_5m', False)
+    if not include_5m:
+        five_min_mask = pos_df['Market'].str.contains(
+            r'\b5[- ]?m(in)?\b', case=False, regex=True, na=False
+        )
+        pos_df = pos_df[~five_min_mask]
 
+    if pos_df.empty:
+        st.warning("No LIVE positions to simulate (all filtered as 5m markets)")
+        return
+    
     if 'AvgPrice' not in pos_df.columns or 'CurPrice' not in pos_df.columns:
         st.error(f"❌ Missing price columns. Got: {list(pos_df.columns)}")
         return
