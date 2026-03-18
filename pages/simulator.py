@@ -146,11 +146,12 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float, s
     sim_df = tag_realized_rows(sim_df)
     sim_df['Avg Price'] = pd.to_numeric(sim_df['AvgPrice'], errors='coerce').round(4)
     sim_df['Cur Price'] = pd.to_numeric(sim_df['CurPrice'], errors='coerce').round(4)
+    expired_mask = sim_df['Status'].str.contains('expired', case=False, na=False)
     sim_df['Slip %'] = sim_df.apply(
-        lambda row: round(((row['Cur Price'] - row['Avg Price']) / row['Avg Price']) * 100, 2)
-        if row['Status'] != 'EXPIRED' else None,
+        lambda row: round(((row['Cur Price'] - row['Avg Price']) / row['Avg Price']) * 100, 2),
         axis=1
     )
+    sim_df.loc[expired_mask, 'Slip %'] = None
 
     # ✅ DRAWDOWN CIRCUIT BREAKER
     drawdown_threshold = st.session_state.get('drawdown_threshold', 10.0)
