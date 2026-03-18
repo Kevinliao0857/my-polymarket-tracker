@@ -191,3 +191,17 @@ def check_drawdown(current_bankroll: float, initial_bankroll: float, threshold_p
         'drawdown_pct': round(drawdown_pct, 2),
         'drawdown_amt': round(drawdown_amt, 2),
     }
+
+def filter_baseline_positions(pos_df: pd.DataFrame, baseline_keys: set) -> pd.DataFrame:
+    """
+    Only keep positions that were present at sim start (baseline_keys)
+    or were added after start (new positions opened mid-session).
+    Filters out positions that vanished due to trader withdrawals.
+    """
+    if not baseline_keys:
+        return pos_df
+
+    current_keys = set(pos_df['Market'] + '|' + pos_df['UP/DOWN'])
+    valid_keys = baseline_keys | current_keys
+    key_series = pos_df['Market'] + '|' + pos_df['UP/DOWN']
+    return pos_df[key_series.isin(valid_keys)]

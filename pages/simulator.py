@@ -4,7 +4,8 @@ import pandas as pd
 from utils.config import TRADER
 from utils.api import get_open_positions, get_closed_trades_pnl
 from utils.simulator import run_position_simulator, track_simulation_pnl, \
-    calculate_simulated_realized, tag_realized_rows, check_drawdown
+    calculate_simulated_realized, tag_realized_rows, check_drawdown, \
+    filter_baseline_positions
 from utils.websocket import get_recent_trader_trades
 from utils.copy_trader import get_latest_trader_activity, detect_new_trades, build_copy_signal
 from utils.filters import filter_5m_markets
@@ -98,13 +99,17 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float, s
     if pos_df.empty:
         st.warning("No LIVE positions to simulate")
         return
+    
+    baseline_keys = st.session_state.get('baseline_position_keys', set())
+    pos_df = filter_baseline_positions(pos_df, baseline_keys)
+
     # ✅ Filter out 5m markets if toggle is off
     include_5m = st.session_state.get('include_5m', False)
     if not include_5m:
         pos_df = filter_5m_markets(pos_df)
 
     if pos_df.empty:
-        st.warning("No LIVE positions to simulate (all filtered as 5m markets)")
+        st.warning("No LIVE positions to simulate (all positions filtered)")
         return
     
     if 'AvgPrice' not in pos_df.columns or 'CurPrice' not in pos_df.columns:
@@ -195,12 +200,15 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float, s
                 st.session_state.realized_baseline = calculate_simulated_realized(
                     sim_results['sim_df'], copy_ratio
                 )
+                st.session_state.baseline_position_keys = set(
+                    pos_df['Market'] + '|' + pos_df['UP/DOWN']
+                )
                 for key in ['sim_start_time', 'sim_pnl_history', 'overexposure_decision',
                             'initial_bankroll', 'allocation_pct', 'drawdown_decision',
-                            'seen_tx_hashes']:
+                            'seen_tx_hashes', 'baseline_position_keys']:
                     st.session_state.pop(key, None)
                 st.rerun()
-            return  # ← stops all rendering
+            return
 
         elif dd_decision == 'continue':
             # Show a persistent but non-blocking warning
@@ -265,9 +273,12 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float, s
                 st.session_state.realized_baseline = calculate_simulated_realized(
                     sim_results['sim_df'], copy_ratio
                 )
+                st.session_state.baseline_position_keys = set(
+                    pos_df['Market'] + '|' + pos_df['UP/DOWN']
+                )
                 for key in ['sim_start_time', 'sim_pnl_history', 'drawdown_decision',
                             'overexposure_decision', 'initial_bankroll', 'allocation_pct',
-                            'seen_tx_hashes']:
+                            'seen_tx_hashes', 'baseline_position_keys']:
                     st.session_state.pop(key, None)
                 st.rerun()
             return
@@ -530,6 +541,9 @@ def show_simulator():
                     st.session_state.realized_baseline = calculate_simulated_realized(
                         sim_results['sim_df'], copy_ratio
                     )
+                    st.session_state.baseline_position_keys = set(
+                        pos_df['Market'] + '|' + pos_df['UP/DOWN']
+                    )
                 st.rerun()
                 
         with col_btn2:
@@ -542,7 +556,7 @@ def show_simulator():
                 )
                 for key in ['sim_start_time', 'sim_pnl_history', 'drawdown_decision',
                             'overexposure_decision', 'initial_bankroll', 'allocation_pct',
-                            'seen_tx_hashes']:  # ✅ pnl_baseline & realized_baseline removed from this list
+                            'seen_tx_hashes', 'baseline_position_keys']:  # ✅ pnl_baseline & realized_baseline removed from this list
                     st.session_state.pop(key, None)
                 st.rerun()
 
