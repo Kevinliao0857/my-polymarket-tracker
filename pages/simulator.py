@@ -124,6 +124,11 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float, s
     current_bankroll = initial_bankroll + adjusted_realized
 
     sim_df = tag_realized_rows(sim_df)
+    sim_df['Avg Price'] = pd.to_numeric(sim_df['AvgPrice'], errors='coerce').round(4)
+    sim_df['Cur Price'] = pd.to_numeric(sim_df['CurPrice'], errors='coerce').round(4)
+    sim_df['Slip %'] = (
+        ((sim_df['Cur Price'] - sim_df['Avg Price']) / sim_df['Avg Price']) * 100
+    ).round(2)
 
     # ✅ DRAWDOWN CIRCUIT BREAKER
     drawdown_threshold = st.session_state.get('drawdown_threshold', 10.0)
@@ -282,7 +287,9 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float, s
                 st.line_chart(hist_df.set_index('Time')['pnl'], height=200)
 
 
-    sim_cols = ['Market', 'UP/DOWN', 'Status', 'Your Shares', 'Your Cost', 'Your PnL', 'Realized?', 'Hedge?']
+    sim_cols = ['Market', 'UP/DOWN', 'Status', 'Your Shares', 'Your Cost',
+            'Avg Price', 'Cur Price', 'Slip %',
+            'Your PnL', 'Realized?', 'Hedge?']
     recent_mask = sim_df['age_sec'] <= 300
 
     def highlight_recent(row):
