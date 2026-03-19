@@ -244,7 +244,7 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float, s
     with col3:
         st.metric("📈 Unrealized PnL", f"${scaled_unrealized:+,.0f}", round(adjusted_pnl, 2), help="Live exposure only — not included in bankroll")
     with col4:
-        st.metric("💰 Simulated Realized", f"${scaled_realized:+,.0f}", round(simulated_realized_pnl / copy_ratio, 2))
+        st.metric("💰 Simulated Realized", f"${scaled_realized:+,.0f}", round(closed_data['total'], 2))
     with col5:
         st.metric("📊 Simulated", f"{len(sim_df)}/{len(sim_df) + skipped}")
 
@@ -483,7 +483,7 @@ def show_simulator():
 
         if auto_ratio:
             allocation_pct = safe['alloc_pct']
-            binding_label = "5-share floor" if safe['binding'] == 'threshold' else "exposure target"
+            binding_label = "exposure target"
             st.info(
                 f"🤖 Auto Ratio: **{safe['alloc_pct']}%** (1:{safe['ratio']:.0f}) — "
                 f"Est. cost **${safe['est_cost']:,.0f}** ({safe['exposure_pct']}% of bankroll) — "
