@@ -316,8 +316,10 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float, s
 
             col_chart1, col_chart2 = st.columns(2)
             with col_chart1:
+                st.caption("🏦 Simulated Bankroll Over Time")
                 st.line_chart(hist_df.set_index('Time')['bankroll'], height=200)
             with col_chart2:
+                st.caption("📈 Unrealized PnL Over Time")
                 st.line_chart(hist_df.set_index('Time')['pnl'], height=200)
 
 
