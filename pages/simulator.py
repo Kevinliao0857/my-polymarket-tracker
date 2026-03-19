@@ -436,7 +436,9 @@ def show_simulator():
         if 'sim_pnl_history' not in st.session_state:
             st.session_state.sim_pnl_history = []
 
-        col1, col2, col3, col4, col5 = st.columns(5)
+        auto_ratio = st.toggle("🤖 Auto Ratio", value=True, help="Auto-calculate safest ratio based on bankroll and positions")
+
+        col1, col2, col3, col4 = st.columns(4)
         with col1:
             initial_bankroll = st.number_input("💰 Starting Bankroll", value=1000.0, step=100.0)
         with col2:
@@ -449,13 +451,11 @@ def show_simulator():
                 allocation_pct_manual = None
                 st.empty()
         with col3:
-            auto_ratio = st.toggle("🤖 Auto Ratio", value=True, help="Auto-calculate safest ratio based on bankroll and positions")
-        with col4:
             drawdown_threshold = st.number_input(
                 "🛑 Drawdown %", value=25.0, min_value=1.0, max_value=50.0, step=1.0,
                 help="Pause sim if bankroll drops by this % from start"
             )
-        with col5:
+        with col4:
             slippage_pct = st.slider(
                 "📉 Slippage %", min_value=0.0, max_value=5.0, value=1.0, step=0.5,
                 help="Simulates price movement against you on entry."
