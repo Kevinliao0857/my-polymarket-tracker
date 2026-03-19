@@ -244,7 +244,8 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float, s
     with col3:
         st.metric("📈 Unrealized PnL", f"${scaled_unrealized:+,.0f}", round(adjusted_pnl, 2), help="Live exposure only — not included in bankroll")
     with col4:
-        st.metric("💰 Simulated Realized", f"${scaled_realized:+,.0f}", round(closed_data['total'], 2))
+        raw_realized_display = simulated_realized_pnl * copy_ratio
+        st.metric("💰 Simulated Realized", f"${scaled_realized:+,.0f}", round(raw_realized_display, 2))
     with col5:
         st.metric("📊 Simulated", f"{len(sim_df)}/{len(sim_df) + skipped}")
 
