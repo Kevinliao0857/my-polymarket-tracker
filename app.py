@@ -66,7 +66,7 @@ show_websocket_status()
 st.sidebar.markdown("---")
 
 if 'include_5m' not in st.session_state:
-    st.session_state.include_5m = False
+    st.session_state.include_5m = True
 
 st.sidebar.checkbox(
     "🔄 Include 5-minute markets",
