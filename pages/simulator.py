@@ -219,7 +219,7 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float, s
 
     col1, col2, col3, col4, col5 = st.columns(5)
     with col1:
-        st.metric("🏦 Simulated Bankroll", f"${current_bankroll:,.0f}", f"${adjusted_realized:+,.0f}",delta_color="inverse")
+        st.metric("🏦 Simulated Bankroll", f"${current_bankroll:,.0f}", adjusted_realized, delta_color="inverse")
     with col2:
         usage_pct = (total_cost / current_bankroll * 100) if current_bankroll > 0 else 0
         usage_color = "🟢" if usage_pct <= 50 else "🟡" if usage_pct <= 80 else "🔴"
