@@ -146,6 +146,7 @@ def tag_realized_rows(sim_df: pd.DataFrame) -> pd.DataFrame:
     sim_df.loc[cur_price <= 0.05, 'Realized?'] = '❌ LOSS'
     return sim_df
 
+
 def check_drawdown(current_bankroll: float, initial_bankroll: float, threshold_pct: float = 10.0) -> dict:
     """
     Check if bankroll has dropped below drawdown threshold.
@@ -164,18 +165,10 @@ def check_drawdown(current_bankroll: float, initial_bankroll: float, threshold_p
     }
 
 def filter_baseline_positions(pos_df: pd.DataFrame, baseline_keys: set) -> pd.DataFrame:
-    """
-    Only keep positions that were present at sim start (baseline_keys)
-    or were added after start (new positions opened mid-session).
-    Filters out positions that vanished due to trader withdrawals.
-    """
     if not baseline_keys:
         return pos_df
-
-    current_keys = set(pos_df['Market'] + '|' + pos_df['UP/DOWN'])
-    valid_keys = baseline_keys | current_keys
     key_series = pos_df['Market'] + '|' + pos_df['UP/DOWN']
-    return pos_df[key_series.isin(valid_keys)]
+    return pos_df[key_series.isin(baseline_keys)]
 
 def calc_safe_ratio(pos_df: pd.DataFrame, bankroll: float, target_exposure: float = 0.80) -> dict:
     """

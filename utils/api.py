@@ -8,6 +8,6 @@ from .copy_trader import get_latest_trader_activity, detect_new_trades, build_co
 __all__ = [
     'track_0x8dxd', 'get_latest_bets',
     'get_profile_name', 'get_trader_pnl',
-    'get_open_positions', 'get_closed_trades_pnl',
+    'get_open_positions',
     'get_latest_trader_activity', 'detect_new_trades', 'build_copy_signal',
 ]
