@@ -233,18 +233,19 @@ def calc_safe_ratio(pos_df: pd.DataFrame, bankroll: float, target_exposure: floa
 
     # Constraint 2: 5-share floor — find smallest hedge pair
     market_groups = pos_df.groupby('Market')
-    min_hedge_shares = float('inf')
+    hedge_pair_mins = []
     for market, group in market_groups:
         up = group['UP/DOWN'].str.contains('UP', na=False).any()
         down = group['UP/DOWN'].str.contains('DOWN', na=False).any()
         if up and down and len(group) == 2:
             pair_min = group['Shares'].astype(float).min()
-            min_hedge_shares = min(min_hedge_shares, pair_min)
+            hedge_pair_mins.append(pair_min)
 
-    if min_hedge_shares == float('inf'):
+    if not hedge_pair_mins:
         ratio_from_threshold = ratio_from_exposure
     else:
-        ratio_from_threshold = min_hedge_shares / 5
+        median_shares = sorted(hedge_pair_mins)[len(hedge_pair_mins) // 2]
+        ratio_from_threshold = median_shares / 5
 
     # Binding constraint is whichever is MORE restrictive (higher ratio)
     safe_ratio = max(ratio_from_exposure, ratio_from_threshold)
