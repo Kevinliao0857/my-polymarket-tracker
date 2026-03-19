@@ -142,7 +142,7 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float, s
     adjusted_realized = simulated_realized_pnl - realized_baseline
 
     # Bankroll moves only on realized PnL — unrealized is shown separately
-    current_bankroll = initial_bankroll + (adjusted_realized / copy_ratio)
+    current_bankroll = initial_bankroll + (adjusted_realized / copy_ratio) + (adjusted_pnl / copy_ratio)
 
     track_simulation_pnl(sim_results, initial_bankroll, current_bankroll)
 
@@ -219,7 +219,8 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float, s
                   help="Live exposure only — not included in bankroll")
     with col4:
         scaled_realized_headline = simulated_realized_pnl / copy_ratio
-        st.metric("💰 Simulated Realized", f"${scaled_realized_headline:+,.0f}", round(adjusted_realized / copy_ratio, 2))
+        realized_delta = (simulated_realized_pnl - realized_baseline) / copy_ratio
+        st.metric("💰 Simulated Realized", f"${scaled_realized_headline:+,.0f}", round(realized_delta, 2))
     with col5:
         st.metric("📊 Simulated", f"{len(sim_df)}/{len(sim_df) + skipped}")
 
