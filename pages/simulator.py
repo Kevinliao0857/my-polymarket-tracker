@@ -430,17 +430,22 @@ def show_simulator():
         if 'sim_pnl_history' not in st.session_state:
             st.session_state.sim_pnl_history = []
 
-        col1, col2, col3, col4 = st.columns(4)
+        col1, col2, col3, col4, col5 = st.columns(5)
         with col1:
             initial_bankroll = st.number_input("💰 Starting Bankroll", value=1000.0, step=100.0)
         with col2:
-            auto_ratio = st.toggle("🤖 Auto Ratio", value=False, help="Auto-calculate safest ratio based on bankroll and positions")
+            allocation_pct_manual = st.number_input(
+                "⚖️ Allocation %", value=10.0, min_value=1.0, max_value=100.0, step=1.0,
+                help="10% = copy 10% of trader's shares (equiv 1:10)"
+            )
         with col3:
+            auto_ratio = st.toggle("🤖 Auto Ratio", value=False, help="Auto-calculate safest ratio based on bankroll and positions")
+        with col4:
             drawdown_threshold = st.number_input(
                 "🛑 Drawdown %", value=25.0, min_value=1.0, max_value=50.0, step=1.0,
                 help="Pause sim if bankroll drops by this % from start"
             )
-        with col4:
+        with col5:
             slippage_pct = st.slider(
                 "📉 Slippage %", min_value=0.0, max_value=5.0, value=1.0, step=0.5,
                 help="Simulates price movement against you on entry."
@@ -454,7 +459,6 @@ def show_simulator():
         if not include_5m:
             pos_df = filter_5m_markets(pos_df)
 
-        # ✅ Auto vs Manual ratio
         safe = calc_safe_ratio(pos_df, initial_bankroll)
 
         if auto_ratio:
@@ -466,10 +470,7 @@ def show_simulator():
                 f"Bound by **{binding_label}**"
             )
         else:
-            allocation_pct = st.number_input(
-                "⚖️ Allocation %", value=10.0, min_value=1.0, max_value=100.0, step=1.0,
-                help="10% = copy 10% of trader's shares (equiv 1:10)"
-            )
+            allocation_pct = allocation_pct_manual
             st.caption(
                 f"💡 Auto would suggest: **{safe['alloc_pct']}%** (1:{safe['ratio']:.0f}) — "
                 f"Est. cost ${safe['est_cost']:,.0f} ({safe['exposure_pct']}% exposure) — "
