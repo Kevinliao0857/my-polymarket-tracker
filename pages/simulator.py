@@ -230,7 +230,13 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float, s
     with col2:
         usage_pct = (total_cost / current_bankroll * 100) if current_bankroll > 0 else 0
         usage_color = "🟢" if usage_pct <= 50 else "🟡" if usage_pct <= 80 else "🔴"
-        st.metric("💼 Capital Used", f"{usage_color}${total_cost:,.0f}", f"{usage_pct:.0f}%")
+        
+        prev_ratio = st.session_state.get("prev_copy_ratio", copy_ratio)
+        ratio_delta = copy_ratio - prev_ratio
+        ratio_str = f"⚖️ {copy_ratio:.4f} ({ratio_delta:+.4f})" if ratio_delta != 0 else f"⚖️ {copy_ratio:.4f}"
+        st.session_state["prev_copy_ratio"] = copy_ratio
+        
+        st.metric("💼 Capital Used", f"{usage_color}${total_cost:,.0f}", f"↑ {usage_pct:.0f}%  |  {ratio_str}")
     with col3:
         st.metric("📈 Unrealized PnL", f"${adjusted_pnl:+,.0f}",
               help="Live exposure only — not included in bankroll")
