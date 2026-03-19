@@ -121,7 +121,7 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float, s
         st.error(sim_results['message'])
         return
 
-    track_simulation_pnl(sim_results, initial_bankroll)
+    track_simulation_pnl(sim_results, initial_bankroll, current_bankroll)
 
     sim_df = sim_results['sim_df']
     total_pnl = sim_results['total_pnl']

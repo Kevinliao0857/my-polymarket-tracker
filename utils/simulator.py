@@ -82,14 +82,14 @@ def run_position_simulator(pos_df: pd.DataFrame, initial_bankroll: float, copy_r
         'hedge_pairs': hedge_pair_count,
     }
 
-def track_simulation_pnl(sim_results: Dict, initial_bankroll: float) -> None:
+def track_simulation_pnl(sim_results: Dict, initial_bankroll: float, current_bankroll: float = None) -> None:
     """Track bankroll/PnL history snapshots over session runtime"""
     if not st.session_state.get('sim_start_time'):
         return
 
     runtime_min = (time.time() - st.session_state.sim_start_time) / 60
-    # ✅ Now passes sim_df (which has 'Your PnL') instead of raw pos_df
-    current_bankroll = get_realized_bankroll(initial_bankroll, sim_results['sim_df'])
+    if current_bankroll is None:
+        current_bankroll = get_realized_bankroll(initial_bankroll, sim_results['sim_df'])
 
     snapshot = {
         'time': runtime_min,
