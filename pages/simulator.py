@@ -10,21 +10,19 @@ from utils.websocket import get_recent_trader_trades
 from utils.copy_trader import get_latest_trader_activity, detect_new_trades, build_copy_signal
 from utils.filters import filter_5m_markets
 
-recent_trades = get_recent_trader_trades(300)
+
+def get_copy_ratio() -> float:
+    return 100 / st.session_state.get('allocation_pct', 10.0)
+
 
 def estimate_required_capital(pos_df: pd.DataFrame, copy_ratio: float) -> dict:
-    """
-    Pre-flight check: estimate how much capital is needed before starting sim.
-    Returns estimated cost, max single position, and whether it's safe.
-    """
     if pos_df.empty:
         return {'valid': True, 'estimated_cost': 0, 'max_position': 0, 'position_count': 0}
 
     shares = pos_df['Shares'].astype(float) / copy_ratio
     avg_prices = pd.to_numeric(pos_df['AvgPrice'], errors='coerce').fillna(0.0)
-    costs = (shares * avg_prices)
+    costs = shares * avg_prices
 
-    # Filter to only positions that would pass the >=5 share threshold
     valid_mask = shares >= 5
     valid_costs = costs[valid_mask]
 
@@ -34,6 +32,7 @@ def estimate_required_capital(pos_df: pd.DataFrame, copy_ratio: float) -> dict:
         'position_count':  int(valid_mask.sum()),
         'valid':           True
     }
+
 
 def show_copy_signals(copy_ratio: float, bankroll: float, include_5m: bool = False):
     """Live copy signal feed — shows new trader buys as actionable cards"""
@@ -94,16 +93,16 @@ def show_copy_signals(copy_ratio: float, bankroll: float, include_5m: bool = Fal
                 for sig in stale:
                     render_signal_card(sig)
 
+
 def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float, slippage_pct: float = 1.0):
     pos_df = get_open_positions(TRADER)
     if pos_df.empty:
         st.warning("No LIVE positions to simulate")
         return
-    
+
     baseline_keys = st.session_state.get('baseline_position_keys', set())
     pos_df = filter_baseline_positions(pos_df, baseline_keys)
 
-    # ✅ Filter out 5m markets if toggle is off
     include_5m = st.session_state.get('include_5m', False)
     if not include_5m:
         pos_df = filter_5m_markets(pos_df)
@@ -112,13 +111,12 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float, s
         st.warning("No LIVE positions to simulate (all positions filtered)")
         return
 
-    # ✅ Auto ratio — recalculate every cycle if enabled
     if st.session_state.get('auto_ratio', False):
         current_bankroll_est = st.session_state.get('initial_bankroll', 1000.0)
         new_safe = calc_safe_ratio(pos_df, current_bankroll_est)
         st.session_state.allocation_pct = new_safe['alloc_pct']
         copy_ratio = 100 / new_safe['alloc_pct']
-    
+
     if 'AvgPrice' not in pos_df.columns or 'CurPrice' not in pos_df.columns:
         st.error(f"❌ Missing price columns. Got: {list(pos_df.columns)}")
         return
@@ -134,62 +132,46 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float, s
     slippage_factor = 1 + (slippage_pct / 100)
     total_cost = sim_results['total_cost'] * slippage_factor
 
-    # Price-threshold realized (positions fully resolved)
-    price_realized = calculate_simulated_realized(sim_df, copy_ratio)
+    # Price-threshold realized — sole source of realized PnL
+    # API path retired: Polymarket /trades lacks buy/sell pairing for true PnL
+    simulated_realized_pnl = calculate_simulated_realized(sim_df, copy_ratio)
 
-    # API settled realized
-    closed_data = get_closed_trades_pnl(TRADER)
-    api_realized = closed_data['total'] / copy_ratio
-
-    # DEBUG
-    st.caption(f"DEBUG closed_data keys: {closed_data}")
-
-    # ✅ Use whichever has greater magnitude (handles both wins AND losses)
-    simulated_realized_pnl = price_realized if abs(price_realized) >= abs(api_realized) else api_realized
-
-    # No fee on winnings — taker fees (short-term markets only) approximated via slippage slider
-
-    # ✅ Unrealized PnL also reflected in bankroll so it can dip below starting
     pnl_baseline = st.session_state.get('pnl_baseline', 0.0)
     realized_baseline = st.session_state.get('realized_baseline', 0.0)
     adjusted_pnl = total_pnl - pnl_baseline
     adjusted_realized = simulated_realized_pnl - realized_baseline
-    current_bankroll = initial_bankroll + (adjusted_realized / copy_ratio) + (adjusted_pnl / copy_ratio)
+
+    # Bankroll moves only on realized PnL — unrealized is shown separately
+    current_bankroll = initial_bankroll + (adjusted_realized / copy_ratio)
+
     track_simulation_pnl(sim_results, initial_bankroll, current_bankroll)
 
-    #DEBUG
-    st.caption(f"DEBUG — price_realized: {price_realized} | api_realized: {api_realized} | simulated_realized_pnl: {simulated_realized_pnl} | adjusted_realized: {adjusted_realized}")
-
+    sim_df = sim_df.reset_index(drop=True)
     sim_df = tag_realized_rows(sim_df)
     sim_df['Avg Price'] = pd.to_numeric(sim_df['AvgPrice'], errors='coerce').round(4)
     sim_df['Cur Price'] = pd.to_numeric(sim_df['CurPrice'], errors='coerce').round(4)
     expired_mask = sim_df['Status'].str.contains('expired', case=False, na=False)
     sim_df['Slip %'] = sim_df.apply(
-        lambda row: round(((row['Cur Price'] - row['Avg Price']) / row['Avg Price']) * 100, 2),
+        lambda row: round(((row['Cur Price'] - row['Avg Price']) / row['Avg Price']) * 100, 2)
+        if row['Avg Price'] != 0 else None,
         axis=1
     )
     sim_df.loc[expired_mask, 'Slip %'] = None
 
-    # ✅ DRAWDOWN CIRCUIT BREAKER
     drawdown_threshold = st.session_state.get('drawdown_threshold', 10.0)
     drawdown = check_drawdown(current_bankroll, initial_bankroll, drawdown_threshold)
 
     if drawdown['triggered']:
-        # Check if user has already made a decision
         dd_decision = st.session_state.get('drawdown_decision', None)
 
         if dd_decision is None:
-            # ⛔ Pause and prompt — don't render the rest of the sim
             st.error(
                 f"🚨 **DRAWDOWN ALERT** — Bankroll dropped "
                 f"${drawdown['drawdown_amt']:,.2f} "
                 f"({drawdown['drawdown_pct']:.1f}%) below starting bankroll. "
                 f"Simulation paused."
             )
-            st.warning(
-                f"Started: ${initial_bankroll:,.2f} → "
-                f"Current: ${current_bankroll:,.2f}"
-            )
+            st.warning(f"Started: ${initial_bankroll:,.2f} → Current: ${current_bankroll:,.2f}")
 
             col_dd1, col_dd2 = st.columns(2)
             with col_dd1:
@@ -200,34 +182,21 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float, s
                 if st.button("🛑 Stop Simulation", type="primary", use_container_width=True):
                     st.session_state.drawdown_decision = 'stop'
                     st.rerun()
-            return  # ← pauses rendering below this point
+            return
 
         elif dd_decision == 'stop':
             st.error("🛑 Simulation stopped due to drawdown limit.")
             st.metric("Final Bankroll", f"${current_bankroll:,.2f}",
                       f"-${drawdown['drawdown_amt']:,.2f} ({drawdown['drawdown_pct']:.1f}%)")
             if st.button("🔄 Reset & Start Fresh"):
-                sim_results = run_position_simulator(pos_df, initial_bankroll, copy_ratio)
-                st.session_state.pnl_baseline = sim_results['total_pnl']
-                st.session_state.realized_baseline = calculate_simulated_realized(
-                    sim_results['sim_df'], copy_ratio
-                )
-                st.session_state.baseline_position_keys = set(
-                    pos_df['Market'] + '|' + pos_df['UP/DOWN']
-                )
-                for key in ['sim_start_time', 'sim_pnl_history', 'overexposure_decision',
-                            'initial_bankroll', 'allocation_pct', 'drawdown_decision',
-                            'seen_tx_hashes', 'baseline_position_keys']:
-                    st.session_state.pop(key, None)
+                _reset_session(pos_df, initial_bankroll, copy_ratio)
                 st.rerun()
             return
 
         elif dd_decision == 'continue':
-            # Show a persistent but non-blocking warning
             st.warning(
                 f"⚠️ Running with {drawdown['drawdown_pct']:.1f}% drawdown "
-                f"(${drawdown['drawdown_amt']:,.2f} below start) — "
-                f"monitor closely."
+                f"(${drawdown['drawdown_amt']:,.2f} below start) — monitor closely."
             )
 
     scaled_unrealized = adjusted_pnl / copy_ratio
@@ -239,15 +208,15 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float, s
     with col2:
         usage_pct = (total_cost / current_bankroll * 100) if current_bankroll > 0 else 0
         usage_color = "🟢" if usage_pct <= 50 else "🟡" if usage_pct <= 80 else "🔴"
-
         prev_ratio = st.session_state.get("prev_copy_ratio", copy_ratio)
         ratio_delta = copy_ratio - prev_ratio
         ratio_str = f"⚖️ 1:{copy_ratio:.1f} ({ratio_delta:+.2f})" if ratio_delta != 0 else f"⚖️ 1:{copy_ratio:.1f}"
         st.session_state["prev_copy_ratio"] = copy_ratio
-
-        st.metric("💼 Capital Used", f"{usage_color}${total_cost:,.0f}", f"↑ {usage_pct:.0f}%  |  {ratio_str}", help="Percentage of Bankroll | Capital allocation and Ratio")
+        st.metric("💼 Capital Used", f"{usage_color}${total_cost:,.0f}", f"↑ {usage_pct:.0f}%  |  {ratio_str}",
+                  help="Percentage of Bankroll | Capital allocation and Ratio")
     with col3:
-        st.metric("📈 Unrealized PnL", f"${scaled_unrealized:+,.0f}", round(adjusted_pnl / copy_ratio, 2), help="Live exposure only — not included in bankroll")
+        st.metric("📈 Unrealized PnL", f"${scaled_unrealized:+,.0f}", round(adjusted_pnl / copy_ratio, 2),
+                  help="Live exposure only — not included in bankroll")
     with col4:
         scaled_realized_headline = simulated_realized_pnl / copy_ratio
         st.metric("💰 Simulated Realized", f"${scaled_realized_headline:+,.0f}", round(adjusted_realized / copy_ratio, 2))
@@ -259,12 +228,9 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float, s
     st.caption(f"⏱️ {runtime_min:.1f}min | {allocation_pct:.0f}% alloc | "
                f"🛡️ {sim_results['hedge_pairs']} hedge pairs")
 
-
-    # ✅ MID-SIM OVER-EXPOSURE GUARD
     if total_cost > current_bankroll:
         over_amt = total_cost - current_bankroll
         over_pct = (over_amt / current_bankroll) * 100
-
         oe_decision = st.session_state.get('overexposure_decision', None)
 
         if oe_decision is None:
@@ -286,21 +252,9 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float, s
 
         elif oe_decision == 'stop':
             st.error("🛑 Simulation stopped — over-exposure limit reached.")
-            st.metric("Final Bankroll", f"${current_bankroll:,.2f}",
-                      f"-${over_amt:,.2f} over budget")
+            st.metric("Final Bankroll", f"${current_bankroll:,.2f}", f"-${over_amt:,.2f} over budget")
             if st.button("🔄 Reset & Start Fresh", key="oe_reset"):
-                sim_results = run_position_simulator(pos_df, initial_bankroll, copy_ratio)
-                st.session_state.pnl_baseline = sim_results['total_pnl']
-                st.session_state.realized_baseline = calculate_simulated_realized(
-                    sim_results['sim_df'], copy_ratio
-                )
-                st.session_state.baseline_position_keys = set(
-                    pos_df['Market'] + '|' + pos_df['UP/DOWN']
-                )
-                for key in ['sim_start_time', 'sim_pnl_history', 'drawdown_decision',
-                            'overexposure_decision', 'initial_bankroll', 'allocation_pct',
-                            'seen_tx_hashes', 'baseline_position_keys']:
-                    st.session_state.pop(key, None)
+                _reset_session(pos_df, initial_bankroll, copy_ratio)
                 st.rerun()
             return
 
@@ -316,7 +270,6 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float, s
             f"{total_cost/current_bankroll*100:.0f}% of current bankroll ${current_bankroll:,.2f}."
         )
 
-    # Hedge marker
     market_groups = sim_df.groupby('Market')
     hedge_markets = {
         m for m, g in market_groups
@@ -324,17 +277,12 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float, s
     }
     sim_df['Hedge?'] = sim_df['Market'].apply(lambda x: '🛡️ Hedge' if x in hedge_markets else '')
 
-
     if len(st.session_state.get('sim_pnl_history', [])) > 1:
         with st.expander("📈 PnL History Charts", expanded=False):
             hist_df = pd.DataFrame(st.session_state.sim_pnl_history)
-            hist_df['Time'] = hist_df['time'].apply(lambda x: f"{int(x)}m")
-
-            # ✅ Adaptive downsample — always render max 200 points regardless of session length
             if len(hist_df) > 200:
                 step = len(hist_df) // 200
                 hist_df = hist_df.iloc[::step]
-
             col_chart1, col_chart2 = st.columns(2)
             with col_chart1:
                 st.caption("🏦 Simulated Bankroll Over Time")
@@ -343,10 +291,8 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float, s
                 st.caption("📈 Unrealized PnL Over Time")
                 st.line_chart(hist_df.set_index('time')['pnl'], height=200)
 
-
     sim_cols = ['Market', 'UP/DOWN', 'Status', 'Your Shares', 'Your Cost',
-            'Avg Price', 'Cur Price', 'Slip %',
-            'Your PnL', 'Realized?', 'Hedge?']
+                'Avg Price', 'Cur Price', 'Slip %', 'Your PnL', 'Realized?', 'Hedge?']
     recent_mask = sim_df['age_sec'] <= 300
 
     def highlight_recent(row):
@@ -362,7 +308,7 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float, s
     if skipped > 0:
         st.markdown("---")
         with st.expander(f"⏭️ Skipped Positions ({skipped})", expanded=False):
-            skipped_df = sim_results['skipped_df']   # ✅ Use pre-built df
+            skipped_df = sim_results['skipped_df']
             if not skipped_df.empty:
                 skipped_df['Your Shares'] = (skipped_df['Shares'].astype(float) / copy_ratio).round(1)
                 st.dataframe(
@@ -370,9 +316,22 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float, s
                     use_container_width=True
                 )
 
+
+def _reset_session(pos_df: pd.DataFrame, initial_bankroll: float, copy_ratio: float):
+    """Shared reset logic — clears session state then recaptures fresh baselines"""
+    for key in ['sim_start_time', 'sim_pnl_history', 'drawdown_decision',
+                'overexposure_decision', 'initial_bankroll', 'allocation_pct',
+                'seen_tx_hashes', 'baseline_position_keys']:
+        st.session_state.pop(key, None)
+    sim_results = run_position_simulator(pos_df, initial_bankroll, copy_ratio)
+    st.session_state.pnl_baseline = sim_results['total_pnl']
+    st.session_state.realized_baseline = calculate_simulated_realized(
+        sim_results['sim_df'], copy_ratio
+    )
+
+
 def render_simulator():
     saved_bankroll = st.session_state.get('initial_bankroll', 1000.0)
-    # ✅ Derive copy_ratio from stored allocation_pct, matching show_simulator()
     saved_allocation_pct = st.session_state.get('allocation_pct', 10.0)
     copy_ratio = 100 / saved_allocation_pct
 
@@ -386,7 +345,7 @@ def render_simulator():
         st.error(sim_results['message'])
         return
 
-    sim_df = sim_results['sim_df']
+    sim_df = sim_results['sim_df'].reset_index(drop=True)
     total_cost = sim_results['total_cost']
     total_pnl = sim_results['total_pnl']
     skipped = sim_results['skipped']
@@ -413,14 +372,10 @@ def render_simulator():
         with st.expander("📈 PnL History", expanded=False):
             try:
                 hist_df = pd.DataFrame(st.session_state.sim_pnl_history)
-                hist_df['Time'] = hist_df['time'].apply(lambda x: f"{int(x)}m")
-
-                # ✅ Same adaptive downsample as render_real_bankroll_simulator
                 if len(hist_df) > 200:
                     step = len(hist_df) // 200
                     hist_df = hist_df.iloc[::step]
-
-                st.line_chart(hist_df.set_index('Time')['pnl'], height=200)
+                st.line_chart(hist_df.set_index('time')['pnl'], height=200)
             except Exception:
                 pass
 
@@ -444,6 +399,7 @@ def render_simulator():
     )
     st.caption("✅ Green rows = active <5min | Status shows expiry/active")
 
+
 def show_simulator():
     with st.expander("🤖 Position Simulator", expanded=False):
         if 'sim_start_time' not in st.session_state:
@@ -451,7 +407,8 @@ def show_simulator():
         if 'sim_pnl_history' not in st.session_state:
             st.session_state.sim_pnl_history = []
 
-        auto_ratio = st.toggle("🤖 Auto Ratio", value=True, help="Auto-calculate safest ratio based on bankroll and positions")
+        auto_ratio = st.toggle("🤖 Auto Ratio", value=True,
+                               help="Auto-calculate safest ratio based on bankroll and positions")
 
         col1, col2, col3, col4 = st.columns(4)
         with col1:
@@ -489,34 +446,28 @@ def show_simulator():
 
         if auto_ratio:
             allocation_pct = safe['alloc_pct']
-            binding_label = "exposure target"
             st.info(
                 f"🤖 Auto Ratio: **{safe['alloc_pct']}%** (1:{safe['ratio']:.0f}) — "
-                f"Est. cost **${safe['est_cost']:,.0f}** ({safe['exposure_pct']}% of bankroll) — "
-                f"Bound by **{binding_label}**"
+                f"Est. cost **${safe['est_cost']:,.0f}** ({safe['exposure_pct']}% of bankroll)"
             )
         else:
             allocation_pct = allocation_pct_manual
             st.caption(
                 f"💡 Auto would suggest: **{safe['alloc_pct']}%** (1:{safe['ratio']:.0f}) — "
-                f"Est. cost ${safe['est_cost']:,.0f} ({safe['exposure_pct']}% exposure) — "
-                f"Bound by {'5-share floor' if safe['binding'] == 'threshold' else 'exposure target'}"
+                f"Est. cost ${safe['est_cost']:,.0f} ({safe['exposure_pct']}% exposure)"
             )
 
         copy_ratio = 100 / allocation_pct
 
-        # ✅ PRE-FLIGHT CAPITAL CHECK
         preflight = estimate_required_capital(pos_df, copy_ratio)
         estimated_cost = preflight['estimated_cost']
         max_position = preflight['max_position']
         position_count = preflight['position_count']
 
-        # Safety checks
         over_bankroll = estimated_cost > initial_bankroll
         over_50pct = estimated_cost > (initial_bankroll * 0.50)
         over_80pct = estimated_cost > (initial_bankroll * 0.80)
 
-        # Display pre-flight summary
         if not st.session_state.sim_start_time:
             st.markdown("#### 🛡️ Pre-Flight Check")
             pf_col1, pf_col2, pf_col3 = st.columns(3)
@@ -528,7 +479,6 @@ def show_simulator():
             with pf_col3:
                 st.metric("📌 Largest Position", f"${max_position:,.2f}")
 
-            # Warnings — inside the if block
             if over_bankroll:
                 st.error(
                     f"🚫 **Insufficient funds** — estimated cost ${estimated_cost:,.2f} "
@@ -552,13 +502,10 @@ def show_simulator():
                     f"{estimated_cost/initial_bankroll*100:.0f}% of bankroll. "
                     f"Note: costs may increase if trader adds positions mid-session."
                 )
-
         else:
-            # ✅ Compact reminder while sim is running
             st.caption(f"🛡️ Started with {position_count} positions | "
                        f"Est. cost ${estimated_cost:,.2f} | "
                        f"Slippage {slippage_pct:.1f}%")
-
 
         if st.button("🗑️ CLEAR CACHES", key="nuke_cache"):
             st.cache_data.clear()
@@ -567,21 +514,17 @@ def show_simulator():
 
         col_btn1, col_btn2 = st.columns(2)
         with col_btn1:
-            # ✅ Disable Start button if over bankroll
-            start_disabled = over_bankroll
             if col_btn1.button(
                 "🚀 Start Sim",
                 type="primary",
                 use_container_width=True,
-                disabled=start_disabled  
+                disabled=over_bankroll
             ):
                 st.session_state.initial_bankroll = initial_bankroll
                 st.session_state.allocation_pct = allocation_pct
                 if st.session_state.sim_start_time is None:
                     st.session_state.sim_start_time = time.time()
                     st.session_state.sim_pnl_history = []
-
-                    # ✅ Capture baseline at start so pre-existing PnL is excluded
                     sim_results = run_position_simulator(pos_df, initial_bankroll, copy_ratio)
                     st.session_state.pnl_baseline = sim_results['total_pnl']
                     st.session_state.realized_baseline = calculate_simulated_realized(
@@ -591,22 +534,12 @@ def show_simulator():
                         pos_df['Market'] + '|' + pos_df['UP/DOWN']
                     )
                 st.rerun()
-                
+
         with col_btn2:
             if col_btn2.button("🛑 Reset", use_container_width=True):
-                # ✅ Recapture baselines so PnL shows 0 on next render
-                sim_results = run_position_simulator(pos_df, initial_bankroll, copy_ratio)
-                st.session_state.pnl_baseline = sim_results['total_pnl']
-                st.session_state.realized_baseline = calculate_simulated_realized(
-                    sim_results['sim_df'], copy_ratio
-                )
-                for key in ['sim_start_time', 'sim_pnl_history', 'drawdown_decision',
-                            'overexposure_decision', 'initial_bankroll', 'allocation_pct',
-                            'seen_tx_hashes', 'baseline_position_keys']:  # ✅ pnl_baseline & realized_baseline removed from this list
-                    st.session_state.pop(key, None)
+                _reset_session(pos_df, initial_bankroll, copy_ratio)
                 st.rerun()
 
-        # ✅ ADD HERE — Mid-session top-up
         if st.session_state.sim_start_time:
             st.markdown("---")
             topup_col1, topup_col2 = st.columns([2, 1])
@@ -625,13 +558,12 @@ def show_simulator():
             include_5m = st.session_state.get('include_5m', False)
             render_real_bankroll_simulator(
                 st.session_state.get('initial_bankroll', 1000.0),
-                100 / st.session_state.get('allocation_pct', 10.0),
+                get_copy_ratio(),
                 st.session_state.get('slippage_pct', 1.0),
             )
             st.markdown("---")
             show_copy_signals(
-                copy_ratio=100 / st.session_state.get('allocation_pct', 10.0),
+                copy_ratio=get_copy_ratio(),
                 bankroll=st.session_state.get('initial_bankroll', 1000.0),
                 include_5m=include_5m,
             )
-
