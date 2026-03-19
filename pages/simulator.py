@@ -240,12 +240,11 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float, s
         ratio_str = f"⚖️ 1:{copy_ratio:.1f} ({ratio_delta:+.2f})" if ratio_delta != 0 else f"⚖️ 1:{copy_ratio:.1f}"
         st.session_state["prev_copy_ratio"] = copy_ratio
 
-        st.metric("💼 Capital Used", f"{usage_color}${total_cost:,.0f}", f"↑ {usage_pct:.0f}%  |  {ratio_str}")
+        st.metric("💼 Capital Used", f"{usage_color}${total_cost:,.0f}", f"↑ {usage_pct:.0f}%  |  {ratio_str}", help="Percentage of Bankroll | Capital allocation and Ratio")
     with col3:
-        st.metric("📈 Unrealized PnL", f"${scaled_unrealized:+,.0f}", adjusted_pnl,
-              help="Live exposure only — not included in bankroll")
+        st.metric("📈 Unrealized PnL", f"${scaled_unrealized:+,.0f}", round(adjusted_pnl, 2), help="Live exposure only — not included in bankroll")
     with col4:
-        st.metric("💰 Simulated Realized", f"${scaled_realized:+,.0f}", simulated_realized_pnl / copy_ratio)
+        st.metric("💰 Simulated Realized", f"${scaled_realized:+,.0f}", round(simulated_realized_pnl / copy_ratio, 2))
     with col5:
         st.metric("📊 Simulated", f"{len(sim_df)}/{len(sim_df) + skipped}")
 
