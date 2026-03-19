@@ -216,9 +216,8 @@ def filter_baseline_positions(pos_df: pd.DataFrame, baseline_keys: set) -> pd.Da
 
 def calc_safe_ratio(pos_df: pd.DataFrame, bankroll: float, target_exposure: float = 0.80) -> dict:
     """
-    Calculate the safest copy ratio balancing:
-    1. Polymarket 5-share minimum floor
-    2. Target exposure % of bankroll
+    Calculate copy ratio based purely on exposure target.
+    5-share floor is handled per-position in run_position_simulator.
     """
     if pos_df.empty:
         return {'ratio': 10.0, 'alloc_pct': 10.0, 'est_cost': 0, 'binding': 'none'}
@@ -227,31 +226,10 @@ def calc_safe_ratio(pos_df: pd.DataFrame, bankroll: float, target_exposure: floa
     avg_prices = pd.to_numeric(pos_df['AvgPrice'], errors='coerce').fillna(0)
     trader_total_cost = (shares * avg_prices).sum()
 
-    # Constraint 1: exposure target
     max_spend = bankroll * target_exposure
-    ratio_from_exposure = trader_total_cost / max_spend if max_spend > 0 else 10.0
+    safe_ratio = trader_total_cost / max_spend if max_spend > 0 else 10.0
+    safe_ratio = max(safe_ratio, 1.0)
 
-    # Constraint 2: 5-share floor — find smallest hedge pair
-    market_groups = pos_df.groupby('Market')
-    hedge_pair_mins = []
-    for market, group in market_groups:
-        up = group['UP/DOWN'].str.contains('UP', na=False).any()
-        down = group['UP/DOWN'].str.contains('DOWN', na=False).any()
-        if up and down and len(group) == 2:
-            pair_min = group['Shares'].astype(float).min()
-            hedge_pair_mins.append(pair_min)
-
-    if not hedge_pair_mins:
-        ratio_from_threshold = ratio_from_exposure
-    else:
-        median_shares = sorted(hedge_pair_mins)[len(hedge_pair_mins) // 2]
-        ratio_from_threshold = median_shares / 5
-
-    # Binding constraint is whichever is MORE restrictive (higher ratio)
-    safe_ratio = max(ratio_from_exposure, ratio_from_threshold)
-    safe_ratio = max(safe_ratio, 1.0)  # never below 1:1
-
-    binding = 'threshold' if ratio_from_threshold >= ratio_from_exposure else 'exposure'
     alloc_pct = round(100 / safe_ratio, 2)
     est_cost = round(trader_total_cost / safe_ratio, 2)
 
@@ -259,6 +237,6 @@ def calc_safe_ratio(pos_df: pd.DataFrame, bankroll: float, target_exposure: floa
         'ratio':        round(safe_ratio, 1),
         'alloc_pct':    alloc_pct,
         'est_cost':     est_cost,
-        'binding':      binding,  # which constraint is limiting you
+        'binding':      'exposure',
         'exposure_pct': round((est_cost / bankroll) * 100, 1),
     }
