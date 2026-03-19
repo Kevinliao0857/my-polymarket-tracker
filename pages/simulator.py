@@ -154,7 +154,7 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float, s
     realized_baseline = st.session_state.get('realized_baseline', 0.0)
     adjusted_pnl = total_pnl - pnl_baseline
     adjusted_realized = simulated_realized_pnl - realized_baseline
-    current_bankroll = initial_bankroll + (adjusted_realized / copy_ratio)
+    current_bankroll = initial_bankroll + (adjusted_realized / copy_ratio) + (adjusted_pnl / copy_ratio)
     track_simulation_pnl(sim_results, initial_bankroll, current_bankroll)
 
     #DEBUG
@@ -231,12 +231,11 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float, s
             )
 
     scaled_unrealized = adjusted_pnl / copy_ratio
-    scaled_realized = adjusted_realized / copy_ratio
 
     col1, col2, col3, col4, col5 = st.columns(5)
     with col1:
-        scaled_realized_delta = adjusted_realized / copy_ratio
-        st.metric("🏦 Simulated Bankroll", f"${current_bankroll:,.0f}", round(scaled_realized_delta, 2))
+        bankroll_delta = current_bankroll - initial_bankroll
+        st.metric("🏦 Simulated Bankroll", f"${current_bankroll:,.0f}", round(bankroll_delta, 2))
     with col2:
         usage_pct = (total_cost / current_bankroll * 100) if current_bankroll > 0 else 0
         usage_color = "🟢" if usage_pct <= 50 else "🟡" if usage_pct <= 80 else "🔴"
@@ -248,10 +247,10 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float, s
 
         st.metric("💼 Capital Used", f"{usage_color}${total_cost:,.0f}", f"↑ {usage_pct:.0f}%  |  {ratio_str}", help="Percentage of Bankroll | Capital allocation and Ratio")
     with col3:
-        st.metric("📈 Unrealized PnL", f"${scaled_unrealized:+,.0f}", round(adjusted_pnl, 2), help="Live exposure only — not included in bankroll")
+        st.metric("📈 Unrealized PnL", f"${scaled_unrealized:+,.0f}", round(adjusted_pnl / copy_ratio, 2), help="Live exposure only — not included in bankroll")
     with col4:
-        raw_realized_display = simulated_realized_pnl * copy_ratio
-        st.metric("💰 Simulated Realized", f"${scaled_realized:+,.0f}", round(raw_realized_display, 2))
+        scaled_realized_headline = simulated_realized_pnl / copy_ratio
+        st.metric("💰 Simulated Realized", f"${scaled_realized_headline:+,.0f}", round(adjusted_realized / copy_ratio, 2))
     with col5:
         st.metric("📊 Simulated", f"{len(sim_df)}/{len(sim_df) + skipped}")
 
