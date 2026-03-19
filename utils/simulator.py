@@ -171,12 +171,8 @@ def filter_baseline_positions(pos_df: pd.DataFrame, baseline_keys: set) -> pd.Da
     return pos_df[key_series.isin(baseline_keys)]
 
 def calc_safe_ratio(pos_df: pd.DataFrame, bankroll: float, target_exposure: float = 0.80) -> dict:
-    """
-    Calculate copy ratio based purely on exposure target.
-    5-share floor is handled per-position in run_position_simulator.
-    """
     if pos_df.empty:
-        return {'ratio': 10.0, 'alloc_pct': 10.0, 'est_cost': 0, 'binding': 'none'}
+        return {'ratio': 10.0, 'alloc_pct': 10.0, 'est_cost': 0, 'binding': 'none', 'exposure_pct': 0}
 
     shares = pos_df['Shares'].astype(float)
     avg_prices = pd.to_numeric(pos_df['AvgPrice'], errors='coerce').fillna(0)
@@ -187,7 +183,11 @@ def calc_safe_ratio(pos_df: pd.DataFrame, bankroll: float, target_exposure: floa
     safe_ratio = max(safe_ratio, 1.0)
 
     alloc_pct = round(100 / safe_ratio, 2)
-    est_cost = round(trader_total_cost / safe_ratio, 2)
+
+    # ✅ Only count positions that pass the 5-share floor — matches run_position_simulator
+    your_shares = shares / safe_ratio
+    valid_mask = your_shares >= 5
+    est_cost = round((your_shares[valid_mask] * avg_prices[valid_mask]).sum(), 2)
 
     return {
         'ratio':        round(safe_ratio, 1),
