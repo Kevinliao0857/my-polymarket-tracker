@@ -82,7 +82,7 @@ try:
 except Exception:
     st.sidebar.markdown(f"**👤 Tracking:** `{TRADER[:10]}...`")
 
-MINUTES_BACK = st.sidebar.slider("⏰ Minutes back", 15, 120, 30, 5, key='minutes_back_slider')
+MINUTES_BACK = st.sidebar.slider("⏰ Minutes back", 15, 120, 60, 5, key='minutes_back_slider')
 now_ts = int(time.time())
 st.sidebar.caption(
     f"From: {datetime.fromtimestamp(now_ts - MINUTES_BACK * 60, EST).strftime('%H:%M %p ET')}"
