@@ -5,7 +5,7 @@ from utils.config import TRADER
 from utils.api import get_open_positions, get_closed_trades_pnl
 from utils.simulator import run_position_simulator, track_simulation_pnl, \
     calculate_simulated_realized, tag_realized_rows, check_drawdown, \
-    filter_baseline_positions
+    filter_baseline_positions, calc_safe_ratio
 from utils.websocket import get_recent_trader_trades
 from utils.copy_trader import get_latest_trader_activity, detect_new_trades, build_copy_signal
 from utils.filters import filter_5m_markets
@@ -434,33 +434,51 @@ def show_simulator():
         with col1:
             initial_bankroll = st.number_input("💰 Starting Bankroll", value=1000.0, step=100.0)
         with col2:
-            allocation_pct = st.number_input(
-                "⚖️ Allocation %", value=10.0, min_value=1.0, max_value=100.0, step=1.0,
-                help="10% = copy 10% of trader's shares (equiv 1:10)"
-            )
+            auto_ratio = st.toggle("🤖 Auto Ratio", value=False, help="Auto-calculate safest ratio based on bankroll and positions")
         with col3:
             drawdown_threshold = st.number_input(
                 "🛑 Drawdown %", value=25.0, min_value=1.0, max_value=50.0, step=1.0,
                 help="Pause sim if bankroll drops by this % from start"
             )
-        
-        st.session_state.drawdown_threshold = drawdown_threshold
-        
         with col4:
             slippage_pct = st.slider(
                 "📉 Slippage %", min_value=0.0, max_value=5.0, value=1.0, step=0.5,
-                help="Simulates price movement against you on entry. 0% = perfect fill."
+                help="Simulates price movement against you on entry."
             )
-        st.session_state.slippage_pct = slippage_pct            
 
+        st.session_state.drawdown_threshold = drawdown_threshold
+        st.session_state.slippage_pct = slippage_pct
 
-        copy_ratio = 100 / allocation_pct
-
-        # ✅ PRE-FLIGHT CAPITAL CHECK
         pos_df = get_open_positions(TRADER)
         include_5m = st.session_state.get('include_5m', False)
         if not include_5m:
             pos_df = filter_5m_markets(pos_df)
+
+        # ✅ Auto vs Manual ratio
+        safe = calc_safe_ratio(pos_df, initial_bankroll)
+
+        if auto_ratio:
+            allocation_pct = safe['alloc_pct']
+            binding_label = "5-share floor" if safe['binding'] == 'threshold' else "exposure target"
+            st.info(
+                f"🤖 Auto Ratio: **{safe['alloc_pct']}%** (1:{safe['ratio']:.0f}) — "
+                f"Est. cost **${safe['est_cost']:,.0f}** ({safe['exposure_pct']}% of bankroll) — "
+                f"Bound by **{binding_label}**"
+            )
+        else:
+            allocation_pct = st.number_input(
+                "⚖️ Allocation %", value=10.0, min_value=1.0, max_value=100.0, step=1.0,
+                help="10% = copy 10% of trader's shares (equiv 1:10)"
+            )
+            st.caption(
+                f"💡 Auto would suggest: **{safe['alloc_pct']}%** (1:{safe['ratio']:.0f}) — "
+                f"Est. cost ${safe['est_cost']:,.0f} ({safe['exposure_pct']}% exposure) — "
+                f"Bound by {'5-share floor' if safe['binding'] == 'threshold' else 'exposure target'}"
+            )
+
+        copy_ratio = 100 / allocation_pct
+
+        # ✅ PRE-FLIGHT CAPITAL CHECK
         preflight = estimate_required_capital(pos_df, copy_ratio)
         estimated_cost = preflight['estimated_cost']
         max_position = preflight['max_position']
