@@ -111,6 +111,13 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float, s
     if pos_df.empty:
         st.warning("No LIVE positions to simulate (all positions filtered)")
         return
+
+    # ✅ Auto ratio — recalculate every cycle if enabled
+    if st.session_state.get('auto_ratio', False):
+        current_bankroll_est = st.session_state.get('initial_bankroll', 1000.0)
+        new_safe = calc_safe_ratio(pos_df, current_bankroll_est)
+        st.session_state.allocation_pct = new_safe['alloc_pct']
+        copy_ratio = 100 / new_safe['alloc_pct']
     
     if 'AvgPrice' not in pos_df.columns or 'CurPrice' not in pos_df.columns:
         st.error(f"❌ Missing price columns. Got: {list(pos_df.columns)}")
@@ -219,7 +226,7 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float, s
 
     col1, col2, col3, col4, col5 = st.columns(5)
     with col1:
-        st.metric("🏦 Simulated Bankroll", f"${current_bankroll:,.0f}", adjusted_realized, delta_color="inverse")
+        st.metric("🏦 Simulated Bankroll", f"${current_bankroll:,.0f}", round(adjusted_realized, 2))
     with col2:
         usage_pct = (total_cost / current_bankroll * 100) if current_bankroll > 0 else 0
         usage_color = "🟢" if usage_pct <= 50 else "🟡" if usage_pct <= 80 else "🔴"
@@ -433,10 +440,14 @@ def show_simulator():
         with col1:
             initial_bankroll = st.number_input("💰 Starting Bankroll", value=1000.0, step=100.0)
         with col2:
-            allocation_pct_manual = st.number_input(
-                "⚖️ Allocation %", value=10.0, min_value=1.0, max_value=100.0, step=1.0,
-                help="10% = copy 10% of trader's shares (equiv 1:10)"
-            )
+            if not auto_ratio:
+                allocation_pct_manual = st.number_input(
+                    "⚖️ Allocation %", value=10.0, min_value=1.0, max_value=100.0, step=1.0,
+                    help="10% = copy 10% of trader's shares (equiv 1:10)"
+                )
+            else:
+                allocation_pct_manual = None
+                st.empty()
         with col3:
             auto_ratio = st.toggle("🤖 Auto Ratio", value=True, help="Auto-calculate safest ratio based on bankroll and positions")
         with col4:
@@ -453,7 +464,7 @@ def show_simulator():
         st.session_state.drawdown_threshold = drawdown_threshold
         st.session_state.slippage_pct = slippage_pct
         st.session_state.auto_ratio = auto_ratio
-        
+
         pos_df = get_open_positions(TRADER)
         include_5m = st.session_state.get('include_5m', False)
         if not include_5m:
