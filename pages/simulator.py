@@ -147,7 +147,8 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float, s
     adjusted_pnl = total_pnl - pnl_baseline
     adjusted_realized = simulated_realized_pnl - realized_baseline
     current_bankroll = initial_bankroll + adjusted_realized
-
+    track_simulation_pnl(sim_results, initial_bankroll, current_bankroll)
+    
     sim_df = tag_realized_rows(sim_df)
     sim_df['Avg Price'] = pd.to_numeric(sim_df['AvgPrice'], errors='coerce').round(4)
     sim_df['Cur Price'] = pd.to_numeric(sim_df['CurPrice'], errors='coerce').round(4)
