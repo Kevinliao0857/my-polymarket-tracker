@@ -141,6 +141,9 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float, s
     closed_data = get_closed_trades_pnl(TRADER)
     api_realized = closed_data['total'] / copy_ratio
 
+    # DEBUG
+    st.caption(f"DEBUG closed_data keys: {closed_data}")
+
     # ✅ Use whichever has greater magnitude (handles both wins AND losses)
     simulated_realized_pnl = price_realized if abs(price_realized) >= abs(api_realized) else api_realized
 
