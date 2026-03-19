@@ -452,7 +452,8 @@ def show_simulator():
 
         st.session_state.drawdown_threshold = drawdown_threshold
         st.session_state.slippage_pct = slippage_pct
-
+        st.session_state.auto_ratio = auto_ratio
+        
         pos_df = get_open_positions(TRADER)
         include_5m = st.session_state.get('include_5m', False)
         if not include_5m:
