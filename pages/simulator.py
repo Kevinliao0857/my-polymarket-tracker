@@ -148,7 +148,7 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float, s
     adjusted_realized = simulated_realized_pnl - realized_baseline
     current_bankroll = initial_bankroll + adjusted_realized
     track_simulation_pnl(sim_results, initial_bankroll, current_bankroll)
-    
+
     sim_df = tag_realized_rows(sim_df)
     sim_df['Avg Price'] = pd.to_numeric(sim_df['AvgPrice'], errors='coerce').round(4)
     sim_df['Cur Price'] = pd.to_numeric(sim_df['CurPrice'], errors='coerce').round(4)
@@ -440,7 +440,7 @@ def show_simulator():
                 help="10% = copy 10% of trader's shares (equiv 1:10)"
             )
         with col3:
-            auto_ratio = st.toggle("🤖 Auto Ratio", value=False, help="Auto-calculate safest ratio based on bankroll and positions")
+            auto_ratio = st.toggle("🤖 Auto Ratio", value=True, help="Auto-calculate safest ratio based on bankroll and positions")
         with col4:
             drawdown_threshold = st.number_input(
                 "🛑 Drawdown %", value=25.0, min_value=1.0, max_value=50.0, step=1.0,
