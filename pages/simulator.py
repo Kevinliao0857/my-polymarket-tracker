@@ -224,8 +224,8 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float, s
                 f"monitor closely."
             )
 
-    scaled_unrealized = adjusted_pnl * copy_ratio
-    scaled_realized = simulated_realized_pnl * copy_ratio
+    scaled_unrealized = adjusted_pnl / copy_ratio
+    scaled_realized = simulated_realized_pnl / copy_ratio
 
     col1, col2, col3, col4, col5 = st.columns(5)
     with col1:
