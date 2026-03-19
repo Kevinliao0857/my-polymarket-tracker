@@ -561,6 +561,20 @@ def show_simulator():
                     st.session_state.pop(key, None)
                 st.rerun()
 
+        # ✅ ADD HERE — Mid-session top-up
+        if st.session_state.sim_start_time:
+            st.markdown("---")
+            topup_col1, topup_col2 = st.columns([2, 1])
+            with topup_col1:
+                topup_amt = st.number_input("💵 Add Funds", value=0.0, step=100.0, min_value=0.0)
+            with topup_col2:
+                st.write("")
+                if st.button("➕ Top Up", use_container_width=True):
+                    if topup_amt > 0:
+                        current = st.session_state.get('initial_bankroll', 1000.0)
+                        st.session_state.initial_bankroll = current + topup_amt
+                        st.success(f"✅ Added ${topup_amt:,.0f} → new bankroll ${current + topup_amt:,.0f}")
+                        st.rerun()
 
         if st.session_state.sim_start_time:
             include_5m = st.session_state.get('include_5m', False)
