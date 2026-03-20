@@ -94,7 +94,7 @@ def show_copy_signals(copy_ratio: float, bankroll: float, include_5m: bool = Fal
                 for sig in stale:
                     render_signal_card(sig)
 
-def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float, slippage_pct: float = 1.0):
+def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float, slippage_pct: float = 1.0, include_5m: bool = False):
     pos_df = get_open_positions(TRADER)
     if pos_df.empty:
         st.warning("No LIVE positions to simulate")
@@ -104,7 +104,6 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float, s
     pos_df = filter_baseline_positions(pos_df, baseline_keys)
 
     # ✅ Filter out 5m markets if toggle is off
-    include_5m = st.session_state.get('include_5m', False)
     if not include_5m:
         pos_df = filter_5m_markets(pos_df)
 
@@ -456,6 +455,8 @@ def show_simulator():
             st.session_state.sim_pnl_history = []
 
         auto_ratio = st.toggle("🤖 Auto Ratio", value=True, help="Auto-calculate safest ratio based on bankroll and positions")
+        if auto_ratio:
+            st.session_state.pop('allocation_pct', None)
 
         col1, col2, col3, col4 = st.columns(4)
         with col1:
@@ -626,11 +627,11 @@ def show_simulator():
                         st.rerun()
 
         if st.session_state.sim_start_time:
-            include_5m = st.session_state.get('include_5m', False)
             render_real_bankroll_simulator(
                 st.session_state.get('initial_bankroll', 1000.0),
                 100 / st.session_state.get('allocation_pct', 10.0),
                 st.session_state.get('slippage_pct', 1.0),
+                include_5m=include_5m,
             )
             st.markdown("---")
             show_copy_signals(
