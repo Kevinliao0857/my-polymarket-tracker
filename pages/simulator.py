@@ -95,7 +95,7 @@ def show_copy_signals(copy_ratio: float, bankroll: float, include_5m: bool = Fal
                     render_signal_card(sig)
 
 
-# SLIPPAGE NOT WORKING FLESHED OUT YET, YOU ONLY SEE A THEORETICAL SLIPPAGE NUMBER
+# SLIPPAGE NOT WORKING FLESHED OUT YET, YOU ONLY SEE A THEORETICAL SLIPPAGE NUMBER.
 def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float, slippage_pct: float = 1.0, include_5m: bool = False):
     pos_df = get_open_positions(TRADER)
     if pos_df.empty:
