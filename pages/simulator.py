@@ -227,24 +227,34 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float, s
     scaled_unrealized = adjusted_pnl
     scaled_realized = adjusted_realized
     scaled_realized_delta = adjusted_realized
-    
+
     col1, col2, col3, col4, col5 = st.columns(5)
     with col1:
         st.metric("🏦 Simulated Bankroll", f"${current_bankroll:,.0f}", round(scaled_realized_delta, 2))
     with col2:
         usage_pct = (total_cost / current_bankroll * 100) if current_bankroll > 0 else 0
         usage_color = "🟢" if usage_pct <= 50 else "🟡" if usage_pct <= 80 else "🔴"
-    
+
         prev_ratio = st.session_state.get("prev_copy_ratio", copy_ratio)
         ratio_delta = copy_ratio - prev_ratio
         ratio_str = f"⚖️ 1:{copy_ratio:.1f} ({ratio_delta:+.2f})" if ratio_delta != 0 else f"⚖️ 1:{copy_ratio:.1f}"
         st.session_state["prev_copy_ratio"] = copy_ratio
-    
+
         st.metric("💼 Capital Used", f"{usage_color}${total_cost:,.0f}", f"↑ {usage_pct:.0f}%  |  {ratio_str}", help="Percentage of Bankroll | Capital allocation and Ratio")
     with col3:
-        st.metric("📈 Unrealized PnL", f"${scaled_unrealized:+,.0f}", round(adjusted_pnl, 2), help="Live exposure only — not included in bankroll")
+        st.metric(
+            "📈 Unrealized PnL",
+            f"${scaled_unrealized:+,.0f}",
+            round(total_pnl, 2),
+            help="Your scaled open position PnL. Not counted in bankroll until resolved. Delta shows trader's full-scale PnL — divide by copy ratio to verify."
+        )
     with col4:
-        st.metric("💰 Simulated Realized", f"${scaled_realized:+,.0f}", round(closed_data['total'], 2))
+        st.metric(
+            "💰 Simulated Realized",
+            f"${scaled_realized:+,.0f}",
+            f"Trader: ${closed_data['total']:+,.2f}",
+            help="Your proportional share of settled/resolved positions. Delta shows trader's actual realized PnL — your share is trader ÷ copy ratio."
+        )
     with col5:
         st.metric("📊 Simulated", f"{len(sim_df)}/{len(sim_df) + skipped}")
 
