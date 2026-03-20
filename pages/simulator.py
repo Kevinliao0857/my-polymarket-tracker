@@ -224,22 +224,22 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float, s
                 f"monitor closely."
             )
 
-    scaled_unrealized = adjusted_pnl / copy_ratio
-    scaled_realized = adjusted_realized / copy_ratio
-
+    scaled_unrealized = adjusted_pnl
+    scaled_realized = adjusted_realized
+    scaled_realized_delta = adjusted_realized
+    
     col1, col2, col3, col4, col5 = st.columns(5)
     with col1:
-        scaled_realized_delta = adjusted_realized / copy_ratio
         st.metric("🏦 Simulated Bankroll", f"${current_bankroll:,.0f}", round(scaled_realized_delta, 2))
     with col2:
         usage_pct = (total_cost / current_bankroll * 100) if current_bankroll > 0 else 0
         usage_color = "🟢" if usage_pct <= 50 else "🟡" if usage_pct <= 80 else "🔴"
-
+    
         prev_ratio = st.session_state.get("prev_copy_ratio", copy_ratio)
         ratio_delta = copy_ratio - prev_ratio
         ratio_str = f"⚖️ 1:{copy_ratio:.1f} ({ratio_delta:+.2f})" if ratio_delta != 0 else f"⚖️ 1:{copy_ratio:.1f}"
         st.session_state["prev_copy_ratio"] = copy_ratio
-
+    
         st.metric("💼 Capital Used", f"{usage_color}${total_cost:,.0f}", f"↑ {usage_pct:.0f}%  |  {ratio_str}", help="Percentage of Bankroll | Capital allocation and Ratio")
     with col3:
         st.metric("📈 Unrealized PnL", f"${scaled_unrealized:+,.0f}", round(adjusted_pnl, 2), help="Live exposure only — not included in bankroll")
