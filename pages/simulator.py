@@ -115,7 +115,7 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float, s
 
     # ✅ Auto ratio — recalculate every cycle if enabled
     if st.session_state.get('auto_ratio', False):
-        current_bankroll_est = st.session_state.get('initial_bankroll', 1000.0)
+        current_bankroll_est = current_bankroll
         new_safe = calc_safe_ratio(pos_df, current_bankroll_est)
         st.session_state.allocation_pct = new_safe['alloc_pct']
         copy_ratio = 100 / new_safe['alloc_pct']
