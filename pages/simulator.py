@@ -151,7 +151,7 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float, s
     realized_baseline = st.session_state.get('realized_baseline', 0.0)
     adjusted_pnl = total_pnl - pnl_baseline
     adjusted_realized = simulated_realized_pnl - realized_baseline
-    current_bankroll = initial_bankroll + (adjusted_realized / copy_ratio)
+    current_bankroll = initial_bankroll + adjusted_realized
     track_simulation_pnl(sim_results, initial_bankroll, current_bankroll)
 
     sim_df = tag_realized_rows(sim_df)
