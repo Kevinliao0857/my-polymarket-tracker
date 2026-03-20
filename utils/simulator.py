@@ -112,26 +112,6 @@ def track_simulation_pnl(sim_results: Dict, initial_bankroll: float, current_ban
         recent = history[-1440:]
         st.session_state.sim_pnl_history = old + recent
 
-def get_simulated_realized_pnl(pos_df: pd.DataFrame, copy_ratio: float, initial_bankroll: float) -> float:
-    """Calculate proportional realized PnL from trader's closed positions"""
-    expired_mask = pos_df['Status'].str.contains(
-        'expired|settled|closed|finished', case=False, na=False
-    )
-    expired_df = pos_df[expired_mask].copy()
-
-    if expired_df.empty or 'PnL' not in expired_df.columns:
-        return 0.0
-
-    expired_df['Your Shares'] = (expired_df['Shares'].astype(float) / copy_ratio).round(1)
-    trader_pnl = pd.to_numeric(expired_df['PnL'], errors='coerce').fillna(0.0)
-    trader_shares = expired_df['Shares'].astype(float)
-
-    # Per-share PnL scaled to your share count
-    per_share_pnl = trader_pnl / trader_shares.replace(0, float('nan'))
-    your_pnl = (per_share_pnl * expired_df['Your Shares']).fillna(0.0)
-
-    return round(your_pnl.sum(), 2)
-
 def calculate_simulated_realized(sim_df: pd.DataFrame, copy_ratio: float) -> float:
     """
     Realize PnL based on price thresholds — don't wait for API settlement.
@@ -165,23 +145,6 @@ def tag_realized_rows(sim_df: pd.DataFrame) -> pd.DataFrame:
     sim_df.loc[cur_price >= 0.95, 'Realized?'] = '✅ WIN'
     sim_df.loc[cur_price <= 0.05, 'Realized?'] = '❌ LOSS'
     return sim_df
-
-def get_realized_bankroll(initial_bankroll: float, sim_df: pd.DataFrame) -> float:
-    """
-    Calculate realized bankroll from ALREADY SIMULATED expired rows.
-    Expects sim_df to have 'Your PnL' and 'Status' columns.
-    """
-    if 'Status' not in sim_df.columns or 'Your PnL' not in sim_df.columns:
-        return float(initial_bankroll)
-
-    expired_mask = sim_df['Status'].str.contains(
-        'expired|settled|closed|finished', case=False, na=False
-    )
-    expired_pnl = pd.to_numeric(
-        sim_df.loc[expired_mask, 'Your PnL'], errors='coerce'
-    ).sum()
-
-    return round(float(initial_bankroll) + expired_pnl, 2)
 
 def check_drawdown(current_bankroll: float, initial_bankroll: float, threshold_pct: float = 10.0) -> dict:
     """
