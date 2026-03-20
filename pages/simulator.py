@@ -112,13 +112,7 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float, s
     if pos_df.empty:
         st.warning("No LIVE positions to simulate (all positions filtered)")
         return
-
-    # ✅ Auto ratio — recalculate every cycle if enabled
-    if st.session_state.get('auto_ratio', False):
-        current_bankroll_est = current_bankroll
-        new_safe = calc_safe_ratio(pos_df, current_bankroll_est)
-        st.session_state.allocation_pct = new_safe['alloc_pct']
-        copy_ratio = 100 / new_safe['alloc_pct']
+    
     
     if 'AvgPrice' not in pos_df.columns or 'CurPrice' not in pos_df.columns:
         st.error(f"❌ Missing price columns. Got: {list(pos_df.columns)}")
@@ -154,6 +148,12 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float, s
     adjusted_realized = simulated_realized_pnl - realized_baseline
     current_bankroll = initial_bankroll + adjusted_realized
     track_simulation_pnl(sim_results, initial_bankroll, current_bankroll)
+
+    # ✅ Auto ratio — recalculate every cycle if enabled
+    if st.session_state.get('auto_ratio', False):
+        new_safe = calc_safe_ratio(pos_df, current_bankroll) 
+        st.session_state.allocation_pct = new_safe['alloc_pct']
+        copy_ratio = 100 / new_safe['alloc_pct']
 
     sim_df = tag_realized_rows(sim_df)
     sim_df['Avg Price'] = pd.to_numeric(sim_df['AvgPrice'], errors='coerce').round(4)
