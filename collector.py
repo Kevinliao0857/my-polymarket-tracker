@@ -51,10 +51,8 @@ def poll_trades(address: str) -> int:
             log.warning("trades API returned %s for %s", resp.status_code, address[:10])
             return 0
         activities = resp.json()
-        buy_trades = [
-            a for a in activities if a.get("type") == "TRADE" and a.get("side") == "BUY"
-        ]
-        return insert_trades_batch(address, buy_trades, source="rest")
+        trades = [a for a in activities if a.get("type") == "TRADE"]
+        return insert_trades_batch(address, trades, source="rest")
     except Exception as e:
         log.error("poll_trades error for %s: %s", address[:10], e)
         return 0

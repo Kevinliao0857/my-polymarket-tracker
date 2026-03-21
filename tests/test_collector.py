@@ -10,6 +10,7 @@ from utils.db import (
     init_db,
     get_active_traders,
     get_trade_count,
+    get_trades,
     get_latest_snapshot,
     get_settled_trades,
     upsert_trader,
@@ -66,7 +67,7 @@ class TestEnsureDefaultTrader:
 
 class TestPollTrades:
     @patch("collector.requests.get")
-    def test_inserts_buy_trades(self, mock_get):
+    def test_inserts_buy_and_sell_trades(self, mock_get):
         mock_get.return_value = _mock_response([
             {"type": "TRADE", "side": "BUY", "transactionHash": "0xtx1",
              "title": "BTC Up", "size": 100, "price": 0.5, "timestamp": 1000},
@@ -76,8 +77,33 @@ class TestPollTrades:
              "title": "SOL Down", "size": 25, "price": 0.3, "timestamp": 1002},
         ])
         new_count = poll_trades(FAKE_ADDR)
-        assert new_count == 2  # only BUY trades
-        assert get_trade_count(FAKE_ADDR) == 2
+        assert new_count == 3  # BUY and SELL trades
+        assert get_trade_count(FAKE_ADDR) == 3
+
+    @patch("collector.requests.get")
+    def test_sell_trades_stored_with_correct_side(self, mock_get):
+        mock_get.return_value = _mock_response([
+            {"type": "TRADE", "side": "SELL", "transactionHash": "0xtx_sell",
+             "title": "BTC Up", "size": 50, "price": 0.8, "timestamp": 2000},
+        ])
+        assert poll_trades(FAKE_ADDR) == 1
+        trades = get_trades(FAKE_ADDR)
+        assert len(trades) == 1
+        assert trades[0]["side"] == "SELL"
+        assert trades[0]["price"] == 0.8
+
+    @patch("collector.requests.get")
+    def test_buy_and_sell_same_market_both_stored(self, mock_get):
+        mock_get.return_value = _mock_response([
+            {"type": "TRADE", "side": "BUY", "transactionHash": "0xtx_buy",
+             "title": "BTC Up", "size": 100, "price": 0.5, "timestamp": 1000},
+            {"type": "TRADE", "side": "SELL", "transactionHash": "0xtx_sell",
+             "title": "BTC Up", "size": 100, "price": 0.8, "timestamp": 2000},
+        ])
+        assert poll_trades(FAKE_ADDR) == 2
+        trades = get_trades(FAKE_ADDR)
+        sides = {t["side"] for t in trades}
+        assert sides == {"BUY", "SELL"}
 
     @patch("collector.requests.get")
     def test_deduplicates_on_second_poll(self, mock_get):
