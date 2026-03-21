@@ -1,8 +1,17 @@
+import os
 import pytz
-from typing import List
+from dotenv import load_dotenv
 
-# Trader address
-TRADER = "0x63ce342161250d705dc0b16df89036c8e5f9ba9a".lower()
+load_dotenv()
+
+# Database
+DB_PATH = os.getenv("TRACKER_DB_PATH", "data/tracker.db")
+
+# Trader address (default; multi-trader uses DB registry)
+TRADER = os.getenv("TRADER_ADDRESS", "0x63ce342161250d705dc0b16df89036c8e5f9ba9a").lower()
+
+# Collector
+POLL_INTERVAL = int(os.getenv("POLL_INTERVAL_SECONDS", "3"))
 
 # Crypto tickers and names
 TICKERS = ['btc', 'eth', 'sol', 'xrp', 'ada', 'doge', 'shib', 'link', 'avax', 'matic', 'dot', 'uni', 'bnb', 'usdt', 'usdc']
@@ -18,7 +27,6 @@ MONTHS_MAP = {
     'september':9,'oct':10,'october':10,'nov':11,'november':11,'dec':12,'december':12
 }
 
-# NEW: toggle for ultra-short-term crypto markets (5-minute windows etc.)
-ALLOW_5M_MARKETS: bool = False
-
-DISABLE_WS_LIVE: bool = False
+# Feature toggles
+ALLOW_5M_MARKETS = os.getenv("ALLOW_5M_MARKETS", "false").lower() == "true"
+DISABLE_WS_LIVE = os.getenv("DISABLE_WS_LIVE", "false").lower() == "true"

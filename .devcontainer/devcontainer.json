@@ -15,13 +15,15 @@
       "settings": {},
       "extensions": [
         "ms-python.python",
-        "ms-python.vscode-pylance"
+        "ms-python.vscode-pylance",
+        "alexcvzz.vscode-sqlite"
       ]
     }
   },
   "updateContentCommand": "echo '✅ Dependencies pre-installed in image'",
   "postAttachCommand": {
-    "server": "streamlit run app.py --server.enableCORS false --server.enableXsrfProtection false"
+    "server": "streamlit run app.py --server.enableCORS false --server.enableXsrfProtection false",
+    "collector": "python collector.py"
   },
   "portsAttributes": {
     "8501": {

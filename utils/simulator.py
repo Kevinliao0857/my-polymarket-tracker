@@ -71,16 +71,30 @@ def run_position_simulator(pos_df: pd.DataFrame, initial_bankroll: float, copy_r
 
     skipped_df = pd.DataFrame(skipped_rows) if skipped_rows else pd.DataFrame()  # ✅ NEW
 
-    return {
+    result = {
         'valid':       True,
         'sim_df':      sim_df,
         'total_cost':  total_cost,
         'total_pnl':   total_pnl,
         'positions':   len(sim_df),
-        'skipped':     len(skipped_rows),   # ✅ CHANGED — was len(pos_df) - len(sim_df)
-        'skipped_df':  skipped_df,          # ✅ NEW
+        'skipped':     len(skipped_rows),
+        'skipped_df':  skipped_df,
         'hedge_pairs': hedge_pair_count,
     }
+
+    try:
+        from .db import insert_simulation_run
+        insert_simulation_run(
+            trader_address=None,
+            config={'bankroll': initial_bankroll, 'copy_ratio': copy_ratio},
+            results={'total_cost': float(total_cost), 'total_pnl': float(total_pnl),
+                     'positions': len(sim_df), 'hedge_pairs': hedge_pair_count,
+                     'skipped': len(skipped_rows)},
+        )
+    except Exception:
+        pass
+
+    return result
 
 def track_simulation_pnl(sim_results: Dict, initial_bankroll: float, current_bankroll: float = None) -> None:
     """Track bankroll/PnL history snapshots over session runtime"""
