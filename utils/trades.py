@@ -48,11 +48,6 @@ def get_latest_bets(address: str, limit: int = 200) -> List[dict]:
             activities = response.json()
             buy_trades = [a for a in activities
                          if a.get("type") == "TRADE" and a.get("side") == "BUY"]
-            try:
-                from .db import insert_trades_batch
-                insert_trades_batch(address, buy_trades, source='rest')
-            except Exception:
-                pass
             return buy_trades
     except:
         pass
@@ -110,12 +105,6 @@ def track_0x8dxd(minutes_back: int, include_5m: bool | None = None, _cache_buste
         if tx_hash not in seen_tx:
             seen_tx.add(tx_hash)
             unique_combined.append(item)
-
-    try:
-        from .db import insert_trades_batch
-        insert_trades_batch(TRADER, unique_combined, source='rest')
-    except Exception:
-        pass
 
     unique_combined.sort(
         key=lambda x: x.get('timestamp', 0) or x.get('updatedAt', 0) or 0,

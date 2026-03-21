@@ -12,13 +12,6 @@ def get_closed_trades_pnl(address: str) -> dict:
             timeout=10
         ).json()
 
-        try:
-            from .db import insert_settled_trades_batch
-            settled = [t for t in trades if t.get('status') == 'settled' and t.get('pnl') is not None]
-            insert_settled_trades_batch(address, settled)
-        except Exception:
-            pass
-
         total_profit = 0
         crypto_count = 0
         settled_count = 0

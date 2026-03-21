@@ -121,6 +121,8 @@ def run_collection_cycle():
 
 
 def main():
+    # Wait for Streamlit to finish DB init first
+    time.sleep(5)
     log.info("Collector starting (poll interval: %ds)...", POLL_INTERVAL)
     _ensure_default_trader()
 

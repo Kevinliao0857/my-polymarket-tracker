@@ -28,13 +28,6 @@ def get_open_positions(address: str) -> pd.DataFrame:
             return pd.DataFrame()
 
         positions = response.json()
-
-        try:
-            from .db import insert_position_snapshot
-            insert_position_snapshot(address, positions)
-        except Exception:
-            pass
-
         df_data = []
         now_ts = int(time.time())
 

@@ -70,12 +70,6 @@ def rtds_listener():
             with _live_lock:
                 live_trades.append(trade_data)
 
-            try:
-                from .db import insert_trade
-                insert_trade(TRADER, trade_data, source='ws')
-            except Exception:
-                pass
-
         except Exception as e:
             print(f"⚠️ process_trade error: {e} | input: {str(raw_data)[:50]}")
 
