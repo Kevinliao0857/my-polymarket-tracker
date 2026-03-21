@@ -10,9 +10,20 @@ import os
 import sqlite3
 import threading
 
-from .config import DB_PATH
+from .config import DB_PATH as _DEFAULT_DB_PATH
 
 _local = threading.local()
+_db_path_override = None
+
+
+def set_db_path(path: str) -> None:
+    """Override DB path (used by tests). Must be called before any DB access."""
+    global _db_path_override
+    _db_path_override = path
+
+
+def _get_db_path() -> str:
+    return _db_path_override or _DEFAULT_DB_PATH
 
 # ---------------------------------------------------------------------------
 # Schema migrations
@@ -105,7 +116,7 @@ def get_connection() -> sqlite3.Connection:
     conn = getattr(_local, "conn", None)
     if conn is None:
         _ensure_data_dir()
-        conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+        conn = sqlite3.connect(_get_db_path(), check_same_thread=False)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA busy_timeout=30000")
@@ -128,7 +139,7 @@ def init_db() -> None:
 
 
 def _ensure_data_dir() -> None:
-    db_dir = os.path.dirname(DB_PATH)
+    db_dir = os.path.dirname(_get_db_path())
     if db_dir:
         os.makedirs(db_dir, exist_ok=True)
 
