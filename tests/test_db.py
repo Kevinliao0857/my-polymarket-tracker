@@ -71,9 +71,9 @@ class TestSchema:
         assert "simulation_runs" in names
         assert "schema_version" in names
 
-    def test_schema_version_is_1(self):
+    def test_schema_version_is_2(self):
         conn = get_connection()
-        assert _get_schema_version(conn) == 1
+        assert _get_schema_version(conn) == 2
 
     def test_indexes_created(self):
         conn = get_connection()
@@ -87,6 +87,10 @@ class TestSchema:
         assert "idx_snapshots_trader" in names
         assert "idx_settled_trader" in names
         assert "idx_simruns_trader" in names
+        # v2 indexes
+        assert "idx_trades_title" in names
+        assert "idx_settled_title" in names
+        assert "idx_trades_side" in names
 
     def test_wal_mode_enabled(self):
         conn = get_connection()
@@ -98,7 +102,7 @@ class TestSchema:
         init_db()
         init_db()
         conn = get_connection()
-        assert _get_schema_version(conn) == 1
+        assert _get_schema_version(conn) == 2
 
 
 # -----------------------------------------------------------------------
