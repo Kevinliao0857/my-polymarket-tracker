@@ -188,11 +188,11 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float, s
 
             col_dd1, col_dd2 = st.columns(2)
             with col_dd1:
-                if st.button("⚠️ Continue Anyway", type="secondary", use_container_width=True):
+                if st.button("⚠️ Continue Anyway", type="secondary", width="stretch"):
                     st.session_state.drawdown_decision = 'continue'
                     st.rerun()
             with col_dd2:
-                if st.button("🛑 Stop Simulation", type="primary", use_container_width=True):
+                if st.button("🛑 Stop Simulation", type="primary", width="stretch"):
                     st.session_state.drawdown_decision = 'stop'
                     st.rerun()
             return  # ← pauses rendering below this point
@@ -280,11 +280,11 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float, s
             )
             col_oe1, col_oe2 = st.columns(2)
             with col_oe1:
-                if st.button("⚠️ Continue Anyway", key="oe_continue", type="secondary", use_container_width=True):
+                if st.button("⚠️ Continue Anyway", key="oe_continue", type="secondary", width="stretch"):
                     st.session_state.overexposure_decision = 'continue'
                     st.rerun()
             with col_oe2:
-                if st.button("🛑 Stop Simulation", key="oe_stop", type="primary", use_container_width=True):
+                if st.button("🛑 Stop Simulation", key="oe_stop", type="primary", width="stretch"):
                     st.session_state.overexposure_decision = 'stop'
                     st.rerun()
             return
@@ -361,7 +361,7 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float, s
 
     st.dataframe(
         sim_df[sim_cols].style.apply(highlight_recent, axis=1),
-        use_container_width=True, height=350, hide_index=True
+        width="stretch", height=350, hide_index=True
     )
 
     if skipped > 0:
@@ -372,7 +372,7 @@ def render_real_bankroll_simulator(initial_bankroll: float, copy_ratio: float, s
                 skipped_df['Your Shares'] = (skipped_df['Shares'].astype(float) / copy_ratio).round(1)
                 st.dataframe(
                     skipped_df[['Market', 'UP/DOWN', 'Shares', 'Your Shares', 'Skip Reason']],
-                    use_container_width=True
+                    width="stretch"
                 )
 
 def render_simulator():
@@ -439,7 +439,7 @@ def render_simulator():
 
     st.dataframe(
         sim_df[sim_cols].style.apply(highlight_recent, axis=1),
-        use_container_width=True, height=300, hide_index=True,
+        width="stretch", height=300, hide_index=True,
         column_config={
             "Your Shares": st.column_config.NumberColumn(format="%.1f"),
             "Your Cost": st.column_config.NumberColumn(format="$%.2f"),
@@ -579,7 +579,7 @@ def show_simulator():
             if col_btn1.button(
                 "🚀 Start Sim",
                 type="primary",
-                use_container_width=True,
+                width="stretch",
                 disabled=start_disabled  
             ):
                 st.session_state.initial_bankroll = initial_bankroll
@@ -600,7 +600,7 @@ def show_simulator():
                 st.rerun()
                 
         with col_btn2:
-            if col_btn2.button("🛑 Reset", use_container_width=True):
+            if col_btn2.button("🛑 Reset", width="stretch"):
                 # ✅ Recapture baselines so PnL shows 0 on next render
                 sim_results = run_position_simulator(pos_df, initial_bankroll, copy_ratio)
                 st.session_state.pnl_baseline = sim_results['total_pnl']
@@ -621,7 +621,7 @@ def show_simulator():
                 topup_amt = st.number_input("💵 Add Funds", value=0.0, step=100.0, min_value=0.0)
             with topup_col2:
                 st.write("")
-                if st.button("➕ Top Up", use_container_width=True):
+                if st.button("➕ Top Up", width="stretch"):
                     if topup_amt > 0:
                         current = st.session_state.get('initial_bankroll', 1000.0)
                         st.session_state.initial_bankroll = current + topup_amt

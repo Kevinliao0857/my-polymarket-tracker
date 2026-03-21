@@ -33,7 +33,7 @@ def show_websocket_status():
             if st.button(
                 f"{status_emoji} Start",
                 type="secondary" if has_streaming else "primary",
-                use_container_width=True
+                width="stretch"
             ):
                 start_listener()
                 st.rerun()
