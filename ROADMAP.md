@@ -95,11 +95,17 @@ We're inheriting a functional but fragile Streamlit dashboard that tracks a Poly
 - Integrate with Polymarket's CLOB API for order placement
 - Need: API key management, order signing, wallet integration
 - Support: market orders and limit orders
-- **New files:** `utils/executor.py`, `utils/wallet.py`
+- **Multiple portfolios / API keys:**
+  - Each portfolio gets its own API key + wallet — isolates execution per trader (or group of traders)
+  - Avoids rate limiting from funneling all activity through one key
+  - Note: Polymarket may also rate-limit by IP — if that becomes an issue, we can proxy through different IPs later, but start simple with key-per-portfolio
+  - Portfolio config: `{ portfolio_name, api_key, wallet, assigned_traders[], bankroll }`
+- **New files:** `utils/executor.py`, `utils/wallet.py`, `utils/portfolio.py`
 
 ### 3b. Risk Management Engine
-- **Per-trader allocation:** Cap how much bankroll goes to each trader (informed by Phase 2b analysis)
-- **Stop-loss:** Per-position, per-trader, and portfolio-level
+- **Per-portfolio isolation:** Each portfolio has its own bankroll, risk limits, and stop-loss — one blowing up doesn't affect the others
+- **Per-trader allocation:** Cap how much of a portfolio's bankroll goes to each assigned trader
+- **Stop-loss:** Per-position, per-trader, and per-portfolio
 - **Max position size:** Cap based on bankroll percentage
 - **Daily loss limit:** Hard stop if cumulative daily loss exceeds threshold (per-trader and global)
 - **Exposure limits:** Max % of bankroll deployed at once across all traders
