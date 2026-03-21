@@ -105,6 +105,11 @@ MIGRATIONS = {
         "CREATE INDEX IF NOT EXISTS idx_settled_trader ON settled_trades(trader_address)",
         "CREATE INDEX IF NOT EXISTS idx_simruns_trader ON simulation_runs(trader_address)",
     ],
+    2: [
+        "CREATE INDEX IF NOT EXISTS idx_trades_title ON trades(trader_address, title)",
+        "CREATE INDEX IF NOT EXISTS idx_settled_title ON settled_trades(trader_address, title)",
+        "CREATE INDEX IF NOT EXISTS idx_trades_side ON trades(trader_address, side)",
+    ],
 }
 
 # ---------------------------------------------------------------------------
@@ -320,6 +325,38 @@ def get_trade_count(trader_address: str) -> int:
     return row[0]
 
 
+def get_all_trades(
+    trader_address: str = None, since_ts: int = None, limit: int = 10000
+) -> list:
+    """Get trades, optionally filtered by trader. None = all traders."""
+    conn = get_connection()
+    clauses, params = [], []
+    if trader_address:
+        clauses.append("trader_address = ?")
+        params.append(trader_address.lower())
+    if since_ts is not None:
+        clauses.append("timestamp >= ?")
+        params.append(since_ts)
+    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    params.append(limit)
+    rows = conn.execute(
+        f"SELECT * FROM trades {where} ORDER BY timestamp DESC LIMIT ?",
+        params,
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_trade_summary_by_trader() -> list:
+    """Aggregate trade stats per trader."""
+    conn = get_connection()
+    rows = conn.execute(
+        """SELECT trader_address, COUNT(*) as trade_count,
+                  MIN(timestamp) as first_trade, MAX(timestamp) as last_trade
+           FROM trades GROUP BY trader_address"""
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
 # ---------------------------------------------------------------------------
 # Position Snapshots
 # ---------------------------------------------------------------------------
@@ -366,6 +403,28 @@ def get_latest_snapshot(trader_address: str) -> list:
            WHERE trader_address = ? AND snapshot_at = ?""",
         (trader_address.lower(), row[0]),
     ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_position_history(
+    trader_address: str, title: str = None, limit: int = 1000
+) -> list:
+    """All position snapshots (not just latest) for temporal analysis."""
+    conn = get_connection()
+    if title:
+        rows = conn.execute(
+            """SELECT * FROM position_snapshots
+               WHERE trader_address = ? AND title = ?
+               ORDER BY snapshot_at ASC LIMIT ?""",
+            (trader_address.lower(), title, limit),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            """SELECT * FROM position_snapshots
+               WHERE trader_address = ?
+               ORDER BY snapshot_at ASC LIMIT ?""",
+            (trader_address.lower(), limit),
+        ).fetchall()
     return [dict(r) for r in rows]
 
 
@@ -439,6 +498,38 @@ def get_settled_trades(trader_address: str, limit: int = 500) -> list:
            WHERE trader_address = ?
            ORDER BY created_at DESC LIMIT ?""",
         (trader_address.lower(), limit),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_all_settled_trades(
+    trader_address: str = None, limit: int = 10000
+) -> list:
+    """Get settled trades, optionally filtered by trader. None = all traders."""
+    conn = get_connection()
+    if trader_address:
+        rows = conn.execute(
+            """SELECT * FROM settled_trades
+               WHERE trader_address = ?
+               ORDER BY created_at DESC LIMIT ?""",
+            (trader_address.lower(), limit),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT * FROM settled_trades ORDER BY created_at DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_settled_summary_by_trader() -> list:
+    """Aggregate settled trade stats per trader."""
+    conn = get_connection()
+    rows = conn.execute(
+        """SELECT trader_address, COUNT(*) as count,
+                  SUM(pnl) as total_pnl, AVG(pnl) as avg_pnl,
+                  SUM(CASE WHEN pnl > 0 THEN 1 ELSE 0 END) as wins
+           FROM settled_trades GROUP BY trader_address"""
     ).fetchall()
     return [dict(r) for r in rows]
 

@@ -19,13 +19,18 @@ from utils.db import (
     insert_trades_batch,
     get_trades,
     get_trade_count,
+    get_all_trades,
+    get_trade_summary_by_trader,
     # Position Snapshots
     insert_position_snapshot,
     get_latest_snapshot,
+    get_position_history,
     # Settled Trades
     insert_settled_trade,
     insert_settled_trades_batch,
     get_settled_trades,
+    get_all_settled_trades,
+    get_settled_summary_by_trader,
     # Simulation Runs
     insert_simulation_run,
     get_simulation_runs,
@@ -367,6 +372,110 @@ class TestSimulationRuns:
             )
         runs = get_simulation_runs(FAKE_ADDR, limit=3)
         assert len(runs) == 3
+
+
+# -----------------------------------------------------------------------
+# Analytics Queries (Phase 2)
+# -----------------------------------------------------------------------
+
+class TestGetAllTrades:
+    def test_all_traders(self):
+        insert_trade("0x1111", {"transactionHash": "tx1", "title": "BTC", "timestamp": 100})
+        insert_trade("0x2222", {"transactionHash": "tx2", "title": "ETH", "timestamp": 200})
+        trades = get_all_trades()
+        assert len(trades) == 2
+
+    def test_filter_by_trader(self):
+        insert_trade("0x1111", {"transactionHash": "tx1", "title": "BTC", "timestamp": 100})
+        insert_trade("0x2222", {"transactionHash": "tx2", "title": "ETH", "timestamp": 200})
+        trades = get_all_trades(trader_address="0x1111")
+        assert len(trades) == 1
+        assert trades[0]["title"] == "BTC"
+
+    def test_filter_by_timestamp(self):
+        insert_trade("0x1111", {"transactionHash": "tx1", "title": "BTC", "timestamp": 100})
+        insert_trade("0x1111", {"transactionHash": "tx2", "title": "ETH", "timestamp": 200})
+        trades = get_all_trades(since_ts=150)
+        assert len(trades) == 1
+
+    def test_empty(self):
+        assert get_all_trades() == []
+
+
+class TestGetTradeSummary:
+    def test_basic(self):
+        insert_trade("0x1111", {"transactionHash": "tx1", "timestamp": 100})
+        insert_trade("0x1111", {"transactionHash": "tx2", "timestamp": 200})
+        insert_trade("0x2222", {"transactionHash": "tx3", "timestamp": 300})
+        summary = get_trade_summary_by_trader()
+        assert len(summary) == 2
+        for s in summary:
+            if s["trader_address"] == "0x1111":
+                assert s["trade_count"] == 2
+                assert s["first_trade"] == 100
+                assert s["last_trade"] == 200
+
+    def test_empty(self):
+        assert get_trade_summary_by_trader() == []
+
+
+class TestGetAllSettledTrades:
+    def test_all_traders(self):
+        insert_settled_trade("0x1111", {"transactionHash": "s1", "pnl": 10})
+        insert_settled_trade("0x2222", {"transactionHash": "s2", "pnl": -5})
+        trades = get_all_settled_trades()
+        assert len(trades) == 2
+
+    def test_filter_by_trader(self):
+        insert_settled_trade("0x1111", {"transactionHash": "s1", "pnl": 10})
+        insert_settled_trade("0x2222", {"transactionHash": "s2", "pnl": -5})
+        trades = get_all_settled_trades(trader_address="0x1111")
+        assert len(trades) == 1
+
+    def test_empty(self):
+        assert get_all_settled_trades() == []
+
+
+class TestGetSettledSummary:
+    def test_basic(self):
+        insert_settled_trade("0x1111", {"transactionHash": "s1", "pnl": 10})
+        insert_settled_trade("0x1111", {"transactionHash": "s2", "pnl": -5})
+        insert_settled_trade("0x2222", {"transactionHash": "s3", "pnl": 20})
+        summary = get_settled_summary_by_trader()
+        assert len(summary) == 2
+        for s in summary:
+            if s["trader_address"] == "0x1111":
+                assert s["count"] == 2
+                assert s["total_pnl"] == 5
+                assert s["wins"] == 1
+
+    def test_empty(self):
+        assert get_settled_summary_by_trader() == []
+
+
+class TestGetPositionHistory:
+    def test_returns_all_snapshots(self):
+        insert_position_snapshot("0x1111", [
+            {"title": "BTC", "outcome": "UP", "size": 100, "avgPrice": 0.5,
+             "curPrice": 0.6, "cashPnl": 10},
+        ])
+        insert_position_snapshot("0x1111", [
+            {"title": "BTC", "outcome": "UP", "size": 100, "avgPrice": 0.5,
+             "curPrice": 0.7, "cashPnl": 20},
+        ])
+        history = get_position_history("0x1111")
+        assert len(history) == 2
+
+    def test_filter_by_title(self):
+        insert_position_snapshot("0x1111", [
+            {"title": "BTC", "outcome": "UP", "size": 100},
+            {"title": "ETH", "outcome": "UP", "size": 50},
+        ])
+        history = get_position_history("0x1111", title="BTC")
+        assert len(history) == 1
+
+    def test_empty(self):
+        assert get_position_history("0x1111") == []
 
 
 # -----------------------------------------------------------------------
